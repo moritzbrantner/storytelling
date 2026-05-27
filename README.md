@@ -126,6 +126,7 @@ export function StoryExperience() {
   return (
     <StoryScroller
       transition={{ type: "fade", scrollUnits: 20 }}
+      scrollInputScale={0.5}
       scenes={[
         {
           id: "opening",
@@ -146,6 +147,10 @@ export function StoryExperience() {
 between every scene, or use `transitionToNext` on an individual scene to
 override that boundary. Scroll transition units are normalized scene-local units
 from `0` to `100`, not pixels, frames, or seconds.
+
+Use `scrollInputScale` to tune wheel and arrow-key input. `1` is the default:
+one arrow press advances by one scene, and wheel deltas are left unchanged.
+Values below `1` slow scrolling down; values above `1` speed it up.
 
 ## Example website
 

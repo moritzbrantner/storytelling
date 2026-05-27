@@ -8,6 +8,7 @@ import {
   useState,
   type KeyboardEvent,
   type ReactNode,
+  type WheelEvent,
 } from "react";
 
 import { motion, useMotionValue, useReducedMotion, type MotionValue } from "motion/react";
@@ -60,6 +61,7 @@ export type StoryScrollerProps<TData extends StoryNodeData = StoryNodeData> = {
   className?: string;
   viewportClassName?: string;
   transition?: StoryScrollTransition;
+  scrollInputScale?: number;
   ariaLabel?: string;
   onChoice?: (choice: StoryChoice, history: StoryHistoryEntry<TData>[]) => void;
   onPathChange?: (history: StoryHistoryEntry<TData>[]) => void;
@@ -82,6 +84,7 @@ type StoryScrollTimelineProps<TSceneData = unknown> = {
   className?: string;
   viewportClassName?: string;
   transition?: StoryScrollTransition;
+  scrollInputScale?: number;
   ariaLabel?: string;
   scrollTarget?: ScrollTarget;
   onActiveIndexChange?: (index: number) => void;
@@ -109,6 +112,7 @@ function getStoryScrollerPageId(storyId: string, sceneId: string) {
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
 const DEFAULT_SCROLL_TRANSITION: StoryScrollTransition = { type: "none" };
+const DEFAULT_SCROLL_INPUT_SCALE = 1;
 
 function getPrefersReducedMotion() {
   return (
@@ -159,11 +163,33 @@ function shouldUpdateScrollState(current: ScrollState, next: ScrollState) {
   return current.activeIndex !== next.activeIndex || Math.abs(current.value - next.value) >= 0.1;
 }
 
+function resolveScrollInputScale(scale: number | undefined) {
+  if (scale === undefined || !Number.isFinite(scale)) {
+    return DEFAULT_SCROLL_INPUT_SCALE;
+  }
+
+  return Math.max(scale, 0);
+}
+
+function getWheelScrollDelta(event: WheelEvent<HTMLElement>, element: HTMLElement) {
+  const baseDelta = event.deltaY || event.deltaX;
+
+  switch (event.deltaMode) {
+    case 1:
+      return baseDelta * 16;
+    case 2:
+      return baseDelta * element.clientHeight;
+    default:
+      return baseDelta;
+  }
+}
+
 function StoryScrollTimeline<TSceneData = unknown>({
   scenes,
   className,
   viewportClassName = "h-[76vh] min-h-[31rem] max-h-[48rem]",
   transition,
+  scrollInputScale,
   ariaLabel,
   scrollTarget,
   onActiveIndexChange,
@@ -177,6 +203,7 @@ function StoryScrollTimeline<TSceneData = unknown>({
   const previewScrollProgress = useMotionValue(0);
   const [scrollState, setScrollState] = useState<ScrollState>({ activeIndex: 0, value: 0 });
   const sceneCount = scenes.length;
+  const resolvedScrollInputScale = resolveScrollInputScale(scrollInputScale);
   const activeIndex = clamp(scrollState.activeIndex, 0, Math.max(sceneCount - 1, 0));
   const activeScene = scenes[activeIndex];
   const nextScene = scenes[activeIndex + 1];
@@ -208,6 +235,28 @@ function StoryScrollTimeline<TSceneData = unknown>({
       shouldUpdateScrollState(current, nextState) ? nextState : current,
     );
   }, [sceneCount, scrollProgress, scrollValue]);
+
+  const setScrollTop = useCallback(
+    (top: number) => {
+      const element = scrollRef.current;
+      if (!element) return;
+
+      const maxScroll = Math.max(element.scrollHeight - element.clientHeight, 0);
+      element.scrollTop = clamp(top, 0, maxScroll);
+      updateFromScroll();
+    },
+    [updateFromScroll],
+  );
+
+  const scrollByInputDelta = useCallback(
+    (delta: number) => {
+      const element = scrollRef.current;
+      if (!element || delta === 0) return;
+
+      setScrollTop(element.scrollTop + delta);
+    },
+    [setScrollTop],
+  );
 
   const scrollToScene = useCallback(
     (index: number) => {
@@ -267,17 +316,36 @@ function StoryScrollTimeline<TSceneData = unknown>({
     onSceneProgressChange?.(scrollState.value);
   }, [onSceneProgressChange, scrollState.value]);
 
+  const handleWheel = (event: WheelEvent<HTMLDivElement>) => {
+    if (resolvedScrollInputScale === DEFAULT_SCROLL_INPUT_SCALE) return;
+
+    event.preventDefault();
+    scrollByInputDelta(getWheelScrollDelta(event, event.currentTarget) * resolvedScrollInputScale);
+  };
+
   const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    const element = scrollRef.current;
+    const maxScroll = element ? Math.max(element.scrollHeight - element.clientHeight, 0) : 0;
+    const sceneScrollSize = sceneCount > 0 ? maxScroll / sceneCount : 0;
+
     switch (event.key) {
       case "ArrowDown":
       case "ArrowRight":
         event.preventDefault();
-        scrollToScene(activeIndex + 1);
+        if (sceneScrollSize === 0) {
+          scrollToScene(activeIndex + 1);
+          return;
+        }
+        scrollByInputDelta(sceneScrollSize * resolvedScrollInputScale);
         return;
       case "ArrowUp":
       case "ArrowLeft":
         event.preventDefault();
-        scrollToScene(activeIndex - 1);
+        if (sceneScrollSize === 0) {
+          scrollToScene(activeIndex - 1);
+          return;
+        }
+        scrollByInputDelta(-sceneScrollSize * resolvedScrollInputScale);
         return;
       case "Home":
         event.preventDefault();
@@ -311,6 +379,7 @@ function StoryScrollTimeline<TSceneData = unknown>({
           viewportClassName,
         )}
         onScroll={updateFromScroll}
+        onWheel={handleWheel}
         data-story-scroller-viewport
       >
         <div className="relative" style={{ height: `${Math.max(sceneCount + 1, 2) * 100}%` }}>
@@ -426,6 +495,7 @@ function StoryDocumentScroller<TData extends StoryNodeData = StoryNodeData>({
   className,
   viewportClassName,
   transition,
+  scrollInputScale,
   ariaLabel,
   onChoice,
   onPathChange,
@@ -555,6 +625,7 @@ function StoryDocumentScroller<TData extends StoryNodeData = StoryNodeData>({
       className={className}
       viewportClassName={viewportClassName}
       transition={transition}
+      scrollInputScale={scrollInputScale}
       ariaLabel={ariaLabel ?? story.labels?.scrollerLabel ?? story.title}
       scrollTarget={scrollTarget}
       onActiveIndexChange={onActiveIndexChange}
@@ -571,6 +642,7 @@ export function StoryScroller<TData extends StoryNodeData = StoryNodeData>({
   className,
   viewportClassName,
   transition,
+  scrollInputScale,
   ariaLabel,
   onChoice,
   onPathChange,
@@ -584,6 +656,7 @@ export function StoryScroller<TData extends StoryNodeData = StoryNodeData>({
         className={className}
         viewportClassName={viewportClassName}
         transition={transition}
+        scrollInputScale={scrollInputScale}
         ariaLabel={ariaLabel}
         onActiveIndexChange={onActiveIndexChange}
         onSceneProgressChange={onSceneProgressChange}
@@ -603,6 +676,7 @@ export function StoryScroller<TData extends StoryNodeData = StoryNodeData>({
       className={className}
       viewportClassName={viewportClassName}
       transition={transition}
+      scrollInputScale={scrollInputScale}
       ariaLabel={ariaLabel}
       onChoice={onChoice}
       onPathChange={onPathChange}

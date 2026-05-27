@@ -413,6 +413,70 @@ describe("@moritzbrantner/storytelling", () => {
     expect(await screen.findByText("Beta 0")).toBeTruthy();
   });
 
+  test("scales StoryScroller wheel input", async () => {
+    const { container } = render(
+      <StoryScroller
+        ariaLabel="Scaled wheel scenes"
+        scrollInputScale={0.5}
+        scenes={[
+          {
+            id: "alpha",
+            title: "Alpha",
+            render: renderScrollTransitionLabel("Alpha"),
+          },
+          {
+            id: "beta",
+            title: "Beta",
+            render: renderScrollTransitionLabel("Beta"),
+          },
+        ]}
+      />,
+    );
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+
+    expect(viewport).toBeTruthy();
+    setScrollerGeometry(viewport!, 2);
+
+    fireEvent.wheel(viewport!, { deltaY: 100 });
+
+    expect(await screen.findByText("Alpha active 50")).toBeTruthy();
+    expect(viewport!.scrollTop).toBe(50);
+  });
+
+  test("scales StoryScroller arrow-key input", async () => {
+    const { container } = render(
+      <StoryScroller
+        ariaLabel="Scaled arrow scenes"
+        scrollInputScale={0.5}
+        scenes={[
+          {
+            id: "alpha",
+            title: "Alpha",
+            render: renderScrollTransitionLabel("Alpha"),
+          },
+          {
+            id: "beta",
+            title: "Beta",
+            render: renderScrollTransitionLabel("Beta"),
+          },
+        ]}
+      />,
+    );
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+    const region = screen.getByRole("region", { name: "Scaled arrow scenes" });
+
+    expect(viewport).toBeTruthy();
+    setScrollerGeometry(viewport!, 2);
+
+    fireEvent.keyDown(region, { key: "ArrowDown" });
+    expect(await screen.findByText("Alpha active 50")).toBeTruthy();
+    expect(viewport!.scrollTop).toBe(50);
+
+    fireEvent.keyDown(region, { key: "ArrowDown" });
+    expect(await screen.findByText("Beta active 0")).toBeTruthy();
+    expect(viewport!.scrollTop).toBe(100);
+  });
+
   test("switches StoryScroller scenes directly by default without transition previews", async () => {
     const { container } = render(
       <StoryScroller
