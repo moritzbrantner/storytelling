@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import {
+  StoryMinimap,
   StoryPlayer,
   StoryScroller,
   StoryStageFrame,
@@ -324,7 +325,7 @@ describe("@moritzbrantner/storytelling", () => {
     fireEvent.click(screen.getByRole("button", { name: /Answer immediately/ }));
 
     expect(await screen.findByText("The message is fragmented.")).toBeTruthy();
-    expect(await screen.findByText("The city hears the pilot")).toBeTruthy();
+    expect((await screen.findAllByText("The city hears the pilot")).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     expect(await screen.findByText("Contact changes the route.")).toBeTruthy();
@@ -339,10 +340,31 @@ describe("@moritzbrantner/storytelling", () => {
     render(<StoryScroller story={linearStory} />);
 
     expect(screen.getByText("Draft the morning brief.")).toBeTruthy();
-    expect(screen.queryByText("Publish the report at noon.")).toBeNull();
+    expect(screen.getByText("Review the copy for sequence and clarity.")).toBeTruthy();
+    expect(screen.getByText("Publish the report at noon.")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     expect(await screen.findByText("Review the copy for sequence and clarity.")).toBeTruthy();
+  });
+
+  test("minimizes and restores StoryMinimap items", () => {
+    render(
+      <StoryMinimap
+        collapsible
+        items={[
+          { id: "draft", title: "Draft the report" },
+          { id: "review", title: "Review the report" },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Go to scene 2: Review the report" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Minimize minimap" }));
+    expect(screen.queryByRole("button", { name: "Go to scene 2: Review the report" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show minimap" }));
+    expect(screen.getByRole("button", { name: "Go to scene 2: Review the report" })).toBeTruthy();
   });
 
   test("uses registry stages and falls back to the default stage", () => {

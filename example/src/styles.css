@@ -330,6 +330,18 @@ select {
   background: #ef8b72;
 }
 
+.example-component-frame [data-story-scroller-page] .demo-stage {
+  min-height: clamp(32rem, 74vh, 46rem);
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.example-component-frame [data-story-scroller-page][data-active="true"] .demo-stage {
+  border-color: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 18px 54px rgba(23, 33, 31, 0.18);
+}
+
 @media (max-width: 1050px) {
   .example-toolbar,
   .example-main-grid {

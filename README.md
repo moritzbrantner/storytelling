@@ -98,7 +98,7 @@ export const linearStory = defineStory({
 ## React playback
 
 Use `StoryPlayer` for focused choice-driven playback, or `StoryScroller` when
-the reader should move through a progressively revealed story graph.
+the reader should scroll through a snap-aligned sequence of story pages.
 
 ```tsx
 import { StoryPlayer } from "@moritzbrantner/storytelling";

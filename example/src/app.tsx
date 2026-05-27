@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   StoryMinimap,
@@ -54,6 +54,10 @@ const exampleStories: ExampleStory[] = [
   },
 ];
 
+function getStoryScrollerPageId(storyId: string, nodeId: string) {
+  return `story-scroller-page-${storyId}-${nodeId}`;
+}
+
 function getHistorySummary(
   story: StoryDocument<SignalStoryData>,
   history: StoryHistoryEntry<SignalStoryData>[],
@@ -73,6 +77,7 @@ function getHistorySummary(
 export function ExampleApp() {
   const [storyId, setStoryId] = useState<ExampleStoryId>("branching");
   const [mode, setMode] = useState<ExampleMode>("player");
+  const [scrollerActiveIndex, setScrollerActiveIndex] = useState(0);
   const activeExample =
     exampleStories.find((example) => example.id === storyId) ?? exampleStories[0]!;
   const [presetId, setPresetId] = useState(activeExample.presets[0]?.id ?? "opening");
@@ -87,7 +92,24 @@ export function ExampleApp() {
       }),
     [activeExample.story, activePreset.choiceIds],
   );
-  const visibleHistory = mode === "player" && history.length > 0 ? history : presetPath.history;
+  const linearScrollPath = useMemo(
+    () =>
+      resolveStoryPath(activeExample.story, {
+        autoAdvanceLinearNodes: true,
+      }),
+    [activeExample.story],
+  );
+  const isLinearStory = activeExample.id === "linear";
+  const isScrollerMode = isLinearStory || mode === "scroller";
+  const visibleHistory = isLinearStory
+    ? linearScrollPath.history
+    : history.length > 0
+      ? history
+      : presetPath.history;
+  const activeMinimapIndex = isScrollerMode
+    ? scrollerActiveIndex
+    : Math.max(visibleHistory.length - 1, 0);
+  const showBranchControls = !isLinearStory;
   const minimapItems = visibleHistory.map((entry) => {
     const node = activeExample.story.nodes.find((candidate) => candidate.id === entry.nodeId);
 
@@ -97,6 +119,31 @@ export function ExampleApp() {
       eyebrow: node?.eyebrow,
     };
   });
+
+  useEffect(() => {
+    setScrollerActiveIndex(0);
+  }, [activeExample.id, activePreset.id, mode]);
+
+  useEffect(() => {
+    if (activeExample.id === "linear" && mode !== "scroller") {
+      setMode("scroller");
+    }
+  }, [activeExample.id, mode]);
+
+  const selectMinimapItem = (index: number) => {
+    if (!isScrollerMode) return;
+
+    const entry = visibleHistory[index];
+    if (!entry) return;
+
+    setScrollerActiveIndex(index);
+    document
+      .getElementById(getStoryScrollerPageId(activeExample.story.id, entry.nodeId))
+      ?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+  };
 
   return (
     <main className="example-shell">
@@ -119,6 +166,9 @@ export function ExampleApp() {
                   onClick={() => {
                     setStoryId(example.id);
                     setPresetId(example.presets[0]?.id ?? "opening");
+                    if (example.id === "linear") {
+                      setMode("scroller");
+                    }
                     setHistory([]);
                   }}
                 >
@@ -127,54 +177,58 @@ export function ExampleApp() {
               ))}
             </div>
 
-            <div className="example-segment" role="tablist" aria-label="Component">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={mode === "player"}
-                data-active={mode === "player"}
-                onClick={() => {
-                  setMode("player");
-                  setHistory([]);
-                }}
-              >
-                Player
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={mode === "scroller"}
-                data-active={mode === "scroller"}
-                onClick={() => {
-                  setMode("scroller");
-                  setHistory([]);
-                }}
-              >
-                Scroller
-              </button>
-            </div>
-
-            <div className="example-preset-list" aria-label="Start path">
-              {activeExample.presets.map((preset) => (
+            {showBranchControls ? (
+              <div className="example-segment" role="tablist" aria-label="Component">
                 <button
-                  key={preset.id}
                   type="button"
-                  data-active={preset.id === activePreset.id}
+                  role="tab"
+                  aria-selected={mode === "player"}
+                  data-active={mode === "player"}
                   onClick={() => {
-                    setPresetId(preset.id);
+                    setMode("player");
                     setHistory([]);
                   }}
                 >
-                  {preset.label}
+                  Player
                 </button>
-              ))}
-            </div>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={mode === "scroller"}
+                  data-active={mode === "scroller"}
+                  onClick={() => {
+                    setMode("scroller");
+                    setHistory([]);
+                  }}
+                >
+                  Scroller
+                </button>
+              </div>
+            ) : null}
+
+            {showBranchControls ? (
+              <div className="example-preset-list" aria-label="Start path">
+                {activeExample.presets.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    data-active={preset.id === activePreset.id}
+                    onClick={() => {
+                      setPresetId(preset.id);
+                      setHistory([]);
+                    }}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
         </header>
 
         <div className="example-main-grid">
           <div className="example-component-frame">
-            {mode === "player" ? (
+            {!isScrollerMode ? (
               <StoryPlayer
                 key={`${activeExample.id}-${activePreset.id}`}
                 story={activeExample.story}
@@ -188,6 +242,8 @@ export function ExampleApp() {
                 story={activeExample.story}
                 registry={storyRegistry}
                 pathChoiceIds={activePreset.choiceIds}
+                onPathChange={setHistory}
+                onActiveIndexChange={setScrollerActiveIndex}
               />
             )}
           </div>
@@ -195,24 +251,32 @@ export function ExampleApp() {
           <aside className="example-inspector" aria-label="Story state">
             <StoryMinimap
               items={minimapItems}
-              activeIndex={Math.max(visibleHistory.length - 1, 0)}
+              activeIndex={activeMinimapIndex}
+              onSelect={isScrollerMode ? selectMinimapItem : undefined}
+              collapsible
               className="example-minimap"
             />
 
             <div className="example-state-panel">
               <div>
                 <p className="example-panel-label">
-                  {mode === "player" ? "Active path" : "Start path"}
+                  {isLinearStory
+                    ? "Scroll sequence"
+                    : mode === "player"
+                      ? "Active path"
+                      : "Start path"}
                 </p>
-                <h2>{activePreset.label}</h2>
+                <h2>{isLinearStory ? "Story cards" : activePreset.label}</h2>
               </div>
               <pre>{getHistorySummary(activeExample.story, visibleHistory)}</pre>
             </div>
 
-            <div className="example-state-panel">
-              <p className="example-panel-label">Choice ids</p>
-              <code>{activePreset.choiceIds.join(" -> ") || "none"}</code>
-            </div>
+            {showBranchControls ? (
+              <div className="example-state-panel">
+                <p className="example-panel-label">Choice ids</p>
+                <code>{activePreset.choiceIds.join(" -> ") || "none"}</code>
+              </div>
+            ) : null}
           </aside>
         </div>
       </section>
