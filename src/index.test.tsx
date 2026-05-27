@@ -359,7 +359,11 @@ describe("@moritzbrantner/storytelling", () => {
           {
             id: "alpha",
             title: "Alpha",
-            render: ({ value }) => <div>Alpha {Math.round(value)}</div>,
+            render: ({ value, scrollProgress }) => (
+              <div>
+                Alpha {Math.round(value)} / Motion {Math.round(scrollProgress.get() * 100)}
+              </div>
+            ),
           },
           {
             id: "beta",
@@ -372,14 +376,14 @@ describe("@moritzbrantner/storytelling", () => {
     const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
 
     expect(viewport).toBeTruthy();
-    expect(screen.getByText("Alpha 0")).toBeTruthy();
+    expect(screen.getByText("Alpha 0 / Motion 0")).toBeTruthy();
 
     Object.defineProperty(viewport!, "scrollHeight", { configurable: true, value: 300 });
     Object.defineProperty(viewport!, "clientHeight", { configurable: true, value: 100 });
 
     viewport!.scrollTop = 50;
     fireEvent.scroll(viewport!);
-    expect(await screen.findByText("Alpha 50")).toBeTruthy();
+    expect(await screen.findByText("Alpha 50 / Motion 50")).toBeTruthy();
 
     viewport!.scrollTop = 100;
     fireEvent.scroll(viewport!);

@@ -10,7 +10,14 @@ import {
   type ReactNode,
 } from "react";
 
-import { useReducedMotion } from "motion/react";
+import {
+  AnimatePresence,
+  motion,
+  useMotionValue,
+  useReducedMotion,
+  useTransform,
+  type MotionValue,
+} from "motion/react";
 
 import { Button, cn } from "@moritzbrantner/ui";
 
@@ -30,6 +37,8 @@ import type {
 export type StoryScrollSceneRenderProps<TData = unknown> = {
   value: number;
   progress: number;
+  scrollValue: MotionValue<number>;
+  scrollProgress: MotionValue<number>;
   scene: StoryScrollScene<TData>;
   sceneIndex: number;
   sceneCount: number;
@@ -134,6 +143,8 @@ function StoryScrollTimeline<TSceneData = unknown>({
 }: StoryScrollTimelineProps<TSceneData>) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const reducedMotion = useReducedMotion();
+  const scrollValue = useMotionValue(0);
+  const scrollProgress = useMotionValue(0);
   const [scrollState, setScrollState] = useState<ScrollState>({ activeIndex: 0, value: 0 });
   const sceneCount = scenes.length;
   const activeIndex = clamp(scrollState.activeIndex, 0, Math.max(sceneCount - 1, 0));
@@ -144,10 +155,13 @@ function StoryScrollTimeline<TSceneData = unknown>({
     if (!element) return;
 
     const nextState = getNextScrollState(element, sceneCount);
+
+    scrollValue.set(nextState.value);
+    scrollProgress.set(nextState.value / 100);
     setScrollState((current) =>
       shouldUpdateScrollState(current, nextState) ? nextState : current,
     );
-  }, [sceneCount]);
+  }, [sceneCount, scrollProgress, scrollValue]);
 
   const scrollToScene = useCallback(
     (index: number) => {
@@ -155,6 +169,8 @@ function StoryScrollTimeline<TSceneData = unknown>({
       const nextIndex = clamp(index, 0, Math.max(sceneCount - 1, 0));
 
       setScrollState({ activeIndex: nextIndex, value: 0 });
+      scrollValue.set(0);
+      scrollProgress.set(0);
 
       if (!element) return;
 
@@ -173,8 +189,13 @@ function StoryScrollTimeline<TSceneData = unknown>({
 
       element.scrollTop = top;
     },
-    [reducedMotion, sceneCount],
+    [reducedMotion, sceneCount, scrollProgress, scrollValue],
   );
+
+  useEffect(() => {
+    scrollValue.set(scrollState.value);
+    scrollProgress.set(scrollState.value / 100);
+  }, [scrollProgress, scrollState.value, scrollValue]);
 
   useEffect(() => {
     setScrollState((current) => {
@@ -263,30 +284,83 @@ function StoryScrollTimeline<TSceneData = unknown>({
               viewportClassName,
             )}
           >
-            {activeScene ? (
-              <article
-                key={activeScene.id}
-                className={cn("h-full min-h-0", activeScene.className)}
-                data-active="true"
-                data-story-scroller-index={activeIndex}
-                data-story-scroller-page
-                aria-label={`${activeIndex + 1}. ${activeScene.title}`}
-              >
-                {activeScene.render({
-                  value: scrollState.value,
-                  progress: scrollState.value / 100,
-                  scene: activeScene,
-                  sceneIndex: activeIndex,
-                  sceneCount,
-                  isActive: true,
-                  scrollToScene,
-                })}
-              </article>
-            ) : null}
+            <AnimatePresence initial={false}>
+              {activeScene ? (
+                <StoryScrollMotionFrame
+                  key={activeScene.id}
+                  scene={activeScene}
+                  sceneIndex={activeIndex}
+                  sceneCount={sceneCount}
+                  value={scrollState.value}
+                  scrollValue={scrollValue}
+                  scrollProgress={scrollProgress}
+                  reducedMotion={Boolean(reducedMotion)}
+                  scrollToScene={scrollToScene}
+                />
+              ) : null}
+            </AnimatePresence>
           </div>
         </div>
       </div>
     </section>
+  );
+}
+
+type StoryScrollMotionFrameProps<TSceneData = unknown> = {
+  scene: StoryScrollScene<TSceneData>;
+  sceneIndex: number;
+  sceneCount: number;
+  value: number;
+  scrollValue: MotionValue<number>;
+  scrollProgress: MotionValue<number>;
+  reducedMotion: boolean;
+  scrollToScene: (index: number) => void;
+};
+
+function StoryScrollMotionFrame<TSceneData = unknown>({
+  scene,
+  sceneIndex,
+  sceneCount,
+  value,
+  scrollValue,
+  scrollProgress,
+  reducedMotion,
+  scrollToScene,
+}: StoryScrollMotionFrameProps<TSceneData>) {
+  const opacity = useTransform(scrollProgress, [0, 0.72, 1], [1, 1, 0.1]);
+  const y = useTransform(scrollProgress, [0, 1], [0, -36]);
+  const scale = useTransform(scrollProgress, [0, 1], [1, 0.985]);
+
+  return (
+    <motion.article
+      className={cn("absolute inset-0 h-full min-h-0", scene.className)}
+      data-active="true"
+      data-story-scroller-index={sceneIndex}
+      data-story-scroller-page
+      aria-label={`${sceneIndex + 1}. ${scene.title}`}
+      initial={reducedMotion ? false : { opacity: 0, y: 24, scale: 0.985 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -24, scale: 0.985 }}
+      transition={{ duration: reducedMotion ? 0 : 0.28, ease: "easeOut" }}
+    >
+      <motion.div
+        className="h-full min-h-0"
+        style={reducedMotion ? undefined : { opacity, y, scale }}
+        data-story-scroller-motion-frame
+      >
+        {scene.render({
+          value,
+          progress: value / 100,
+          scrollValue,
+          scrollProgress,
+          scene,
+          sceneIndex,
+          sceneCount,
+          isActive: true,
+          scrollToScene,
+        })}
+      </motion.div>
+    </motion.article>
   );
 }
 

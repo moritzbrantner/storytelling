@@ -98,11 +98,29 @@ export const linearStory = defineStory({
 ## React playback
 
 Use `StoryPlayer` for focused choice-driven playback, or `StoryScroller` when
-the reader should scroll through scenes that receive a normalized `value` from
-`0` to `100`.
+the reader should scroll through scenes that receive normalized numeric progress
+and Motion values for scroll-reactive effects.
 
 ```tsx
 import { StoryScroller } from "@moritzbrantner/storytelling";
+import { motion, useTransform, type MotionValue } from "motion/react";
+
+function OpeningMotionScene({
+  value,
+  scrollProgress,
+}: {
+  value: number;
+  scrollProgress: MotionValue<number>;
+}) {
+  const opacity = useTransform(scrollProgress, [0, 0.75, 1], [1, 1, 0]);
+  const y = useTransform(scrollProgress, [0, 1], [0, -48]);
+
+  return (
+    <motion.div style={{ opacity, y }}>
+      <OpeningScene scrollValue={value} />
+    </motion.div>
+  );
+}
 
 export function StoryExperience() {
   return (
@@ -111,7 +129,9 @@ export function StoryExperience() {
         {
           id: "opening",
           title: "Opening",
-          render: ({ value }) => <OpeningScene scrollValue={value} />,
+          render: ({ value, scrollProgress }) => (
+            <OpeningMotionScene value={value} scrollProgress={scrollProgress} />
+          ),
         },
       ]}
     />
