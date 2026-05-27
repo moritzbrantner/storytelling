@@ -36,7 +36,7 @@ function resolveInitialHistory<TData extends StoryNodeData>(
 ) {
   return resolveStoryPath(story, {
     choiceIds: initialChoiceIds,
-    autoAdvanceLinearNodes: true,
+    autoAdvanceLinearNodes: initialChoiceIds.length > 0,
   }).history;
 }
 

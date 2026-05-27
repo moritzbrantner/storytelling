@@ -57,6 +57,44 @@ targets, missing opening nodes, and cycles. `resolveStoryPath()` returns the
 current path for a set of selected choice ids, while `buildStoryTimeline()`
 converts that path into frame ranges for video-oriented renderers.
 
+### Linear stories
+
+Use `next` when a story should move through one fixed sequence without multiple
+paths. The player renders each `next` link as a single continue action.
+
+```ts
+import { defineStory } from "@moritzbrantner/storytelling";
+
+export const linearStory = defineStory({
+  id: "bridge-report",
+  title: "Bridge Report",
+  openingNodeId: "briefing",
+  labels: {
+    continue: "Continue",
+    completedBranch: "The report is complete.",
+  },
+  nodes: [
+    {
+      id: "briefing",
+      title: "Brief the desk",
+      content: [{ type: "paragraph", text: "The editor assigns the morning report." }],
+      next: "crossing",
+    },
+    {
+      id: "crossing",
+      title: "Ride the first train",
+      content: [{ type: "paragraph", text: "The repaired bridge carries commuters again." }],
+      next: "publish",
+    },
+    {
+      id: "publish",
+      title: "Publish at noon",
+      content: [{ type: "paragraph", text: "The sequence ends with one clear update." }],
+    },
+  ],
+});
+```
+
 ## React playback
 
 Use `StoryPlayer` for focused choice-driven playback, or `StoryScroller` when
@@ -78,8 +116,9 @@ Run the local example app from the repository root:
 bun dev
 ```
 
-The app shows `StoryPlayer`, `StoryScroller`, custom web stage renderers, branch
-presets, and the minimap/state helpers against the local source files.
+The app shows `StoryPlayer`, `StoryScroller`, custom web stage renderers,
+branching and linear story presets, and the minimap/state helpers against the
+local source files.
 
 ## Renderer registry
 

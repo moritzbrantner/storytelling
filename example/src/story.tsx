@@ -272,6 +272,137 @@ export const signalStory = defineStory<SignalStoryData>({
   ],
 });
 
+export const linearStory = defineStory<SignalStoryData>({
+  id: "morning-dispatch",
+  title: "Morning Dispatch",
+  subtitle: "A linear story with one route",
+  openingNodeId: "briefing",
+  labels: {
+    completedBranch: "The linear story is complete.",
+    continue: "Continue",
+    endingPrompt: "The sequence has reached its ending.",
+    restart: "Restart",
+    scrollerLabel: "Morning Dispatch scroller",
+  },
+  defaults: {
+    durationInFrames: 100,
+    transitionInFrames: 14,
+  },
+  nodes: [
+    {
+      id: "briefing",
+      title: "Brief the morning desk",
+      eyebrow: "Scene 01",
+      prompt: "Continue to the field report.",
+      next: "field-report",
+      stage: { renderer: "signal-stage" },
+      data: {
+        channel: "Desk 04",
+        imageAlt: "A newsroom desk with notebooks and a laptop",
+        imageSrc:
+          "https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1400&q=80",
+        intensity: 42,
+        location: "City newsroom",
+        metricLabel: "Briefing status",
+        metricValue: "Ready",
+        tone: "amber",
+      },
+      content: [
+        {
+          type: "paragraph",
+          text: "The editor assigns one reporter to follow the first train over the repaired bridge.",
+        },
+        {
+          type: "list",
+          items: ["Confirm the route", "Record the first crossing", "File before noon"],
+        },
+      ],
+    },
+    {
+      id: "field-report",
+      title: "Ride the first train",
+      eyebrow: "Scene 02",
+      prompt: "Continue to the edit room.",
+      next: "edit-room",
+      stage: { renderer: "signal-stage" },
+      data: {
+        channel: "Car 12",
+        imageAlt: "Train tracks crossing a steel bridge in morning light",
+        imageSrc:
+          "https://images.unsplash.com/photo-1474487548417-781cb71495f3?auto=format&fit=crop&w=1400&q=80",
+        intensity: 67,
+        location: "Harbor bridge",
+        metricLabel: "Route progress",
+        metricValue: "67%",
+        tone: "green",
+      },
+      content: [
+        {
+          type: "paragraph",
+          text: "Passengers fall quiet as the wheels reach the new span and the harbor opens below.",
+        },
+        {
+          type: "quote",
+          text: "It sounds ordinary again. That is the whole point.",
+          cite: "Bridge engineer",
+        },
+      ],
+    },
+    {
+      id: "edit-room",
+      title: "Shape the report",
+      eyebrow: "Scene 03",
+      prompt: "Continue to publication.",
+      next: "publish",
+      stage: { renderer: "signal-stage" },
+      data: {
+        channel: "Edit bay",
+        imageAlt: "An editor reviewing photos on a desktop monitor",
+        imageSrc:
+          "https://images.unsplash.com/photo-1492724441997-5dc865305da7?auto=format&fit=crop&w=1400&q=80",
+        intensity: 81,
+        location: "Photo desk",
+        metricLabel: "Draft polish",
+        metricValue: "81%",
+        tone: "cyan",
+      },
+      content: [
+        {
+          type: "paragraph",
+          text: "The story keeps its order: assignment, crossing, reaction, and what changes for commuters next.",
+        },
+        {
+          type: "heading",
+          text: "No branch is needed when the sequence is the point.",
+        },
+      ],
+    },
+    {
+      id: "publish",
+      title: "Publish at noon",
+      eyebrow: "Scene 04",
+      stage: { renderer: "signal-stage" },
+      data: {
+        channel: "Front page",
+        imageAlt: "A printed newspaper on a cafe table",
+        imageSrc:
+          "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=1400&q=80",
+        intensity: 100,
+        location: "Morning edition",
+        metricLabel: "Sequence",
+        metricValue: "Complete",
+        tone: "rose",
+      },
+      content: [
+        {
+          type: "paragraph",
+          text: "By noon, the repaired bridge is no longer a rumor. It is a route people can plan around.",
+        },
+      ],
+    },
+  ],
+});
+
 export const storyRegistry = createStoryRendererRegistry<SignalStoryData>({
   web: {
     "signal-stage": SignalStage,

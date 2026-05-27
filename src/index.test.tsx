@@ -101,6 +101,34 @@ const story = defineStory<FixtureData>({
   ],
 });
 
+const linearStory = defineStory<FixtureData>({
+  id: "linear-report",
+  title: "Linear report",
+  openingNodeId: "draft",
+  nodes: [
+    {
+      id: "draft",
+      title: "Draft the report",
+      content: [{ type: "paragraph", text: "Draft the morning brief." }],
+      next: "review",
+      data: { tone: "cold" },
+    },
+    {
+      id: "review",
+      title: "Review the report",
+      content: [{ type: "paragraph", text: "Review the copy for sequence and clarity." }],
+      next: "publish",
+      data: { tone: "warm" },
+    },
+    {
+      id: "publish",
+      title: "Publish the report",
+      content: [{ type: "paragraph", text: "Publish the report at noon." }],
+      data: { tone: "bright" },
+    },
+  ],
+});
+
 afterEach(() => {
   vi.restoreAllMocks();
   vi.resetModules();
@@ -273,6 +301,19 @@ describe("@moritzbrantner/storytelling", () => {
     expect(onPathChange).toHaveBeenCalled();
   });
 
+  test("renders linear StoryPlayer stories one continue step at a time", async () => {
+    render(<StoryPlayer story={linearStory} />);
+
+    expect(screen.getByText("Draft the morning brief.")).toBeTruthy();
+    expect(screen.queryByText("Publish the report at noon.")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(await screen.findByText("Review the copy for sequence and clarity.")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(await screen.findByText("Publish the report at noon.")).toBeTruthy();
+  });
+
   test("renders StoryScroller with overlaid choices and a progressively revealed graph", async () => {
     render(<StoryScroller story={story} />);
 
@@ -292,6 +333,16 @@ describe("@moritzbrantner/storytelling", () => {
       key: "Home",
     });
     expect(await screen.findByText("A low signal reaches the tower.")).toBeTruthy();
+  });
+
+  test("renders linear StoryScroller stories from the opening node", async () => {
+    render(<StoryScroller story={linearStory} />);
+
+    expect(screen.getByText("Draft the morning brief.")).toBeTruthy();
+    expect(screen.queryByText("Publish the report at noon.")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(await screen.findByText("Review the copy for sequence and clarity.")).toBeTruthy();
   });
 
   test("uses registry stages and falls back to the default stage", () => {
