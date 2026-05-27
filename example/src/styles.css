@@ -342,6 +342,200 @@ select {
   box-shadow: 0 18px 54px rgba(23, 33, 31, 0.18);
 }
 
+.motion-lab-scene {
+  --motion-accent: #56d5c4;
+  position: relative;
+  display: grid;
+  min-height: 100%;
+  overflow: hidden;
+  background: #111817;
+  color: #ffffff;
+}
+
+.motion-lab-image,
+.motion-lab-scrim,
+.motion-lab-scan {
+  position: absolute;
+  inset: 0;
+}
+
+.motion-lab-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform-origin: center;
+}
+
+.motion-lab-scrim {
+  background:
+    linear-gradient(90deg, rgba(8, 12, 12, 0.9), rgba(8, 12, 12, 0.5) 48%, rgba(8, 12, 12, 0.1)),
+    linear-gradient(0deg, rgba(8, 12, 12, 0.84), rgba(8, 12, 12, 0.08) 52%);
+}
+
+.motion-lab-scan {
+  opacity: 0.28;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.12) 1px, transparent 1px),
+    radial-gradient(
+      circle at 72% 24%,
+      color-mix(in srgb, var(--motion-accent) 38%, transparent),
+      transparent 27%
+    );
+  background-size:
+    48px 48px,
+    48px 48px,
+    100% 100%;
+  mask-image: linear-gradient(90deg, black, transparent 86%);
+}
+
+.motion-lab-copy {
+  position: relative;
+  z-index: 1;
+  align-self: end;
+  max-width: 43rem;
+  padding: clamp(1.4rem, 4vw, 3.25rem);
+  padding-bottom: clamp(5rem, 12vw, 8rem);
+}
+
+.motion-lab-eyebrow {
+  margin: 0 0 1rem;
+  color: var(--motion-accent);
+  font-size: 0.76rem;
+  font-weight: 850;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.motion-lab-copy h2 {
+  margin: 0;
+  max-width: 9ch;
+  color: #ffffff;
+  font-size: clamp(3.2rem, 9vw, 8rem);
+  line-height: 0.86;
+  letter-spacing: 0;
+}
+
+.motion-lab-copy p:not(.motion-lab-eyebrow) {
+  max-width: 35rem;
+  margin: 1.35rem 0 0;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: clamp(1rem, 1.5vw, 1.18rem);
+  line-height: 1.6;
+}
+
+.motion-lab-instrument {
+  position: absolute;
+  right: clamp(1rem, 3vw, 2.5rem);
+  bottom: clamp(1rem, 3vw, 2.5rem);
+  z-index: 2;
+  width: min(18rem, calc(100% - 2rem));
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0.5rem;
+  background: rgba(8, 12, 12, 0.58);
+  padding: 0.85rem;
+  backdrop-filter: blur(16px);
+}
+
+.motion-lab-instrument-header,
+.motion-lab-primary-readout,
+.motion-lab-instrument li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1rem;
+  align-items: baseline;
+}
+
+.motion-lab-instrument-header {
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+.motion-lab-primary-readout {
+  margin-top: 0.8rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  padding-top: 0.85rem;
+}
+
+.motion-lab-primary-readout span,
+.motion-lab-instrument li span {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.motion-lab-primary-readout strong {
+  color: var(--motion-accent);
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.motion-lab-instrument ul {
+  display: grid;
+  gap: 0.62rem;
+  margin: 0.9rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.motion-lab-instrument li {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 0.62rem;
+}
+
+.motion-lab-instrument li strong {
+  color: #ffffff;
+  font-size: 0.92rem;
+}
+
+.motion-lab-meter {
+  position: absolute;
+  inset-inline: clamp(1.4rem, 4vw, 3.25rem);
+  bottom: clamp(1.2rem, 3vw, 2rem);
+  z-index: 3;
+  height: 0.35rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.motion-lab-meter span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--motion-accent);
+  transform-origin: left;
+}
+
+.motion-lab-value {
+  position: absolute;
+  top: clamp(1.4rem, 4vw, 3.25rem);
+  right: clamp(1.4rem, 4vw, 3.25rem);
+  z-index: 2;
+  color: rgba(255, 255, 255, 0.28);
+  font-size: clamp(4rem, 12vw, 9rem);
+  font-weight: 850;
+  line-height: 0.8;
+}
+
+.motion-lab-active {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  border: 1px solid color-mix(in srgb, var(--motion-accent) 56%, transparent);
+  opacity: 0;
+}
+
+.motion-lab-active[data-active="true"] {
+  opacity: 1;
+}
+
 @media (max-width: 1050px) {
   .example-toolbar,
   .example-main-grid {
@@ -383,6 +577,14 @@ select {
 
   .demo-stage h2 {
     max-width: 9ch;
+  }
+
+  .motion-lab-copy {
+    padding-bottom: 18rem;
+  }
+
+  .motion-lab-copy h2 {
+    max-width: 8ch;
   }
 
   .example-inspector {

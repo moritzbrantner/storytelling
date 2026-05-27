@@ -2,8 +2,12 @@ import {
   StoryContent,
   createStoryRendererRegistry,
   defineStory,
+  type StoryScrollScene,
+  type StoryScrollSceneRenderProps,
   type StoryRenderProps,
 } from "@moritzbrantner/storytelling";
+import { motion, useTransform, type MotionValue } from "motion/react";
+import type { CSSProperties } from "react";
 
 export type SignalStoryData = {
   channel: string;
@@ -14,6 +18,16 @@ export type SignalStoryData = {
   metricLabel: string;
   metricValue: string;
   tone: "amber" | "cyan" | "green" | "rose";
+};
+
+export type MotionLabSceneData = {
+  accent: string;
+  deck: string;
+  imageAlt: string;
+  imageSrc: string;
+  metricLabel: string;
+  metricValue: string;
+  readouts: { label: string; value: string }[];
 };
 
 export const signalStory = defineStory<SignalStoryData>({
@@ -409,6 +423,90 @@ export const storyRegistry = createStoryRendererRegistry<SignalStoryData>({
   },
 });
 
+export const motionLabScenes: StoryScrollScene<MotionLabSceneData>[] = [
+  {
+    id: "motion-lab-signal",
+    title: "Signal resolves",
+    eyebrow: "Motion 01",
+    data: {
+      accent: "#56d5c4",
+      deck: "A low-band scan gathers into one readable carrier as the scroll value crosses the frame.",
+      imageAlt: "Radio astronomy dishes under a clear sky",
+      imageSrc:
+        "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=1400&q=80",
+      metricLabel: "Lock",
+      metricValue: "0.74",
+      readouts: [
+        { label: "Drift", value: "-02.1" },
+        { label: "Band", value: "L" },
+        { label: "Noise", value: "18 dB" },
+      ],
+    },
+    render: (props) => <MotionLabScene {...props} />,
+  },
+  {
+    id: "motion-lab-field",
+    title: "Field shifts",
+    eyebrow: "Motion 02",
+    data: {
+      accent: "#f1b851",
+      deck: "Foreground instruments slide at a different rate than the horizon while the fade preview enters.",
+      imageAlt: "A desert research station at dusk",
+      imageSrc:
+        "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1400&q=80",
+      metricLabel: "Vector",
+      metricValue: "032",
+      readouts: [
+        { label: "Bearing", value: "032" },
+        { label: "Range", value: "14 km" },
+        { label: "Cloud", value: "6/10" },
+      ],
+    },
+    render: (props) => <MotionLabScene {...props} />,
+  },
+  {
+    id: "motion-lab-relay",
+    title: "Relay opens",
+    eyebrow: "Motion 03",
+    transitionToNext: { type: "none" },
+    data: {
+      accent: "#ef8b72",
+      deck: "The local relay hands off cleanly, using a direct boundary before the final confirmation frame.",
+      imageAlt: "A communications tower silhouetted by city lights",
+      imageSrc:
+        "https://images.unsplash.com/photo-1489515217757-5fd1be406fef?auto=format&fit=crop&w=1400&q=80",
+      metricLabel: "Spread",
+      metricValue: "99%",
+      readouts: [
+        { label: "Nodes", value: "128" },
+        { label: "Delay", value: "22 ms" },
+        { label: "Queue", value: "Clear" },
+      ],
+    },
+    render: (props) => <MotionLabScene {...props} />,
+  },
+  {
+    id: "motion-lab-archive",
+    title: "Archive lands",
+    eyebrow: "Motion 04",
+    data: {
+      accent: "#8bd17c",
+      deck: "The final frame eases the image, headline, instrument cluster, and progress bar into alignment.",
+      imageAlt: "A marked paper map on a work table",
+      imageSrc:
+        "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&w=1400&q=80",
+      metricLabel: "Match",
+      metricValue: "83%",
+      readouts: [
+        { label: "Route", value: "Found" },
+        { label: "Source", value: "Tape 31B" },
+        { label: "Status", value: "Filed" },
+      ],
+    },
+    render: (props) => <MotionLabScene {...props} />,
+  },
+];
+
 function SignalStage({ node, progress, currentIndex }: StoryRenderProps<SignalStoryData>) {
   const data = node.data;
 
@@ -453,5 +551,99 @@ function SignalStage({ node, progress, currentIndex }: StoryRenderProps<SignalSt
         <span style={{ width: `${Math.max(progress * 100, 12)}%` }} />
       </div>
     </section>
+  );
+}
+
+function MotionLabScene({
+  scene,
+  sceneIndex,
+  sceneCount,
+  progress,
+  scrollProgress,
+  isActive,
+}: StoryScrollSceneRenderProps<MotionLabSceneData>) {
+  const data = scene.data;
+  const imageScale = useTransform(scrollProgress, [0, 1], [1.1, 1.01]);
+  const imageY = useTransform(scrollProgress, [0, 1], [22, -22]);
+  const copyY = useTransform(scrollProgress, [0, 1], [44, -34]);
+  const copyOpacity = useTransform(scrollProgress, [0, 0.16, 0.82, 1], [0.72, 1, 1, 0.64]);
+  const instrumentY = useTransform(scrollProgress, [0, 1], [72, -18]);
+  const meterScale = useTransform(scrollProgress, [0, 1], [0.08, 1]);
+
+  return (
+    <section
+      className="motion-lab-scene"
+      style={{ "--motion-accent": data?.accent ?? "#56d5c4" } as CSSProperties}
+    >
+      {data ? (
+        <motion.img
+          className="motion-lab-image"
+          src={data.imageSrc}
+          alt={data.imageAlt}
+          style={{ scale: imageScale, y: imageY }}
+        />
+      ) : null}
+      <div className="motion-lab-scrim" />
+      <div className="motion-lab-scan" aria-hidden="true" />
+
+      <motion.div className="motion-lab-copy" style={{ opacity: copyOpacity, y: copyY }}>
+        {scene.eyebrow ? <p className="motion-lab-eyebrow">{scene.eyebrow}</p> : null}
+        <h2>{scene.title}</h2>
+        {data ? <p>{data.deck}</p> : null}
+      </motion.div>
+
+      <motion.div className="motion-lab-instrument" style={{ y: instrumentY }}>
+        <div className="motion-lab-instrument-header">
+          <span>{String(sceneIndex + 1).padStart(2, "0")}</span>
+          <span>{String(sceneCount).padStart(2, "0")}</span>
+        </div>
+        {data ? (
+          <div className="motion-lab-primary-readout">
+            <span>{data.metricLabel}</span>
+            <strong>{data.metricValue}</strong>
+          </div>
+        ) : null}
+        <ul>
+          {data?.readouts.map((readout, index) => (
+            <MotionLabReadout
+              key={readout.label}
+              index={index}
+              readout={readout}
+              scrollProgress={scrollProgress}
+            />
+          ))}
+        </ul>
+      </motion.div>
+
+      <div className="motion-lab-meter" aria-hidden="true">
+        <motion.span style={{ scaleX: meterScale }} />
+      </div>
+      <span className="motion-lab-value" aria-hidden="true">
+        {Math.round(progress * 100)
+          .toString()
+          .padStart(2, "0")}
+      </span>
+      <span className="motion-lab-active" data-active={isActive ? "true" : "false"} />
+    </section>
+  );
+}
+
+function MotionLabReadout({
+  index,
+  readout,
+  scrollProgress,
+}: {
+  index: number;
+  readout: MotionLabSceneData["readouts"][number];
+  scrollProgress: MotionValue<number>;
+}) {
+  const y = useTransform(scrollProgress, [0, 1], [18 + index * 10, -12 - index * 8]);
+  const opacity = useTransform(scrollProgress, [0, 0.18 + index * 0.08, 1], [0.52, 1, 0.82]);
+
+  return (
+    <motion.li style={{ opacity, y }}>
+      <span>{readout.label}</span>
+      <strong>{readout.value}</strong>
+    </motion.li>
   );
 }

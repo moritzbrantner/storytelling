@@ -7,12 +7,21 @@ import {
   resolveStoryPath,
   type StoryDocument,
   type StoryHistoryEntry,
+  type StoryScrollScene,
+  type StoryScrollTransition,
 } from "@moritzbrantner/storytelling";
 
-import { linearStory, signalStory, storyRegistry, type SignalStoryData } from "./story";
+import {
+  linearStory,
+  motionLabScenes,
+  signalStory,
+  storyRegistry,
+  type MotionLabSceneData,
+  type SignalStoryData,
+} from "./story";
 
 type ExampleMode = "player" | "scroller";
-type ExampleStoryId = "branching" | "linear";
+type ExampleStoryId = "branching" | "linear" | "motion";
 
 type PathPreset = {
   id: string;
@@ -21,11 +30,23 @@ type PathPreset = {
 };
 
 type ExampleStory = {
-  id: ExampleStoryId;
+  id: Exclude<ExampleStoryId, "motion">;
   label: string;
   story: StoryDocument<SignalStoryData>;
   presets: PathPreset[];
 };
+
+type MotionPreset = {
+  id: string;
+  label: string;
+  transition: StoryScrollTransition;
+};
+
+const storyOptions: { id: ExampleStoryId; label: string }[] = [
+  { id: "branching", label: "Branching" },
+  { id: "linear", label: "Linear" },
+  { id: "motion", label: "Motion" },
+];
 
 const exampleStories: ExampleStory[] = [
   {
@@ -54,6 +75,12 @@ const exampleStories: ExampleStory[] = [
   },
 ];
 
+const motionPresets: MotionPreset[] = [
+  { id: "soft-fade", label: "Soft fade", transition: { type: "fade", scrollUnits: 18 } },
+  { id: "long-fade", label: "Long fade", transition: { type: "fade", scrollUnits: 34 } },
+  { id: "direct", label: "Direct", transition: { type: "none" } },
+];
+
 function getStoryScrollerPageId(storyId: string, nodeId: string) {
   return `story-scroller-page-${storyId}-${nodeId}`;
 }
@@ -74,16 +101,36 @@ function getHistorySummary(
     .join("\n");
 }
 
+function getSceneSummary(
+  scenes: StoryScrollScene<MotionLabSceneData>[],
+  activeIndex: number,
+  progress: number,
+) {
+  const activeScene = scenes[activeIndex] ?? scenes[0];
+
+  if (!activeScene) {
+    return "No active scene";
+  }
+
+  return `${activeScene.title}\nProgress ${Math.round(progress)}%\nScene ${activeIndex + 1} of ${
+    scenes.length
+  }`;
+}
+
 export function ExampleApp() {
   const [storyId, setStoryId] = useState<ExampleStoryId>("branching");
   const [mode, setMode] = useState<ExampleMode>("player");
   const [scrollerActiveIndex, setScrollerActiveIndex] = useState(0);
+  const [sceneProgress, setSceneProgress] = useState(0);
+  const isMotionStory = storyId === "motion";
   const activeExample =
     exampleStories.find((example) => example.id === storyId) ?? exampleStories[0]!;
   const [presetId, setPresetId] = useState(activeExample.presets[0]?.id ?? "opening");
   const [history, setHistory] = useState<StoryHistoryEntry<SignalStoryData>[]>([]);
   const activePreset =
     activeExample.presets.find((preset) => preset.id === presetId) ?? activeExample.presets[0]!;
+  const activeMotionPreset =
+    motionPresets.find((preset) => preset.id === presetId) ?? motionPresets[0]!;
   const presetPath = useMemo(
     () =>
       resolveStoryPath(activeExample.story, {
@@ -99,8 +146,8 @@ export function ExampleApp() {
       }),
     [activeExample.story],
   );
-  const isLinearStory = activeExample.id === "linear";
-  const isScrollerMode = isLinearStory || mode === "scroller";
+  const isLinearStory = storyId === "linear";
+  const isScrollerMode = isMotionStory || isLinearStory || mode === "scroller";
   const visibleHistory = isLinearStory
     ? linearScrollPath.history
     : history.length > 0
@@ -109,29 +156,48 @@ export function ExampleApp() {
   const activeMinimapIndex = isScrollerMode
     ? scrollerActiveIndex
     : Math.max(visibleHistory.length - 1, 0);
-  const showBranchControls = !isLinearStory;
-  const minimapItems = visibleHistory.map((entry) => {
-    const node = activeExample.story.nodes.find((candidate) => candidate.id === entry.nodeId);
+  const showBranchControls = !isLinearStory && !isMotionStory;
+  const minimapItems = isMotionStory
+    ? motionLabScenes.map((scene) => ({
+        id: scene.id,
+        title: scene.title,
+        eyebrow: scene.eyebrow,
+      }))
+    : visibleHistory.map((entry) => {
+        const node = activeExample.story.nodes.find((candidate) => candidate.id === entry.nodeId);
 
-    return {
-      id: entry.nodeId,
-      title: node?.title ?? entry.nodeId,
-      eyebrow: node?.eyebrow,
-    };
-  });
+        return {
+          id: entry.nodeId,
+          title: node?.title ?? entry.nodeId,
+          eyebrow: node?.eyebrow,
+        };
+      });
 
   useEffect(() => {
     setScrollerActiveIndex(0);
-  }, [activeExample.id, activePreset.id, mode]);
+    setSceneProgress(0);
+  }, [storyId, activePreset.id, activeMotionPreset.id, mode]);
 
   useEffect(() => {
-    if (activeExample.id === "linear" && mode !== "scroller") {
+    if ((isLinearStory || isMotionStory) && mode !== "scroller") {
       setMode("scroller");
     }
-  }, [activeExample.id, mode]);
+  }, [isLinearStory, isMotionStory, mode]);
 
   const selectMinimapItem = (index: number) => {
     if (!isScrollerMode) return;
+
+    if (isMotionStory) {
+      const scene = motionLabScenes[index];
+      if (!scene) return;
+
+      setScrollerActiveIndex(index);
+      document.getElementById(scene.id)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+      return;
+    }
 
     const entry = visibleHistory[index];
     if (!entry) return;
@@ -156,7 +222,7 @@ export function ExampleApp() {
 
           <div className="example-toolbar-controls" aria-label="Example controls">
             <div className="example-segment" role="tablist" aria-label="Story type">
-              {exampleStories.map((example) => (
+              {storyOptions.map((example) => (
                 <button
                   key={example.id}
                   type="button"
@@ -165,8 +231,15 @@ export function ExampleApp() {
                   data-active={storyId === example.id}
                   onClick={() => {
                     setStoryId(example.id);
-                    setPresetId(example.presets[0]?.id ?? "opening");
-                    if (example.id === "linear") {
+                    if (example.id === "motion") {
+                      setPresetId(motionPresets[0]?.id ?? "soft-fade");
+                    } else {
+                      const nextExample =
+                        exampleStories.find((candidate) => candidate.id === example.id) ??
+                        exampleStories[0]!;
+                      setPresetId(nextExample.presets[0]?.id ?? "opening");
+                    }
+                    if (example.id === "linear" || example.id === "motion") {
                       setMode("scroller");
                     }
                     setHistory([]);
@@ -223,12 +296,39 @@ export function ExampleApp() {
                 ))}
               </div>
             ) : null}
+
+            {isMotionStory ? (
+              <div className="example-preset-list" aria-label="Motion transition">
+                {motionPresets.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    data-active={preset.id === activeMotionPreset.id}
+                    onClick={() => {
+                      setPresetId(preset.id);
+                      setHistory([]);
+                    }}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
         </header>
 
         <div className="example-main-grid">
           <div className="example-component-frame">
-            {!isScrollerMode ? (
+            {isMotionStory ? (
+              <StoryScroller
+                key={`motion-${activeMotionPreset.id}`}
+                scenes={motionLabScenes}
+                transition={activeMotionPreset.transition}
+                ariaLabel="Motion examples"
+                onActiveIndexChange={setScrollerActiveIndex}
+                onSceneProgressChange={setSceneProgress}
+              />
+            ) : !isScrollerMode ? (
               <StoryPlayer
                 key={`${activeExample.id}-${activePreset.id}`}
                 story={activeExample.story}
@@ -242,8 +342,10 @@ export function ExampleApp() {
                 story={activeExample.story}
                 registry={storyRegistry}
                 pathChoiceIds={activePreset.choiceIds}
+                transition={{ type: "fade", scrollUnits: 16 }}
                 onPathChange={setHistory}
                 onActiveIndexChange={setScrollerActiveIndex}
+                onSceneProgressChange={setSceneProgress}
               />
             )}
           </div>
@@ -260,15 +362,27 @@ export function ExampleApp() {
             <div className="example-state-panel">
               <div>
                 <p className="example-panel-label">
-                  {isLinearStory
-                    ? "Scroll sequence"
-                    : mode === "player"
-                      ? "Active path"
-                      : "Start path"}
+                  {isMotionStory
+                    ? "Motion scene"
+                    : isLinearStory
+                      ? "Scroll sequence"
+                      : mode === "player"
+                        ? "Active path"
+                        : "Start path"}
                 </p>
-                <h2>{isLinearStory ? "Story cards" : activePreset.label}</h2>
+                <h2>
+                  {isMotionStory
+                    ? (motionLabScenes[activeMinimapIndex]?.title ?? "Motion scenes")
+                    : isLinearStory
+                      ? "Story cards"
+                      : activePreset.label}
+                </h2>
               </div>
-              <pre>{getHistorySummary(activeExample.story, visibleHistory)}</pre>
+              <pre>
+                {isMotionStory
+                  ? getSceneSummary(motionLabScenes, activeMinimapIndex, sceneProgress)
+                  : getHistorySummary(activeExample.story, visibleHistory)}
+              </pre>
             </div>
 
             {showBranchControls ? (
