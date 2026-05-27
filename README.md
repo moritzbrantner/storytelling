@@ -6,11 +6,19 @@ Three-friendly rendering helpers.
 ## Main APIs
 
 - `defineStory(story)` / `validateStory(story)`
+- `validateStoryDocument(story)` / `assertStoryDocument(story)`
 - `resolveStoryPath(story, options)` / `buildStoryTimeline(story, options)`
+- `compileStory(story)` / `enumerateStoryPaths(story, options)`
+- `serializeStoryPath(...)` / `parseStoryPath(...)`
 - `StoryPlayer`, `StoryControls`, `StoryScroller`, `StoryProgress`, and `StoryMinimap`
 - `createStoryRendererRegistry(...)`, `getStoryRendererKey(...)`, and `getStoryStageProps(...)`
+- `@moritzbrantner/storytelling/media` for media-oriented stage helpers
+- `@moritzbrantner/storytelling/workflow` for workflow-editor document conversion
+- `@moritzbrantner/storytelling/timeline` for timeline-editor document conversion
 - `@moritzbrantner/storytelling/remotion` for frame-synced compositions
 - `@moritzbrantner/storytelling/three` for Three.js stage rendering
+
+See [docs/API.md](docs/API.md) for the compact public API reference.
 
 ## Story schema
 
@@ -56,6 +64,18 @@ export const story = defineStory({
 targets, missing opening nodes, and cycles. `resolveStoryPath()` returns the
 current path for a set of selected choice ids, while `buildStoryTimeline()`
 converts that path into frame ranges for video-oriented renderers.
+
+Use `validateStoryDocument()` when an editor should show all diagnostics instead
+of throwing on the first invalid field.
+
+```ts
+import { validateStoryDocument } from "@moritzbrantner/storytelling";
+
+const issues = validateStoryDocument(story);
+```
+
+Use `compileStory()` and `enumerateStoryPaths()` when an authoring UI needs graph
+metadata, branch lists, endings, or all selectable routes through a document.
 
 ### Linear stories
 
@@ -152,6 +172,11 @@ Use `scrollInputScale` to tune wheel and arrow-key input. `1` is the default:
 one arrow press advances by one scene, and wheel deltas are left unchanged.
 Values below `1` slow scrolling down; values above `1` speed it up.
 
+Both `StoryPlayer` and story-backed `StoryScroller` support controlled choice
+state with `choiceIds`, `defaultChoiceIds`, and `onChoiceIdsChange`. Use
+`serializeStoryPath()` and `parseStoryPath()` to put the current path in a URL or
+share token.
+
 ## Example website
 
 Run the local example app from the repository root:
@@ -205,6 +230,35 @@ import { StoryCanvasStage } from "@moritzbrantner/storytelling/three";
 export function ThreeStory() {
   return <StoryCanvasStage story={story} choiceIds={["trace"]} />;
 }
+```
+
+## Media
+
+The media entrypoint exposes reusable stage helpers for subtitle, audio, and
+video stories without keeping the older JSX story-node model in the root API.
+
+```tsx
+import { createVideoStoryScene } from "@moritzbrantner/storytelling/media";
+
+const registry = createStoryRendererRegistry({
+  web: {
+    interview: createVideoStoryScene({ src: "/interview.mp4", title: "Interview" }),
+  },
+});
+```
+
+## Workflow And Timeline Adapters
+
+The workflow and timeline entrypoints are pure conversion helpers. They return
+plain objects shaped for `@moritzbrantner/workflow-editor` and
+`@moritzbrantner/timeline-editor`, but they do not import those packages.
+
+```ts
+import { storyToTimelineEditorDocument } from "@moritzbrantner/storytelling/timeline";
+import { storyToWorkflowDocument } from "@moritzbrantner/storytelling/workflow";
+
+const workflowDocument = storyToWorkflowDocument(story);
+const timelineDocument = storyToTimelineEditorDocument(story, { choiceIds: ["answer"] });
 ```
 
 ## Adapter decision

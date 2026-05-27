@@ -19,15 +19,19 @@ import type {
   StoryRenderProps,
   StoryRendererRegistry,
 } from "./story-model";
+import type { StoryPathState } from "./story-state";
 
 export type StoryPlayerProps<TData extends StoryNodeData = StoryNodeData> = {
   story: StoryDocument<TData>;
   registry?: StoryRendererRegistry<TData>;
   initialChoiceIds?: string[];
+  defaultChoiceIds?: string[];
+  choiceIds?: string[];
   className?: string;
   ariaLabel?: string;
   onChoice?: (choice: StoryChoice, history: StoryHistoryEntry<TData>[]) => void;
   onPathChange?: (history: StoryHistoryEntry<TData>[]) => void;
+  onChoiceIdsChange?: (choiceIds: string[], state: StoryPathState<TData>) => void;
 };
 
 function resolveInitialHistory<TData extends StoryNodeData>(
@@ -38,6 +42,20 @@ function resolveInitialHistory<TData extends StoryNodeData>(
     choiceIds: initialChoiceIds,
     autoAdvanceLinearNodes: initialChoiceIds.length > 0,
   }).history;
+}
+
+function resolveControlledHistory<TData extends StoryNodeData>(
+  story: StoryDocument<TData>,
+  choiceIds: string[],
+) {
+  return resolveStoryPath(story, {
+    choiceIds,
+    autoAdvanceLinearNodes: false,
+  }).history;
+}
+
+function getHistoryChoiceIds<TData extends StoryNodeData>(history: StoryHistoryEntry<TData>[]) {
+  return history.flatMap((entry) => (entry.choiceId ? [entry.choiceId] : []));
 }
 
 function buildPathFromHistory<TData extends StoryNodeData>(
@@ -55,19 +73,43 @@ function buildPathFromHistory<TData extends StoryNodeData>(
   };
 }
 
+function buildStoryPathStateFromHistory<TData extends StoryNodeData>(
+  story: StoryDocument<TData>,
+  history: StoryHistoryEntry<TData>[],
+  choiceIds: string[],
+): StoryPathState<TData> {
+  const path = buildPathFromHistory(story, history);
+
+  return {
+    choiceIds,
+    path,
+    history,
+    currentNode: path.currentNode,
+    completed: path.completed,
+  };
+}
+
 export function StoryPlayer<TData extends StoryNodeData = StoryNodeData>({
   story: input,
   registry,
   initialChoiceIds = [],
+  defaultChoiceIds,
+  choiceIds,
   className,
   ariaLabel,
   onChoice,
   onPathChange,
+  onChoiceIdsChange,
 }: StoryPlayerProps<TData>) {
   const story = useMemo(() => defineStory(input), [input]);
-  const initialChoiceKey = initialChoiceIds.join("|");
+  const resolvedDefaultChoiceIds = defaultChoiceIds ?? initialChoiceIds;
+  const defaultChoiceKey = resolvedDefaultChoiceIds.join("|");
+  const controlledChoiceKey = choiceIds?.join("|") ?? "";
+  const isChoiceIdsControlled = choiceIds !== undefined;
   const [history, setHistory] = useState<StoryHistoryEntry<TData>[]>(() =>
-    resolveInitialHistory(story, initialChoiceIds),
+    isChoiceIdsControlled
+      ? resolveControlledHistory(story, choiceIds ?? [])
+      : resolveInitialHistory(story, resolvedDefaultChoiceIds),
   );
   const headingRef = useRef<HTMLHeadingElement | null>(null);
   const reducedMotion = useReducedMotion();
@@ -79,8 +121,13 @@ export function StoryPlayer<TData extends StoryNodeData = StoryNodeData>({
   const progress = history.length / Math.max(story.nodes.length, 1);
 
   useEffect(() => {
-    setHistory(resolveInitialHistory(story, initialChoiceIds));
-  }, [initialChoiceKey, story]);
+    if (isChoiceIdsControlled) {
+      setHistory(resolveControlledHistory(story, choiceIds ?? []));
+      return;
+    }
+
+    setHistory(resolveInitialHistory(story, resolvedDefaultChoiceIds));
+  }, [controlledChoiceKey, defaultChoiceKey, isChoiceIdsControlled, story]);
 
   useEffect(() => {
     onPathChange?.(history);
@@ -103,20 +150,44 @@ export function StoryPlayer<TData extends StoryNodeData = StoryNodeData>({
         data: nextNode.data,
       },
     ];
+    const nextChoiceIds = getHistoryChoiceIds(nextHistory);
 
-    setHistory(nextHistory);
+    if (!isChoiceIdsControlled) {
+      setHistory(nextHistory);
+    }
+
     onChoice?.(choice, nextHistory);
+    onChoiceIdsChange?.(
+      nextChoiceIds,
+      buildStoryPathStateFromHistory(story, nextHistory, nextChoiceIds),
+    );
   };
 
   const goBack = () => {
     if (!canGoBack) return;
-    setHistory((current) => current.slice(0, -1));
+
+    const nextHistory = history.slice(0, -1);
+    const nextChoiceIds = getHistoryChoiceIds(nextHistory);
+
+    if (!isChoiceIdsControlled) {
+      setHistory(nextHistory);
+    }
+
+    onChoiceIdsChange?.(
+      nextChoiceIds,
+      buildStoryPathStateFromHistory(story, nextHistory, nextChoiceIds),
+    );
   };
 
   const restart = () => {
     const openingNode = getStoryNode(story, story.openingNodeId);
+    const nextHistory = [{ nodeId: openingNode.id, data: openingNode.data }];
 
-    setHistory([{ nodeId: openingNode.id, data: openingNode.data }]);
+    if (!isChoiceIdsControlled) {
+      setHistory(nextHistory);
+    }
+
+    onChoiceIdsChange?.([], buildStoryPathStateFromHistory(story, nextHistory, []));
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {

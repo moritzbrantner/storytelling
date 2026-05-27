@@ -7,11 +7,19 @@ import {
   StoryPlayer,
   StoryScroller,
   StoryStageFrame,
+  assertStoryDocument,
   buildStoryTimeline,
+  compileStory,
   createStoryRendererRegistry,
   defineStory,
+  enumerateStoryPaths,
+  getStoryBranches,
+  getStoryEndings,
+  parseStoryPath,
   resolveStoryPath,
+  serializeStoryPath,
   validateStory,
+  validateStoryDocument,
   type StoryDocument,
   type StoryRenderProps,
   type StoryScrollSceneRenderProps,
@@ -243,6 +251,57 @@ describe("@moritzbrantner/storytelling", () => {
     ).toThrow("contains a cycle");
   });
 
+  test("returns structured validation diagnostics", () => {
+    const issues = validateStoryDocument({
+      id: "broken",
+      title: "",
+      openingNodeId: "missing",
+      nodes: [
+        {
+          id: "start",
+          title: "Start",
+          choices: [{ id: "go", label: "Go", target: "missing" }],
+        },
+      ],
+    });
+
+    expect(issues.map((issue) => issue.code)).toEqual([
+      "empty-story-title",
+      "missing-opening-node",
+      "missing-choice-target",
+    ]);
+    expect(() =>
+      assertStoryDocument({
+        id: "broken",
+        title: "",
+        openingNodeId: "missing",
+        nodes: [{ id: "start", title: "Start" }],
+      }),
+    ).toThrow("must have a title");
+  });
+
+  test("compiles story graphs, finds branches and endings, and enumerates paths", () => {
+    const compiledStory = compileStory(story);
+
+    expect(getStoryBranches(compiledStory).map((node) => node.id)).toEqual(["wake"]);
+    expect(getStoryEndings(compiledStory).map((node) => node.id)).toEqual([
+      "pilot-ending",
+      "trace-node",
+    ]);
+    expect(enumerateStoryPaths(story).map((path) => path.choiceIds)).toEqual([
+      ["answer", "answer-node__continue"],
+      ["trace"],
+    ]);
+  });
+
+  test("serializes and parses story path choice ids", () => {
+    const serialized = serializeStoryPath(["answer", "trace/with spaces"]);
+
+    expect(serialized).toBe("choice=answer&choice=trace%2Fwith+spaces");
+    expect(parseStoryPath(`?${serialized}`)).toEqual(["answer", "trace/with spaces"]);
+    expect(parseStoryPath("answer,trace")).toEqual(["answer", "trace"]);
+  });
+
   test("resolves branching, linear auto-advance, disabled choices, stopAt, and maxSteps", () => {
     expect(resolveStoryPath(story, { choiceIds: ["trace"] }).nodes.map((node) => node.id)).toEqual([
       "wake",
@@ -338,6 +397,30 @@ describe("@moritzbrantner/storytelling", () => {
     expect(await screen.findByText("Publish the report at noon.")).toBeTruthy();
   });
 
+  test("supports controlled StoryPlayer choice ids", async () => {
+    const onChoiceIdsChange = vi.fn();
+    const { rerender } = render(
+      <StoryPlayer story={story} choiceIds={[]} onChoiceIdsChange={onChoiceIdsChange} />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Trace the source/ }));
+
+    expect(onChoiceIdsChange).toHaveBeenCalledWith(
+      ["trace"],
+      expect.objectContaining({
+        choiceIds: ["trace"],
+        currentNode: expect.objectContaining({ id: "trace-node" }),
+      }),
+    );
+    expect(screen.getByText("A low signal reaches the tower.")).toBeTruthy();
+
+    rerender(<StoryPlayer story={story} choiceIds={["trace"]} />);
+
+    expect(
+      await screen.findByText("The signal comes from a cove nobody has charted in decades."),
+    ).toBeTruthy();
+  });
+
   test("renders StoryScroller story branches as scene-progress pages", async () => {
     render(<StoryScroller story={story} />);
 
@@ -372,6 +455,22 @@ describe("@moritzbrantner/storytelling", () => {
       key: "ArrowDown",
     });
     expect(await screen.findByText("Review the copy for sequence and clarity.")).toBeTruthy();
+  });
+
+  test("supports controlled StoryScroller choice ids", async () => {
+    const onChoiceIdsChange = vi.fn();
+
+    render(<StoryScroller story={story} choiceIds={[]} onChoiceIdsChange={onChoiceIdsChange} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Answer immediately/ }));
+
+    expect(onChoiceIdsChange).toHaveBeenCalledWith(
+      ["answer"],
+      expect.objectContaining({
+        choiceIds: ["answer"],
+        currentNode: expect.objectContaining({ id: "pilot-ending" }),
+      }),
+    );
   });
 
   test("passes a normalized 0-100 scroll value to custom StoryScroller scenes", async () => {
@@ -701,9 +800,51 @@ describe("@moritzbrantner/storytelling", () => {
     ).toBeTruthy();
   });
 
-  test("imports remotion and three entrypoints without browser-only setup", async () => {
+  test("imports subpath entrypoints without browser-only setup", async () => {
     await expect(import("./remotion")).resolves.toHaveProperty("StoryRemotionComposition");
     await expect(import("./three")).resolves.toHaveProperty("StoryCanvasStage");
+    await expect(import("./media")).resolves.toHaveProperty("StoryVideoFile");
+    await expect(import("./workflow")).resolves.toHaveProperty("storyToWorkflowDocument");
+    await expect(import("./timeline")).resolves.toHaveProperty("storyToTimelineEditorDocument");
+  });
+
+  test("converts stories to workflow and timeline documents", async () => {
+    const { storyToWorkflowDocument, workflowDocumentToStory } = await import("./workflow");
+    const { applyTimelineTimingsToStory, storyToTimelineEditorDocument } =
+      await import("./timeline");
+    const workflowDocument = storyToWorkflowDocument(story);
+    const timelineDocument = storyToTimelineEditorDocument(story, { choiceIds: ["answer"] });
+
+    expect(workflowDocument.nodes.map((node) => node.id)).toContain("wake");
+    expect(workflowDocument.edges.map((edge) => edge.data.choiceId)).toContain("answer");
+    expect(workflowDocumentToStory(workflowDocument, { id: "roundtrip" }).nodes).toHaveLength(
+      story.nodes.length,
+    );
+    expect(timelineDocument.tracks[0]?.items.map((item) => item.data?.nodeId)).toEqual([
+      "wake",
+      "answer-node",
+      "pilot-ending",
+    ]);
+    expect(
+      applyTimelineTimingsToStory(story, {
+        tracks: [
+          {
+            id: "story-scenes",
+            label: "Story scenes",
+            items: [
+              {
+                id: "story-scene-wake",
+                trackId: "story-scenes",
+                label: "Wake",
+                startMs: 0,
+                durationMs: 2000,
+                data: { nodeId: "wake", storyNode: story.nodes[0]!, pathIndex: 0 },
+              },
+            ],
+          },
+        ],
+      }).nodes[0]?.durationInFrames,
+    ).toBe(60);
   });
 
   test("computes Remotion composition props", async () => {
@@ -736,11 +877,19 @@ describe("@moritzbrantner/storytelling", () => {
 
     const { StoryRemotionComposition } = await import("./remotion");
     const capture = vi.fn();
+    const remotionNodes = [...story.nodes];
+    const traceNodeIndex = remotionNodes.findIndex((node) => node.id === "trace-node");
+
+    if (traceNodeIndex >= 0) {
+      remotionNodes[traceNodeIndex] = {
+        ...remotionNodes[traceNodeIndex]!,
+        stage: { renderer: "capture" },
+      };
+    }
+
     const remotionStory: StoryDocument<FixtureData> = {
       ...story,
-      nodes: story.nodes.map((node) =>
-        node.id === "trace-node" ? { ...node, stage: { renderer: "capture" } } : node,
-      ),
+      nodes: remotionNodes,
     };
     const registry = createStoryRendererRegistry<FixtureData>({
       remotion: {
@@ -752,7 +901,12 @@ describe("@moritzbrantner/storytelling", () => {
     });
 
     render(
-      <StoryRemotionComposition story={remotionStory} choiceIds={["trace"]} registry={registry} />,
+      <StoryRemotionComposition
+        story={remotionStory}
+        choiceIds={["trace"]}
+        registry={registry}
+        layout={{ fps: 24 }}
+      />,
     );
 
     expect(screen.getByText("Captured The map reveals a hidden harbor")).toBeTruthy();
@@ -761,6 +915,7 @@ describe("@moritzbrantner/storytelling", () => {
         absoluteFrame: 130,
         frame: 30,
         durationInFrames: 100,
+        fps: 24,
         sceneProgress: 0.3,
         currentIndex: 1,
         history: expect.arrayContaining([

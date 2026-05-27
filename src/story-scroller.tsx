@@ -27,6 +27,7 @@ import type {
   StoryRenderProps,
   StoryRendererRegistry,
 } from "./story-model";
+import type { StoryPathState } from "./story-state";
 
 export type StoryScrollSceneRenderProps<TData = unknown> = {
   value: number;
@@ -53,11 +54,16 @@ export type StoryScrollScene<TData = unknown> = {
   render: (props: StoryScrollSceneRenderProps<TData>) => ReactNode;
 };
 
-export type StoryScrollerProps<TData extends StoryNodeData = StoryNodeData> = {
+export type StoryScrollerProps<
+  TData extends StoryNodeData = StoryNodeData,
+  TSceneData = unknown,
+> = {
   story?: StoryDocument<TData>;
-  scenes?: StoryScrollScene[];
+  scenes?: StoryScrollScene<TSceneData>[];
   registry?: StoryRendererRegistry<TData>;
   pathChoiceIds?: string[];
+  defaultChoiceIds?: string[];
+  choiceIds?: string[];
   className?: string;
   viewportClassName?: string;
   transition?: StoryScrollTransition;
@@ -65,6 +71,7 @@ export type StoryScrollerProps<TData extends StoryNodeData = StoryNodeData> = {
   ariaLabel?: string;
   onChoice?: (choice: StoryChoice, history: StoryHistoryEntry<TData>[]) => void;
   onPathChange?: (history: StoryHistoryEntry<TData>[]) => void;
+  onChoiceIdsChange?: (choiceIds: string[], state: StoryPathState<TData>) => void;
   onActiveIndexChange?: (index: number) => void;
   onSceneProgressChange?: (value: number) => void;
 };
@@ -103,6 +110,37 @@ function resolveInitialHistory<TData extends StoryNodeData>(
 
 function getHistoryChoiceIds<TData extends StoryNodeData>(history: StoryHistoryEntry<TData>[]) {
   return history.flatMap((entry) => (entry.choiceId ? [entry.choiceId] : []));
+}
+
+function buildPathFromHistory<TData extends StoryNodeData>(
+  story: StoryDocument<TData>,
+  history: StoryHistoryEntry<TData>[],
+): ResolvedStoryPath<TData> {
+  const nodes = history.map((entry) => getStoryNode(story, entry.nodeId));
+  const currentNode = nodes[nodes.length - 1] ?? getStoryNode(story, story.openingNodeId);
+
+  return {
+    nodes,
+    history,
+    currentNode,
+    completed: isStoryEnding(story, currentNode),
+  };
+}
+
+function buildStoryPathStateFromHistory<TData extends StoryNodeData>(
+  story: StoryDocument<TData>,
+  history: StoryHistoryEntry<TData>[],
+  choiceIds: string[],
+): StoryPathState<TData> {
+  const path = buildPathFromHistory(story, history);
+
+  return {
+    choiceIds,
+    path,
+    history,
+    currentNode: path.currentNode,
+    completed: path.completed,
+  };
 }
 
 function getStoryScrollerPageId(storyId: string, sceneId: string) {
@@ -492,6 +530,8 @@ function StoryDocumentScroller<TData extends StoryNodeData = StoryNodeData>({
   story: input,
   registry,
   pathChoiceIds = [],
+  defaultChoiceIds,
+  choiceIds,
   className,
   viewportClassName,
   transition,
@@ -499,16 +539,20 @@ function StoryDocumentScroller<TData extends StoryNodeData = StoryNodeData>({
   ariaLabel,
   onChoice,
   onPathChange,
+  onChoiceIdsChange,
   onActiveIndexChange,
   onSceneProgressChange,
-}: Omit<StoryScrollerProps<TData>, "story" | "scenes"> & {
+}: Omit<StoryScrollerProps<TData, unknown>, "story" | "scenes"> & {
   story: StoryDocument<TData>;
 }) {
   const story = useMemo(() => validateStory(input), [input]);
-  const initialChoiceKey = pathChoiceIds.join("|");
+  const resolvedDefaultChoiceIds = defaultChoiceIds ?? pathChoiceIds;
+  const defaultChoiceKey = resolvedDefaultChoiceIds.join("|");
+  const controlledChoiceKey = choiceIds?.join("|") ?? "";
+  const isChoiceIdsControlled = choiceIds !== undefined;
   const initialHistory = useMemo(
-    () => resolveInitialHistory(story, pathChoiceIds),
-    [initialChoiceKey, story],
+    () => resolveInitialHistory(story, choiceIds ?? resolvedDefaultChoiceIds),
+    [controlledChoiceKey, defaultChoiceKey, isChoiceIdsControlled, story],
   );
   const [history, setHistory] = useState<StoryHistoryEntry<TData>[]>(() => initialHistory);
   const [scrollTarget, setScrollTarget] = useState<ScrollTarget | undefined>();
@@ -541,19 +585,30 @@ function StoryDocumentScroller<TData extends StoryNodeData = StoryNodeData>({
       const nextHistory = resolveInitialHistory(story, nextChoiceIds);
       const nextActiveIndex = Math.min(index + 1, nextHistory.length - 1);
 
-      setHistory(nextHistory);
+      if (!isChoiceIdsControlled) {
+        setHistory(nextHistory);
+      }
+
       requestScrollToScene(nextActiveIndex);
       onChoice?.(choice, nextHistory);
+      onChoiceIdsChange?.(
+        nextChoiceIds,
+        buildStoryPathStateFromHistory(story, nextHistory, nextChoiceIds),
+      );
     },
-    [history, onChoice, requestScrollToScene, story],
+    [history, isChoiceIdsControlled, onChoice, onChoiceIdsChange, requestScrollToScene, story],
   );
 
   const restart = useCallback(() => {
     const nextHistory = resolveInitialHistory(story, []);
 
-    setHistory(nextHistory);
+    if (!isChoiceIdsControlled) {
+      setHistory(nextHistory);
+    }
+
     requestScrollToScene(0);
-  }, [requestScrollToScene, story]);
+    onChoiceIdsChange?.([], buildStoryPathStateFromHistory(story, nextHistory, []));
+  }, [isChoiceIdsControlled, onChoiceIdsChange, requestScrollToScene, story]);
 
   const scenes = useMemo<StoryScrollScene[]>(
     () =>
@@ -634,11 +689,13 @@ function StoryDocumentScroller<TData extends StoryNodeData = StoryNodeData>({
   );
 }
 
-export function StoryScroller<TData extends StoryNodeData = StoryNodeData>({
+export function StoryScroller<TData extends StoryNodeData = StoryNodeData, TSceneData = unknown>({
   story,
   scenes,
   registry,
   pathChoiceIds = [],
+  defaultChoiceIds,
+  choiceIds,
   className,
   viewportClassName,
   transition,
@@ -646,9 +703,10 @@ export function StoryScroller<TData extends StoryNodeData = StoryNodeData>({
   ariaLabel,
   onChoice,
   onPathChange,
+  onChoiceIdsChange,
   onActiveIndexChange,
   onSceneProgressChange,
-}: StoryScrollerProps<TData>) {
+}: StoryScrollerProps<TData, TSceneData>) {
   if (scenes) {
     return (
       <StoryScrollTimeline
@@ -673,6 +731,8 @@ export function StoryScroller<TData extends StoryNodeData = StoryNodeData>({
       story={story}
       registry={registry}
       pathChoiceIds={pathChoiceIds}
+      defaultChoiceIds={defaultChoiceIds}
+      choiceIds={choiceIds}
       className={className}
       viewportClassName={viewportClassName}
       transition={transition}
@@ -680,6 +740,7 @@ export function StoryScroller<TData extends StoryNodeData = StoryNodeData>({
       ariaLabel={ariaLabel}
       onChoice={onChoice}
       onPathChange={onPathChange}
+      onChoiceIdsChange={onChoiceIdsChange}
       onActiveIndexChange={onActiveIndexChange}
       onSceneProgressChange={onSceneProgressChange}
     />

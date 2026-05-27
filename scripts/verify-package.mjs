@@ -7,7 +7,15 @@ import { fileURLToPath } from "node:url";
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const distRoot = path.join(packageRoot, "dist");
 
-for (const requiredFile of ["index.js", "index.d.ts", "remotion.js", "three.js"]) {
+for (const requiredFile of [
+  "index.js",
+  "index.d.ts",
+  "remotion.js",
+  "three.js",
+  "media.js",
+  "workflow.js",
+  "timeline.js",
+]) {
   assert.equal(
     existsSync(path.join(distRoot, requiredFile)),
     true,
@@ -38,6 +46,23 @@ assert.equal(
   "three export should include StoryCanvasStage",
 );
 
+const media = await import(path.join(distRoot, "media.js"));
+assert.equal(typeof media.StoryVideoFile, "function", "media export should include StoryVideoFile");
+
+const workflow = await import(path.join(distRoot, "workflow.js"));
+assert.equal(
+  typeof workflow.storyToWorkflowDocument,
+  "function",
+  "workflow export should include storyToWorkflowDocument",
+);
+
+const timeline = await import(path.join(distRoot, "timeline.js"));
+assert.equal(
+  typeof timeline.storyToTimelineEditorDocument,
+  "function",
+  "timeline export should include storyToTimelineEditorDocument",
+);
+
 const pack = spawnSync("npm", ["pack", "--dry-run", "--ignore-scripts", "--json"], {
   cwd: packageRoot,
   encoding: "utf8",
@@ -59,6 +84,13 @@ for (const requiredFile of [
   "dist/remotion.d.ts",
   "dist/three.js",
   "dist/three.d.ts",
+  "dist/media.js",
+  "dist/media.d.ts",
+  "dist/workflow.js",
+  "dist/workflow.d.ts",
+  "dist/timeline.js",
+  "dist/timeline.d.ts",
+  "docs/API.md",
 ]) {
   assert.equal(packageFiles.has(requiredFile), true, `package must include ${requiredFile}`);
 }

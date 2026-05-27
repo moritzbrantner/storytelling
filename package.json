@@ -11,7 +11,8 @@
   },
   "license": "UNLICENSED",
   "files": [
-    "dist"
+    "dist",
+    "docs"
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -27,6 +28,18 @@
     "./three": {
       "types": "./dist/three.d.ts",
       "import": "./dist/three.js"
+    },
+    "./media": {
+      "types": "./dist/media.d.ts",
+      "import": "./dist/media.js"
+    },
+    "./workflow": {
+      "types": "./dist/workflow.d.ts",
+      "import": "./dist/workflow.js"
+    },
+    "./timeline": {
+      "types": "./dist/timeline.d.ts",
+      "import": "./dist/timeline.js"
     }
   },
   "peerDependencies": {
@@ -80,7 +93,7 @@
   "scripts": {
     "dev": "vite --config example/vite.config.ts",
     "build:example": "vite build --config example/vite.config.ts",
-    "build": "tsup src/index.ts src/remotion.tsx src/three.tsx --format esm --dts --clean --out-dir dist",
+    "build": "tsup src/index.ts src/remotion.tsx src/three.tsx src/media.tsx src/workflow.ts src/timeline.ts --format esm --dts --clean --out-dir dist",
     "check-types": "tsc --noEmit",
     "lint": "oxfmt --check && oxlint --format=github && node scripts/verify-package-imports.mjs ./src @/ next/ next-intl",
     "test": "vitest run src",

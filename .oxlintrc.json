@@ -6,7 +6,7 @@
     "perf": "warn"
   },
   "rules": {
-    "eslint/no-console": "warn",
+    "eslint/no-console": "off",
     "eslint/no-debugger": "error",
     "eslint/no-loss-of-precision": "warn",
     "eslint/no-shadow": "off",

@@ -310,10 +310,11 @@ export function StoryRemotionComposition<TData extends StoryNodeData = StoryNode
   choiceIds = [],
   registry,
   theme,
+  layout,
 }: StoryRemotionCompositionProps<TData>) {
   const story = validateStory(input);
   const absoluteFrame = useCurrentFrame();
-  const timeline = buildStoryTimeline(story, { choiceIds });
+  const timeline = buildStoryTimeline(story, { choiceIds, fps: layout?.fps });
 
   return (
     <AbsoluteFill>
@@ -351,6 +352,7 @@ export function StoryRemotionComposition<TData extends StoryNodeData = StoryNode
           frame,
           absoluteFrame,
           durationInFrames: scene.durationInFrames,
+          fps: timeline.fps,
           sceneProgress: frame / Math.max(scene.durationInFrames, 1),
           timelineScene: scene,
         };

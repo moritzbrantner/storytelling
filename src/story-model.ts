@@ -142,6 +142,7 @@ export type StoryRemotionSceneProps<TData extends StoryNodeData = StoryNodeData>
     frame: number;
     absoluteFrame: number;
     durationInFrames: number;
+    fps: number;
     sceneProgress: number;
     timelineScene: StoryTimelineScene<TData>;
   };

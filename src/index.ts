@@ -12,12 +12,35 @@ export {
   getStoryStageProps,
 } from "./story-render-registry";
 export {
+  assertStoryDocument,
   defineStory,
   getStoryChoices,
   getStoryNode,
   isStoryEnding,
   validateStory,
+  validateStoryDocument,
+  StoryValidationError,
+  type StoryValidationIssue,
+  type StoryValidationIssueCode,
 } from "./story-validation";
+export {
+  compileStory,
+  enumerateStoryPaths,
+  getStoryBranches,
+  getStoryEndings,
+  type CompiledStory,
+  type CompiledStoryNode,
+  type EnumerateStoryPathsOptions,
+  type EnumeratedStoryPath,
+  type StoryGraphEdge,
+} from "./story-graph";
+export {
+  createStoryPathState,
+  parseStoryPath,
+  serializeStoryPath,
+  type CreateStoryPathStateOptions,
+  type StoryPathState,
+} from "./story-state";
 export { defaultStoryTheme, type StoryTheme } from "./story-theme";
 export { StoryContent, type StoryContentProps } from "./story-content";
 export {

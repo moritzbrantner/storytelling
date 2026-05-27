@@ -4,15 +4,14 @@ import { useEffect, useMemo, useState, type ComponentPropsWithoutRef, type React
 
 import { cn } from "@moritzbrantner/ui";
 
-import type { StoryNodeData, StoryRenderProps, StoryStageComponent } from "./story-types";
+import type {
+  StoryMediaTextTrack,
+  StoryNodeData,
+  StoryRenderProps,
+  StoryStageComponent,
+} from "./story-model";
 
-export type StoryMediaTextTrack = {
-  src: string;
-  label: string;
-  srcLang?: string;
-  kind?: "subtitles" | "captions" | "descriptions" | "chapters" | "metadata";
-  default?: boolean;
-};
+export type { StoryMediaTextTrack } from "./story-model";
 
 export type StorySubtitleCue = {
   id: string;
@@ -97,7 +96,10 @@ function parseSubtitleTimestamp(input: string) {
   return hours * 3600 + minutes * 60 + secondsWithMillis;
 }
 
-function parseSubtitleText(input: string, format: StorySubtitleFileProps["format"] = "auto") {
+export function parseSubtitleText(
+  input: string,
+  format: StorySubtitleFileProps["format"] = "auto",
+) {
   const normalized = input.replace(/\r\n?/g, "\n").trim();
 
   if (!normalized) {
@@ -173,7 +175,7 @@ function parseSubtitleText(input: string, format: StorySubtitleFileProps["format
   return cues;
 }
 
-function formatSubtitleTime(seconds: number) {
+export function formatSubtitleTime(seconds: number) {
   const totalSeconds = Math.max(seconds, 0);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);

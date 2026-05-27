@@ -2,11 +2,7 @@
 
 import { cn } from "@moritzbrantner/ui";
 
-import type {
-  StoryContentBlock,
-  StoryContentRendererProps,
-  StoryMediaTextTrack,
-} from "./story-model";
+import type { StoryContentRendererProps, StoryMediaTextTrack } from "./story-model";
 
 export type StoryContentProps = StoryContentRendererProps & {
   className?: string;
