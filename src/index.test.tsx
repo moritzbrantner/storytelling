@@ -422,20 +422,32 @@ describe("@moritzbrantner/storytelling", () => {
   });
 
   test("renders StoryScroller story branches as scene-progress pages", async () => {
-    render(<StoryScroller story={story} />);
+    const { container } = render(<StoryScroller story={story} />);
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
 
     expect(screen.queryByRole("navigation", { name: "Story graph" })).toBeNull();
     expect(screen.queryByText("The city hears the pilot")).toBeNull();
     expect(screen.queryByText(/Scene 1 \//)).toBeNull();
+    expect(viewport).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Answer immediately/ })).toBeNull();
 
+    setScrollerGeometry(viewport!, 1);
+    scrollScrollerViewport(viewport!, 95);
+    expect(
+      screen.getByRole<HTMLButtonElement>("button", {
+        name: /Answer immediately/,
+        hidden: true,
+      }).disabled,
+    ).toBe(true);
+
+    scrollScrollerViewport(viewport!, 100);
     fireEvent.click(screen.getByRole("button", { name: /Answer immediately/ }));
 
     expect(await screen.findByText("The message is fragmented.")).toBeTruthy();
     expect(screen.queryByText("Contact changes the route.")).toBeNull();
 
-    fireEvent.keyDown(screen.getByRole("region", { name: "Signal in the fog" }), {
-      key: "ArrowDown",
-    });
+    setScrollerGeometry(viewport!, 3);
+    scrollScrollerViewport(viewport!, 200);
     expect(await screen.findByText("Contact changes the route.")).toBeTruthy();
 
     fireEvent.keyDown(screen.getByRole("region", { name: "Signal in the fog" }), {
@@ -460,7 +472,14 @@ describe("@moritzbrantner/storytelling", () => {
   test("supports controlled StoryScroller choice ids", async () => {
     const onChoiceIdsChange = vi.fn();
 
-    render(<StoryScroller story={story} choiceIds={[]} onChoiceIdsChange={onChoiceIdsChange} />);
+    const { container } = render(
+      <StoryScroller story={story} choiceIds={[]} onChoiceIdsChange={onChoiceIdsChange} />,
+    );
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+
+    expect(viewport).toBeTruthy();
+    setScrollerGeometry(viewport!, 1);
+    scrollScrollerViewport(viewport!, 100);
 
     fireEvent.click(screen.getByRole("button", { name: /Answer immediately/ }));
 

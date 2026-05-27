@@ -151,6 +151,8 @@ const clamp = (value: number, min: number, max: number) => Math.min(Math.max(val
 
 const DEFAULT_SCROLL_TRANSITION: StoryScrollTransition = { type: "none" };
 const DEFAULT_SCROLL_INPUT_SCALE = 1;
+const STORY_BRANCH_REVEAL_START = 0.9;
+const STORY_BRANCH_REVEAL_END = 1;
 
 function getPrefersReducedMotion() {
   return (
@@ -664,6 +666,7 @@ function StoryDocumentScroller<TData extends StoryNodeData = StoryNodeData>({
                     }
                     restartLabel={story.labels?.restart ?? "Restart"}
                     restart={restart}
+                    progress={progress}
                   />
                 ) : null}
               </div>
@@ -755,6 +758,7 @@ type StoryChoicePanelProps = {
   completedLabel: string;
   restartLabel: string;
   restart: () => void;
+  progress: number;
 };
 
 function StoryChoicePanel({
@@ -765,9 +769,25 @@ function StoryChoicePanel({
   completedLabel,
   restartLabel,
   restart,
+  progress,
 }: StoryChoicePanelProps) {
+  const revealProgress = clamp(
+    (progress - STORY_BRANCH_REVEAL_START) / (STORY_BRANCH_REVEAL_END - STORY_BRANCH_REVEAL_START),
+    0,
+    1,
+  );
+  const isReady = progress >= STORY_BRANCH_REVEAL_END;
+
+  if (revealProgress <= 0) {
+    return null;
+  }
+
   return (
-    <div className="rounded-lg border bg-background p-4 shadow-sm">
+    <motion.div
+      className="rounded-lg border bg-background p-4 shadow-sm"
+      style={{ opacity: revealProgress }}
+      aria-hidden={!isReady}
+    >
       <p className="text-sm font-medium">{prompt}</p>
       {choices.length > 0 ? (
         <div className="mt-4 grid gap-3 md:grid-cols-[repeat(auto-fit,minmax(13rem,1fr))]">
@@ -778,7 +798,7 @@ function StoryChoicePanel({
               variant="outline"
               className="h-auto justify-start whitespace-normal px-4 py-3 text-left"
               onClick={() => choose(choice.id)}
-              disabled={choice.disabled}
+              disabled={choice.disabled || !isReady}
             >
               <span className="grid gap-1">
                 <span>{choice.label}</span>
@@ -794,11 +814,11 @@ function StoryChoicePanel({
       ) : ending ? (
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <p className="text-sm text-muted-foreground">{completedLabel}</p>
-          <Button type="button" variant="secondary" onClick={restart}>
+          <Button type="button" variant="secondary" onClick={restart} disabled={!isReady}>
             {restartLabel}
           </Button>
         </div>
       ) : null}
-    </div>
+    </motion.div>
   );
 }

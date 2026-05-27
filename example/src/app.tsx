@@ -75,9 +75,11 @@ const exampleCatalog: ExampleCatalog = {
       story: signalStory,
       presets: [
         { id: "opening", label: "Opening", choiceIds: [] },
-        { id: "pilot", label: "Pilot", choiceIds: ["answer"] },
+        { id: "pilot", label: "Pilot route", choiceIds: ["answer"] },
+        { id: "trace", label: "Harbor choice", choiceIds: ["trace"] },
         { id: "harbor-team", label: "Harbor team", choiceIds: ["trace", "send-team"] },
-        { id: "archive", label: "Archive", choiceIds: ["archive"] },
+        { id: "harbor-broadcast", label: "Broadcast fix", choiceIds: ["trace", "broadcast"] },
+        { id: "archive", label: "Archive route", choiceIds: ["archive"] },
       ],
     },
     {
