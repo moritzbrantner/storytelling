@@ -14,6 +14,7 @@ import {
   validateStory,
   type StoryDocument,
   type StoryRenderProps,
+  type StoryScrollSceneRenderProps,
 } from ".";
 
 type FixtureData = {
@@ -133,7 +134,29 @@ const linearStory = defineStory<FixtureData>({
 afterEach(() => {
   vi.restoreAllMocks();
   vi.resetModules();
+  vi.unstubAllGlobals();
 });
+
+function setScrollerGeometry(viewport: HTMLElement, sceneCount: number) {
+  Object.defineProperty(viewport, "scrollHeight", {
+    configurable: true,
+    value: (sceneCount + 1) * 100,
+  });
+  Object.defineProperty(viewport, "clientHeight", { configurable: true, value: 100 });
+}
+
+function scrollScrollerViewport(viewport: HTMLElement, scrollTop: number) {
+  viewport.scrollTop = scrollTop;
+  fireEvent.scroll(viewport);
+}
+
+function renderScrollTransitionLabel(label: string) {
+  return ({ value, isActive }: StoryScrollSceneRenderProps) => (
+    <div>
+      {label} {isActive ? "active" : "preview"} {Math.round(value)}
+    </div>
+  );
+}
 
 describe("@moritzbrantner/storytelling", () => {
   test("validates stories and rejects invalid graph references", () => {
@@ -388,6 +411,174 @@ describe("@moritzbrantner/storytelling", () => {
     viewport!.scrollTop = 100;
     fireEvent.scroll(viewport!);
     expect(await screen.findByText("Beta 0")).toBeTruthy();
+  });
+
+  test("switches StoryScroller scenes directly by default without transition previews", async () => {
+    const { container } = render(
+      <StoryScroller
+        ariaLabel="Direct scenes"
+        scenes={[
+          {
+            id: "alpha",
+            title: "Alpha",
+            render: renderScrollTransitionLabel("Alpha"),
+          },
+          {
+            id: "beta",
+            title: "Beta",
+            render: renderScrollTransitionLabel("Beta"),
+          },
+        ]}
+      />,
+    );
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+
+    expect(viewport).toBeTruthy();
+    setScrollerGeometry(viewport!, 2);
+
+    scrollScrollerViewport(viewport!, 99);
+    expect(await screen.findByText("Alpha active 99")).toBeTruthy();
+    expect(screen.queryByText(/Beta/)).toBeNull();
+
+    scrollScrollerViewport(viewport!, 100);
+    expect(await screen.findByText("Beta active 0")).toBeTruthy();
+    expect(screen.queryByText(/Alpha/)).toBeNull();
+  });
+
+  test("crossfades StoryScroller scenes during the configured global transition window", async () => {
+    const { container } = render(
+      <StoryScroller
+        ariaLabel="Fade scenes"
+        transition={{ type: "fade", scrollUnits: 20 }}
+        scenes={[
+          {
+            id: "alpha",
+            title: "Alpha",
+            render: renderScrollTransitionLabel("Alpha"),
+          },
+          {
+            id: "beta",
+            title: "Beta",
+            render: renderScrollTransitionLabel("Beta"),
+          },
+        ]}
+      />,
+    );
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+
+    expect(viewport).toBeTruthy();
+    setScrollerGeometry(viewport!, 2);
+
+    scrollScrollerViewport(viewport!, 79);
+    expect(await screen.findByText("Alpha active 79")).toBeTruthy();
+    expect(screen.queryByText(/Beta/)).toBeNull();
+
+    scrollScrollerViewport(viewport!, 90);
+    expect(await screen.findByText("Alpha active 90")).toBeTruthy();
+    expect(screen.getByText("Beta preview 0")).toBeTruthy();
+
+    scrollScrollerViewport(viewport!, 100);
+    expect(await screen.findByText("Beta active 0")).toBeTruthy();
+    expect(screen.queryByText(/Alpha/)).toBeNull();
+  });
+
+  test("lets StoryScroller scene transitions override the global transition", async () => {
+    const { container } = render(
+      <StoryScroller
+        ariaLabel="Override scenes"
+        transition={{ type: "fade", scrollUnits: 20 }}
+        scenes={[
+          {
+            id: "alpha",
+            title: "Alpha",
+            transitionToNext: { type: "none" },
+            render: renderScrollTransitionLabel("Alpha"),
+          },
+          {
+            id: "beta",
+            title: "Beta",
+            render: renderScrollTransitionLabel("Beta"),
+          },
+        ]}
+      />,
+    );
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+
+    expect(viewport).toBeTruthy();
+    setScrollerGeometry(viewport!, 2);
+
+    scrollScrollerViewport(viewport!, 90);
+    expect(await screen.findByText("Alpha active 90")).toBeTruthy();
+    expect(screen.queryByText(/Beta/)).toBeNull();
+  });
+
+  test("treats zero-unit StoryScroller fade transitions as direct scene changes", async () => {
+    const { container } = render(
+      <StoryScroller
+        ariaLabel="Zero fade scenes"
+        transition={{ type: "fade", scrollUnits: 0 }}
+        scenes={[
+          {
+            id: "alpha",
+            title: "Alpha",
+            render: renderScrollTransitionLabel("Alpha"),
+          },
+          {
+            id: "beta",
+            title: "Beta",
+            render: renderScrollTransitionLabel("Beta"),
+          },
+        ]}
+      />,
+    );
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+
+    expect(viewport).toBeTruthy();
+    setScrollerGeometry(viewport!, 2);
+
+    scrollScrollerViewport(viewport!, 99);
+    expect(await screen.findByText("Alpha active 99")).toBeTruthy();
+    expect(screen.queryByText(/Beta/)).toBeNull();
+  });
+
+  test("disables StoryScroller fade previews for reduced motion users", async () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: true,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+
+    const { container } = render(
+      <StoryScroller
+        ariaLabel="Reduced motion scenes"
+        transition={{ type: "fade", scrollUnits: 20 }}
+        scenes={[
+          {
+            id: "alpha",
+            title: "Alpha",
+            render: renderScrollTransitionLabel("Alpha"),
+          },
+          {
+            id: "beta",
+            title: "Beta",
+            render: renderScrollTransitionLabel("Beta"),
+          },
+        ]}
+      />,
+    );
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+
+    expect(viewport).toBeTruthy();
+    setScrollerGeometry(viewport!, 2);
+
+    scrollScrollerViewport(viewport!, 90);
+    expect(await screen.findByText("Alpha active 90")).toBeTruthy();
+    expect(screen.queryByText(/Beta/)).toBeNull();
   });
 
   test("minimizes and restores StoryMinimap items", () => {

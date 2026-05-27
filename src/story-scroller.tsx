@@ -10,14 +10,7 @@ import {
   type ReactNode,
 } from "react";
 
-import {
-  AnimatePresence,
-  motion,
-  useMotionValue,
-  useReducedMotion,
-  useTransform,
-  type MotionValue,
-} from "motion/react";
+import { motion, useMotionValue, useReducedMotion, type MotionValue } from "motion/react";
 
 import { Button, cn } from "@moritzbrantner/ui";
 
@@ -46,6 +39,8 @@ export type StoryScrollSceneRenderProps<TData = unknown> = {
   scrollToScene: (index: number) => void;
 };
 
+export type StoryScrollTransition = { type: "none" } | { type: "fade"; scrollUnits: number };
+
 export type StoryScrollScene<TData = unknown> = {
   id: string;
   title: string;
@@ -53,6 +48,7 @@ export type StoryScrollScene<TData = unknown> = {
   menuLabel?: string;
   className?: string;
   data?: TData;
+  transitionToNext?: StoryScrollTransition;
   render: (props: StoryScrollSceneRenderProps<TData>) => ReactNode;
 };
 
@@ -63,6 +59,7 @@ export type StoryScrollerProps<TData extends StoryNodeData = StoryNodeData> = {
   pathChoiceIds?: string[];
   className?: string;
   viewportClassName?: string;
+  transition?: StoryScrollTransition;
   ariaLabel?: string;
   onChoice?: (choice: StoryChoice, history: StoryHistoryEntry<TData>[]) => void;
   onPathChange?: (history: StoryHistoryEntry<TData>[]) => void;
@@ -84,6 +81,7 @@ type StoryScrollTimelineProps<TSceneData = unknown> = {
   scenes: StoryScrollScene<TSceneData>[];
   className?: string;
   viewportClassName?: string;
+  transition?: StoryScrollTransition;
   ariaLabel?: string;
   scrollTarget?: ScrollTarget;
   onActiveIndexChange?: (index: number) => void;
@@ -109,6 +107,35 @@ function getStoryScrollerPageId(storyId: string, sceneId: string) {
 }
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+
+const DEFAULT_SCROLL_TRANSITION: StoryScrollTransition = { type: "none" };
+
+function getPrefersReducedMotion() {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
+function resolveScrollTransition(
+  sceneTransition: StoryScrollTransition | undefined,
+  timelineTransition: StoryScrollTransition | undefined,
+  reducedMotion: boolean,
+): StoryScrollTransition {
+  if (reducedMotion) {
+    return DEFAULT_SCROLL_TRANSITION;
+  }
+
+  const transition = sceneTransition ?? timelineTransition ?? DEFAULT_SCROLL_TRANSITION;
+
+  if (transition.type === "fade") {
+    const scrollUnits = clamp(transition.scrollUnits, 0, 100);
+    return scrollUnits > 0 ? { type: "fade", scrollUnits } : DEFAULT_SCROLL_TRANSITION;
+  }
+
+  return DEFAULT_SCROLL_TRANSITION;
+}
 
 function getNextScrollState(element: HTMLElement, sceneCount: number): ScrollState {
   if (sceneCount <= 0) {
@@ -136,6 +163,7 @@ function StoryScrollTimeline<TSceneData = unknown>({
   scenes,
   className,
   viewportClassName = "h-[76vh] min-h-[31rem] max-h-[48rem]",
+  transition,
   ariaLabel,
   scrollTarget,
   onActiveIndexChange,
@@ -145,10 +173,28 @@ function StoryScrollTimeline<TSceneData = unknown>({
   const reducedMotion = useReducedMotion();
   const scrollValue = useMotionValue(0);
   const scrollProgress = useMotionValue(0);
+  const previewScrollValue = useMotionValue(0);
+  const previewScrollProgress = useMotionValue(0);
   const [scrollState, setScrollState] = useState<ScrollState>({ activeIndex: 0, value: 0 });
   const sceneCount = scenes.length;
   const activeIndex = clamp(scrollState.activeIndex, 0, Math.max(sceneCount - 1, 0));
   const activeScene = scenes[activeIndex];
+  const nextScene = scenes[activeIndex + 1];
+  const activeTransition = resolveScrollTransition(
+    activeScene?.transitionToNext,
+    transition,
+    Boolean(reducedMotion) || getPrefersReducedMotion(),
+  );
+  const fadeProgress =
+    activeTransition.type === "fade" && nextScene
+      ? clamp(
+          (scrollState.value - (100 - activeTransition.scrollUnits)) / activeTransition.scrollUnits,
+          0,
+          1,
+        )
+      : 0;
+  const shouldRenderFadePreview =
+    activeTransition.type === "fade" && Boolean(nextScene) && fadeProgress > 0;
 
   const updateFromScroll = useCallback(() => {
     const element = scrollRef.current;
@@ -284,21 +330,34 @@ function StoryScrollTimeline<TSceneData = unknown>({
               viewportClassName,
             )}
           >
-            <AnimatePresence initial={false}>
-              {activeScene ? (
-                <StoryScrollMotionFrame
-                  key={activeScene.id}
-                  scene={activeScene}
-                  sceneIndex={activeIndex}
-                  sceneCount={sceneCount}
-                  value={scrollState.value}
-                  scrollValue={scrollValue}
-                  scrollProgress={scrollProgress}
-                  reducedMotion={Boolean(reducedMotion)}
-                  scrollToScene={scrollToScene}
-                />
-              ) : null}
-            </AnimatePresence>
+            {activeScene ? (
+              <StoryScrollMotionFrame
+                key={activeScene.id}
+                scene={activeScene}
+                sceneIndex={activeIndex}
+                sceneCount={sceneCount}
+                value={scrollState.value}
+                scrollValue={scrollValue}
+                scrollProgress={scrollProgress}
+                opacity={shouldRenderFadePreview ? 1 - fadeProgress : 1}
+                isActive
+                scrollToScene={scrollToScene}
+              />
+            ) : null}
+            {shouldRenderFadePreview && nextScene ? (
+              <StoryScrollMotionFrame
+                key={`${nextScene.id}-preview`}
+                scene={nextScene}
+                sceneIndex={activeIndex + 1}
+                sceneCount={sceneCount}
+                value={0}
+                scrollValue={previewScrollValue}
+                scrollProgress={previewScrollProgress}
+                opacity={fadeProgress}
+                isActive={false}
+                scrollToScene={scrollToScene}
+              />
+            ) : null}
           </div>
         </div>
       </div>
@@ -313,7 +372,8 @@ type StoryScrollMotionFrameProps<TSceneData = unknown> = {
   value: number;
   scrollValue: MotionValue<number>;
   scrollProgress: MotionValue<number>;
-  reducedMotion: boolean;
+  opacity: number;
+  isActive: boolean;
   scrollToScene: (index: number) => void;
 };
 
@@ -324,30 +384,25 @@ function StoryScrollMotionFrame<TSceneData = unknown>({
   value,
   scrollValue,
   scrollProgress,
-  reducedMotion,
+  opacity,
+  isActive,
   scrollToScene,
 }: StoryScrollMotionFrameProps<TSceneData>) {
-  const opacity = useTransform(scrollProgress, [0, 0.72, 1], [1, 1, 0.1]);
-  const y = useTransform(scrollProgress, [0, 1], [0, -36]);
-  const scale = useTransform(scrollProgress, [0, 1], [1, 0.985]);
-
   return (
     <motion.article
-      className={cn("absolute inset-0 h-full min-h-0", scene.className)}
-      data-active="true"
+      className={cn(
+        "absolute inset-0 h-full min-h-0",
+        isActive ? "pointer-events-auto" : "pointer-events-none",
+        scene.className,
+      )}
+      data-active={isActive ? "true" : "false"}
       data-story-scroller-index={sceneIndex}
       data-story-scroller-page
       aria-label={`${sceneIndex + 1}. ${scene.title}`}
-      initial={reducedMotion ? false : { opacity: 0, y: 24, scale: 0.985 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -24, scale: 0.985 }}
-      transition={{ duration: reducedMotion ? 0 : 0.28, ease: "easeOut" }}
+      aria-hidden={!isActive}
+      style={{ opacity }}
     >
-      <motion.div
-        className="h-full min-h-0"
-        style={reducedMotion ? undefined : { opacity, y, scale }}
-        data-story-scroller-motion-frame
-      >
+      <div className="h-full min-h-0" data-story-scroller-motion-frame>
         {scene.render({
           value,
           progress: value / 100,
@@ -356,10 +411,10 @@ function StoryScrollMotionFrame<TSceneData = unknown>({
           scene,
           sceneIndex,
           sceneCount,
-          isActive: true,
+          isActive,
           scrollToScene,
         })}
-      </motion.div>
+      </div>
     </motion.article>
   );
 }
@@ -370,6 +425,7 @@ function StoryDocumentScroller<TData extends StoryNodeData = StoryNodeData>({
   pathChoiceIds = [],
   className,
   viewportClassName,
+  transition,
   ariaLabel,
   onChoice,
   onPathChange,
@@ -498,6 +554,7 @@ function StoryDocumentScroller<TData extends StoryNodeData = StoryNodeData>({
       scenes={scenes}
       className={className}
       viewportClassName={viewportClassName}
+      transition={transition}
       ariaLabel={ariaLabel ?? story.labels?.scrollerLabel ?? story.title}
       scrollTarget={scrollTarget}
       onActiveIndexChange={onActiveIndexChange}
@@ -513,6 +570,7 @@ export function StoryScroller<TData extends StoryNodeData = StoryNodeData>({
   pathChoiceIds = [],
   className,
   viewportClassName,
+  transition,
   ariaLabel,
   onChoice,
   onPathChange,
@@ -525,6 +583,7 @@ export function StoryScroller<TData extends StoryNodeData = StoryNodeData>({
         scenes={scenes}
         className={className}
         viewportClassName={viewportClassName}
+        transition={transition}
         ariaLabel={ariaLabel}
         onActiveIndexChange={onActiveIndexChange}
         onSceneProgressChange={onSceneProgressChange}
@@ -543,6 +602,7 @@ export function StoryScroller<TData extends StoryNodeData = StoryNodeData>({
       pathChoiceIds={pathChoiceIds}
       className={className}
       viewportClassName={viewportClassName}
+      transition={transition}
       ariaLabel={ariaLabel}
       onChoice={onChoice}
       onPathChange={onPathChange}

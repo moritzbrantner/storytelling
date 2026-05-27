@@ -125,10 +125,12 @@ function OpeningMotionScene({
 export function StoryExperience() {
   return (
     <StoryScroller
+      transition={{ type: "fade", scrollUnits: 20 }}
       scenes={[
         {
           id: "opening",
           title: "Opening",
+          transitionToNext: { type: "none" },
           render: ({ value, scrollProgress }) => (
             <OpeningMotionScene value={value} scrollProgress={scrollProgress} />
           ),
@@ -138,6 +140,12 @@ export function StoryExperience() {
   );
 }
 ```
+
+`StoryScroller` changes scenes directly by default. Add
+`transition={{ type: "fade", scrollUnits: 20 }}` for a scroll-driven crossfade
+between every scene, or use `transitionToNext` on an individual scene to
+override that boundary. Scroll transition units are normalized scene-local units
+from `0` to `100`, not pixels, frames, or seconds.
 
 ## Example website
 

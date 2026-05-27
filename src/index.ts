@@ -33,6 +33,7 @@ export {
   StoryScroller,
   type StoryScrollScene,
   type StoryScrollSceneRenderProps,
+  type StoryScrollTransition,
   type StoryScrollerProps,
 } from "./story-scroller";
 export { StoryStageFrame, type StoryStageFrameProps } from "./story-stage-frame";
