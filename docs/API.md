@@ -16,7 +16,7 @@ This reference tracks the package exports that are intended for consumers.
 - `serializeStoryPath(value)` and `parseStoryPath(input)` convert choice ids to and from URL query strings.
 - `createStoryPathState(story, options)` builds a reusable resolved path state object.
 - `StoryPlayer` renders focused branching playback.
-- `StoryScroller` renders either a story-backed scroll experience or custom scroll scenes.
+- `StoryScroller` renders either a story-backed scroll experience or custom scroll scenes, with optional `autoplay` pacing.
 - `StoryContent`, `StoryControls`, `StoryProgress`, `StoryMinimap`, and `StoryStageFrame` expose composable UI pieces.
 - `createStoryRendererRegistry(...)`, `getStoryRendererKey(...)`, and `getStoryStageProps(...)` connect serializable stage descriptors to renderer components.
 

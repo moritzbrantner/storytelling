@@ -147,6 +147,7 @@ export function StoryExperience() {
     <StoryScroller
       transition={{ type: "fade", scrollUnits: 20 }}
       scrollInputScale={0.5}
+      autoplay={{ unitsPerSecond: 18 }}
       scenes={[
         {
           id: "opening",
@@ -171,6 +172,11 @@ from `0` to `100`, not pixels, frames, or seconds.
 Use `scrollInputScale` to tune wheel and arrow-key input. `1` is the default:
 one arrow press advances by one scene, and wheel deltas are left unchanged.
 Values below `1` slow scrolling down; values above `1` speed it up.
+
+Use `autoplay` when the scroller should advance itself. Passing `true` uses the
+default pace of `20` scene units per second; pass
+`autoplay={{ unitsPerSecond: 18 }}` to set a custom pace. Autoplay is disabled
+for users who prefer reduced motion.
 
 Both `StoryPlayer` and story-backed `StoryScroller` support controlled choice
 state with `choiceIds`, `defaultChoiceIds`, and `onChoiceIdsChange`. Use

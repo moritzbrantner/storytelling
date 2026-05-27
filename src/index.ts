@@ -54,6 +54,8 @@ export {
 export { StoryProgress, type StoryProgressProps } from "./story-progress";
 export {
   StoryScroller,
+  type StoryScrollAutoplay,
+  type StoryScrollAutoplayOptions,
   type StoryScrollScene,
   type StoryScrollSceneRenderProps,
   type StoryScrollTransition,

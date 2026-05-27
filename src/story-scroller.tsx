@@ -43,6 +43,13 @@ export type StoryScrollSceneRenderProps<TData = unknown> = {
 
 export type StoryScrollTransition = { type: "none" } | { type: "fade"; scrollUnits: number };
 
+export type StoryScrollAutoplayOptions = {
+  enabled?: boolean;
+  unitsPerSecond?: number;
+};
+
+export type StoryScrollAutoplay = boolean | StoryScrollAutoplayOptions;
+
 export type StoryScrollScene<TData = unknown> = {
   id: string;
   title: string;
@@ -68,6 +75,7 @@ export type StoryScrollerProps<
   viewportClassName?: string;
   transition?: StoryScrollTransition;
   scrollInputScale?: number;
+  autoplay?: StoryScrollAutoplay;
   ariaLabel?: string;
   onChoice?: (choice: StoryChoice, history: StoryHistoryEntry<TData>[]) => void;
   onPathChange?: (history: StoryHistoryEntry<TData>[]) => void;
@@ -92,6 +100,7 @@ type StoryScrollTimelineProps<TSceneData = unknown> = {
   viewportClassName?: string;
   transition?: StoryScrollTransition;
   scrollInputScale?: number;
+  autoplay?: StoryScrollAutoplay;
   ariaLabel?: string;
   scrollTarget?: ScrollTarget;
   onActiveIndexChange?: (index: number) => void;
@@ -151,6 +160,8 @@ const clamp = (value: number, min: number, max: number) => Math.min(Math.max(val
 
 const DEFAULT_SCROLL_TRANSITION: StoryScrollTransition = { type: "none" };
 const DEFAULT_SCROLL_INPUT_SCALE = 1;
+const DEFAULT_AUTOPLAY_UNITS_PER_SECOND = 20;
+const AUTOPLAY_INTERVAL_MS = 1000 / 60;
 const STORY_BRANCH_REVEAL_START = 0.9;
 const STORY_BRANCH_REVEAL_END = 1;
 
@@ -211,6 +222,32 @@ function resolveScrollInputScale(scale: number | undefined) {
   return Math.max(scale, 0);
 }
 
+function resolveStoryScrollAutoplay(autoplay: StoryScrollAutoplay | undefined) {
+  if (!autoplay) {
+    return {
+      enabled: false,
+      unitsPerSecond: DEFAULT_AUTOPLAY_UNITS_PER_SECOND,
+    };
+  }
+
+  if (autoplay === true) {
+    return {
+      enabled: true,
+      unitsPerSecond: DEFAULT_AUTOPLAY_UNITS_PER_SECOND,
+    };
+  }
+
+  const unitsPerSecond =
+    autoplay.unitsPerSecond === undefined || !Number.isFinite(autoplay.unitsPerSecond)
+      ? DEFAULT_AUTOPLAY_UNITS_PER_SECOND
+      : Math.max(autoplay.unitsPerSecond, 0);
+
+  return {
+    enabled: (autoplay.enabled ?? true) && unitsPerSecond > 0,
+    unitsPerSecond,
+  };
+}
+
 function getWheelScrollDelta(event: WheelEvent<HTMLElement>, element: HTMLElement) {
   const baseDelta = event.deltaY || event.deltaX;
 
@@ -230,6 +267,7 @@ function StoryScrollTimeline<TSceneData = unknown>({
   viewportClassName = "h-[76vh] min-h-[31rem] max-h-[48rem]",
   transition,
   scrollInputScale,
+  autoplay,
   ariaLabel,
   scrollTarget,
   onActiveIndexChange,
@@ -244,6 +282,7 @@ function StoryScrollTimeline<TSceneData = unknown>({
   const [scrollState, setScrollState] = useState<ScrollState>({ activeIndex: 0, value: 0 });
   const sceneCount = scenes.length;
   const resolvedScrollInputScale = resolveScrollInputScale(scrollInputScale);
+  const resolvedAutoplay = resolveStoryScrollAutoplay(autoplay);
   const activeIndex = clamp(scrollState.activeIndex, 0, Math.max(sceneCount - 1, 0));
   const activeScene = scenes[activeIndex];
   const nextScene = scenes[activeIndex + 1];
@@ -347,6 +386,37 @@ function StoryScrollTimeline<TSceneData = unknown>({
     if (!scrollTarget) return;
     scrollToScene(scrollTarget.index);
   }, [scrollTarget, scrollToScene]);
+
+  useEffect(() => {
+    const shouldAutoplay =
+      resolvedAutoplay.enabled && sceneCount > 0 && !reducedMotion && !getPrefersReducedMotion();
+
+    if (!shouldAutoplay || typeof window === "undefined") {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      const element = scrollRef.current;
+      if (!element) return;
+
+      const maxScroll = Math.max(element.scrollHeight - element.clientHeight, 0);
+      if (maxScroll === 0 || element.scrollTop >= maxScroll) return;
+
+      const sceneScrollSize = maxScroll / sceneCount;
+      const secondsPerTick = AUTOPLAY_INTERVAL_MS / 1000;
+      const delta = (sceneScrollSize * resolvedAutoplay.unitsPerSecond * secondsPerTick) / 100;
+
+      setScrollTop(element.scrollTop + delta);
+    }, AUTOPLAY_INTERVAL_MS);
+
+    return () => window.clearInterval(interval);
+  }, [
+    reducedMotion,
+    resolvedAutoplay.enabled,
+    resolvedAutoplay.unitsPerSecond,
+    sceneCount,
+    setScrollTop,
+  ]);
 
   useEffect(() => {
     onActiveIndexChange?.(activeIndex);
@@ -538,6 +608,7 @@ function StoryDocumentScroller<TData extends StoryNodeData = StoryNodeData>({
   viewportClassName,
   transition,
   scrollInputScale,
+  autoplay,
   ariaLabel,
   onChoice,
   onPathChange,
@@ -684,6 +755,7 @@ function StoryDocumentScroller<TData extends StoryNodeData = StoryNodeData>({
       viewportClassName={viewportClassName}
       transition={transition}
       scrollInputScale={scrollInputScale}
+      autoplay={autoplay}
       ariaLabel={ariaLabel ?? story.labels?.scrollerLabel ?? story.title}
       scrollTarget={scrollTarget}
       onActiveIndexChange={onActiveIndexChange}
@@ -703,6 +775,7 @@ export function StoryScroller<TData extends StoryNodeData = StoryNodeData, TScen
   viewportClassName,
   transition,
   scrollInputScale,
+  autoplay,
   ariaLabel,
   onChoice,
   onPathChange,
@@ -718,6 +791,7 @@ export function StoryScroller<TData extends StoryNodeData = StoryNodeData, TScen
         viewportClassName={viewportClassName}
         transition={transition}
         scrollInputScale={scrollInputScale}
+        autoplay={autoplay}
         ariaLabel={ariaLabel}
         onActiveIndexChange={onActiveIndexChange}
         onSceneProgressChange={onSceneProgressChange}
@@ -740,6 +814,7 @@ export function StoryScroller<TData extends StoryNodeData = StoryNodeData, TScen
       viewportClassName={viewportClassName}
       transition={transition}
       scrollInputScale={scrollInputScale}
+      autoplay={autoplay}
       ariaLabel={ariaLabel}
       onChoice={onChoice}
       onPathChange={onPathChange}

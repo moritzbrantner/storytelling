@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
@@ -140,6 +140,7 @@ const linearStory = defineStory<FixtureData>({
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.resetModules();
   vi.unstubAllGlobals();
@@ -593,6 +594,93 @@ describe("@moritzbrantner/storytelling", () => {
     fireEvent.keyDown(region, { key: "ArrowDown" });
     expect(await screen.findByText("Beta active 0")).toBeTruthy();
     expect(viewport!.scrollTop).toBe(100);
+  });
+
+  test("autoplays StoryScroller at the configured scene pace", async () => {
+    vi.useFakeTimers();
+
+    const { container } = render(
+      <StoryScroller
+        ariaLabel="Autoplay scenes"
+        autoplay={{ unitsPerSecond: 50 }}
+        scenes={[
+          {
+            id: "alpha",
+            title: "Alpha",
+            render: renderScrollTransitionLabel("Alpha"),
+          },
+          {
+            id: "beta",
+            title: "Beta",
+            render: renderScrollTransitionLabel("Beta"),
+          },
+        ]}
+      />,
+    );
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+
+    expect(viewport).toBeTruthy();
+    setScrollerGeometry(viewport!, 2);
+
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+
+    expect(viewport!.scrollTop).toBeGreaterThan(45);
+    expect(viewport!.scrollTop).toBeLessThan(55);
+    expect(screen.getByText(/Alpha active \d+/)).toBeTruthy();
+
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+
+    expect(viewport!.scrollTop).toBeGreaterThan(95);
+    expect(viewport!.scrollTop).toBeLessThan(105);
+    expect(screen.getByText(/Beta active \d+/)).toBeTruthy();
+  });
+
+  test("does not autoplay StoryScroller for reduced motion users", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: true,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+
+    const { container } = render(
+      <StoryScroller
+        ariaLabel="Reduced autoplay scenes"
+        autoplay
+        scenes={[
+          {
+            id: "alpha",
+            title: "Alpha",
+            render: renderScrollTransitionLabel("Alpha"),
+          },
+          {
+            id: "beta",
+            title: "Beta",
+            render: renderScrollTransitionLabel("Beta"),
+          },
+        ]}
+      />,
+    );
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+
+    expect(viewport).toBeTruthy();
+    setScrollerGeometry(viewport!, 2);
+
+    await act(async () => {
+      vi.advanceTimersByTime(3000);
+    });
+
+    expect(viewport!.scrollTop).toBe(0);
+    expect(screen.getByText("Alpha active 0")).toBeTruthy();
   });
 
   test("switches StoryScroller scenes directly by default without transition previews", async () => {
