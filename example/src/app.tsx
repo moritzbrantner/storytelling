@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import {
   StoryMinimap,
@@ -19,6 +20,19 @@ import {
   type MotionLabSceneData,
   type SignalStoryData,
 } from "./story";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  ErrorState,
+  LoadingState,
+  ToggleGroup,
+  ToggleGroupItem,
+  cn,
+} from "@moritzbrantner/ui";
 
 type ExampleMode = "player" | "scroller";
 type ExampleStoryId = "branching" | "linear" | "motion";
@@ -42,43 +56,67 @@ type MotionPreset = {
   transition: StoryScrollTransition;
 };
 
-const storyOptions: { id: ExampleStoryId; label: string }[] = [
+type ExampleCatalog = {
+  storyOptions: { id: ExampleStoryId; label: string }[];
+  stories: ExampleStory[];
+  motionPresets: MotionPreset[];
+};
+
+const exampleCatalog: ExampleCatalog = {
+  storyOptions: [
+    { id: "branching", label: "Branching" },
+    { id: "linear", label: "Linear" },
+    { id: "motion", label: "Motion" },
+  ],
+  stories: [
+    {
+      id: "branching",
+      label: "Branching",
+      story: signalStory,
+      presets: [
+        { id: "opening", label: "Opening", choiceIds: [] },
+        { id: "pilot", label: "Pilot", choiceIds: ["answer"] },
+        { id: "harbor-team", label: "Harbor team", choiceIds: ["trace", "send-team"] },
+        { id: "archive", label: "Archive", choiceIds: ["archive"] },
+      ],
+    },
+    {
+      id: "linear",
+      label: "Linear",
+      story: linearStory,
+      presets: [
+        { id: "linear-opening", label: "Opening", choiceIds: [] },
+        {
+          id: "linear-complete",
+          label: "Full sequence",
+          choiceIds: ["briefing__continue", "field-report__continue", "edit-room__continue"],
+        },
+      ],
+    },
+  ],
+  motionPresets: [
+    { id: "soft-fade", label: "Soft fade", transition: { type: "fade", scrollUnits: 18 } },
+    { id: "long-fade", label: "Long fade", transition: { type: "fade", scrollUnits: 34 } },
+    { id: "direct", label: "Direct", transition: { type: "none" } },
+  ],
+};
+
+async function getExampleCatalog() {
+  return exampleCatalog;
+}
+
+function getDefaultPresetId(storyId: ExampleStoryId, catalog: ExampleCatalog) {
+  if (storyId === "motion") {
+    return catalog.motionPresets[0]?.id ?? "soft-fade";
+  }
+
+  return catalog.stories.find((example) => example.id === storyId)?.presets[0]?.id ?? "opening";
+}
+
+const storyOptionsFallback: { id: ExampleStoryId; label: string }[] = [
   { id: "branching", label: "Branching" },
   { id: "linear", label: "Linear" },
   { id: "motion", label: "Motion" },
-];
-
-const exampleStories: ExampleStory[] = [
-  {
-    id: "branching",
-    label: "Branching",
-    story: signalStory,
-    presets: [
-      { id: "opening", label: "Opening", choiceIds: [] },
-      { id: "pilot", label: "Pilot", choiceIds: ["answer"] },
-      { id: "harbor-team", label: "Harbor team", choiceIds: ["trace", "send-team"] },
-      { id: "archive", label: "Archive", choiceIds: ["archive"] },
-    ],
-  },
-  {
-    id: "linear",
-    label: "Linear",
-    story: linearStory,
-    presets: [
-      { id: "linear-opening", label: "Opening", choiceIds: [] },
-      {
-        id: "linear-complete",
-        label: "Full sequence",
-        choiceIds: ["briefing__continue", "field-report__continue", "edit-room__continue"],
-      },
-    ],
-  },
-];
-
-const motionPresets: MotionPreset[] = [
-  { id: "soft-fade", label: "Soft fade", transition: { type: "fade", scrollUnits: 18 } },
-  { id: "long-fade", label: "Long fade", transition: { type: "fade", scrollUnits: 34 } },
-  { id: "direct", label: "Direct", transition: { type: "none" } },
 ];
 
 function getStoryScrollerPageId(storyId: string, nodeId: string) {
@@ -117,16 +155,28 @@ function getSceneSummary(
   }`;
 }
 
+function StateSummary({ summary }: { summary: string }) {
+  return <pre className="m-0 whitespace-pre-wrap text-sm leading-7 text-[#2d3835]">{summary}</pre>;
+}
+
 export function ExampleApp() {
+  const catalogQuery = useQuery({
+    queryKey: ["storytelling-example-catalog"],
+    queryFn: getExampleCatalog,
+  });
   const [storyId, setStoryId] = useState<ExampleStoryId>("branching");
   const [mode, setMode] = useState<ExampleMode>("player");
   const [scrollerActiveIndex, setScrollerActiveIndex] = useState(0);
   const [sceneProgress, setSceneProgress] = useState(0);
+  const [history, setHistory] = useState<StoryHistoryEntry<SignalStoryData>[]>([]);
+  const [presetId, setPresetId] = useState("opening");
+  const catalog = catalogQuery.data ?? exampleCatalog;
+  const storyOptions = catalog?.storyOptions ?? storyOptionsFallback;
+  const exampleStories = catalog?.stories ?? [];
+  const motionPresets = catalog?.motionPresets ?? [];
   const isMotionStory = storyId === "motion";
   const activeExample =
     exampleStories.find((example) => example.id === storyId) ?? exampleStories[0]!;
-  const [presetId, setPresetId] = useState(activeExample.presets[0]?.id ?? "opening");
-  const [history, setHistory] = useState<StoryHistoryEntry<SignalStoryData>[]>([]);
   const activePreset =
     activeExample.presets.find((preset) => preset.id === presetId) ?? activeExample.presets[0]!;
   const activeMotionPreset =
@@ -172,6 +222,9 @@ export function ExampleApp() {
           eyebrow: node?.eyebrow,
         };
       });
+  const stateSummary = isMotionStory
+    ? getSceneSummary(motionLabScenes, activeMinimapIndex, sceneProgress)
+    : getHistorySummary(activeExample.story, visibleHistory);
 
   useEffect(() => {
     setScrollerActiveIndex(0);
@@ -211,114 +264,143 @@ export function ExampleApp() {
       });
   };
 
+  if (catalogQuery.isPending) {
+    return (
+      <main className="min-h-screen bg-[linear-gradient(135deg,rgba(10,124,111,0.08),transparent_34%),linear-gradient(315deg,rgba(190,80,52,0.09),transparent_38%),#f6f7f8] p-4 md:p-8">
+        <LoadingState className="mx-auto min-h-[28rem] max-w-4xl" label="Loading story catalog" />
+      </main>
+    );
+  }
+
+  if (catalogQuery.isError) {
+    return (
+      <main className="min-h-screen bg-[linear-gradient(135deg,rgba(10,124,111,0.08),transparent_34%),linear-gradient(315deg,rgba(190,80,52,0.09),transparent_38%),#f6f7f8] p-4 md:p-8">
+        <ErrorState className="mx-auto min-h-[28rem] max-w-4xl">
+          Story catalog could not be loaded.
+        </ErrorState>
+      </main>
+    );
+  }
+
   return (
-    <main className="example-shell">
-      <section className="example-workspace" aria-labelledby="example-title">
-        <header className="example-toolbar">
+    <main className="min-h-screen bg-[linear-gradient(135deg,rgba(10,124,111,0.08),transparent_34%),linear-gradient(315deg,rgba(190,80,52,0.09),transparent_38%),#f6f7f8] p-3 text-[#17211f] md:p-8">
+      <section className="mx-auto w-full max-w-[1480px]" aria-labelledby="example-title">
+        <header className="grid gap-4 pb-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
           <div>
-            <p className="example-kicker">Example website</p>
-            <h1 id="example-title">Storytelling component lab</h1>
+            <Badge variant="outline" className="mb-3 border-[#17211f]/15 bg-white/60">
+              Example website
+            </Badge>
+            <h1
+              id="example-title"
+              className="max-w-[9ch] text-5xl font-semibold leading-[0.92] tracking-normal text-[#111817] md:max-w-[13ch] md:text-6xl xl:text-7xl"
+            >
+              Storytelling component lab
+            </h1>
           </div>
 
-          <div className="example-toolbar-controls" aria-label="Example controls">
-            <div className="example-segment" role="tablist" aria-label="Story type">
+          <div className="grid gap-3 lg:justify-items-end" aria-label="Example controls">
+            <ToggleGroup
+              type="single"
+              value={storyId}
+              onValueChange={(nextStoryId) => {
+                if (!nextStoryId) return;
+
+                const typedStoryId = nextStoryId as ExampleStoryId;
+
+                setStoryId(typedStoryId);
+                setPresetId(getDefaultPresetId(typedStoryId, catalog));
+                if (typedStoryId === "linear" || typedStoryId === "motion") {
+                  setMode("scroller");
+                }
+                setHistory([]);
+              }}
+              className="flex-wrap justify-start border border-[#17211f]/15 bg-white/75 p-1 shadow-[0_10px_24px_rgba(23,33,31,0.06)] lg:justify-end"
+              aria-label="Story type"
+            >
               {storyOptions.map((example) => (
-                <button
+                <ToggleGroupItem
                   key={example.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={storyId === example.id}
-                  data-active={storyId === example.id}
-                  onClick={() => {
-                    setStoryId(example.id);
-                    if (example.id === "motion") {
-                      setPresetId(motionPresets[0]?.id ?? "soft-fade");
-                    } else {
-                      const nextExample =
-                        exampleStories.find((candidate) => candidate.id === example.id) ??
-                        exampleStories[0]!;
-                      setPresetId(nextExample.presets[0]?.id ?? "opening");
-                    }
-                    if (example.id === "linear" || example.id === "motion") {
-                      setMode("scroller");
-                    }
-                    setHistory([]);
-                  }}
+                  value={example.id}
+                  aria-label={example.label}
+                  className="min-h-9 px-3"
                 >
                   {example.label}
-                </button>
+                </ToggleGroupItem>
               ))}
-            </div>
+            </ToggleGroup>
 
             {showBranchControls ? (
-              <div className="example-segment" role="tablist" aria-label="Component">
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={mode === "player"}
-                  data-active={mode === "player"}
-                  onClick={() => {
-                    setMode("player");
-                    setHistory([]);
-                  }}
-                >
+              <ToggleGroup
+                type="single"
+                value={mode}
+                onValueChange={(nextMode) => {
+                  if (!nextMode) return;
+
+                  setMode(nextMode as ExampleMode);
+                  setHistory([]);
+                }}
+                className="flex-wrap justify-start border border-[#17211f]/15 bg-white/75 p-1 shadow-[0_10px_24px_rgba(23,33,31,0.06)] lg:justify-end"
+                aria-label="Component"
+              >
+                <ToggleGroupItem value="player" className="min-h-9 px-3">
                   Player
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={mode === "scroller"}
-                  data-active={mode === "scroller"}
-                  onClick={() => {
-                    setMode("scroller");
-                    setHistory([]);
-                  }}
-                >
+                </ToggleGroupItem>
+                <ToggleGroupItem value="scroller" className="min-h-9 px-3">
                   Scroller
-                </button>
-              </div>
+                </ToggleGroupItem>
+              </ToggleGroup>
             ) : null}
 
             {showBranchControls ? (
-              <div className="example-preset-list" aria-label="Start path">
+              <div
+                className="flex flex-wrap justify-start gap-1 rounded-lg border border-[#17211f]/15 bg-white/75 p-1 shadow-[0_10px_24px_rgba(23,33,31,0.06)] lg:justify-end"
+                aria-label="Start path"
+              >
                 {activeExample.presets.map((preset) => (
-                  <button
+                  <Button
                     key={preset.id}
                     type="button"
-                    data-active={preset.id === activePreset.id}
+                    variant={preset.id === activePreset.id ? "default" : "ghost"}
+                    size="sm"
+                    className="min-h-9"
                     onClick={() => {
                       setPresetId(preset.id);
                       setHistory([]);
                     }}
                   >
                     {preset.label}
-                  </button>
+                  </Button>
                 ))}
               </div>
             ) : null}
 
             {isMotionStory ? (
-              <div className="example-preset-list" aria-label="Motion transition">
+              <div
+                className="flex flex-wrap justify-start gap-1 rounded-lg border border-[#17211f]/15 bg-white/75 p-1 shadow-[0_10px_24px_rgba(23,33,31,0.06)] lg:justify-end"
+                aria-label="Motion transition"
+              >
                 {motionPresets.map((preset) => (
-                  <button
+                  <Button
                     key={preset.id}
                     type="button"
-                    data-active={preset.id === activeMotionPreset.id}
+                    variant={preset.id === activeMotionPreset.id ? "default" : "ghost"}
+                    size="sm"
+                    className="min-h-9"
                     onClick={() => {
                       setPresetId(preset.id);
                       setHistory([]);
                     }}
                   >
                     {preset.label}
-                  </button>
+                  </Button>
                 ))}
               </div>
             ) : null}
           </div>
         </header>
 
-        <div className="example-main-grid">
-          <div className="example-component-frame">
+        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]">
+          <div className="[&>section]:shadow-[0_18px_54px_rgba(23,33,31,0.10)]">
             {isMotionStory ? (
               <StoryScroller
                 key={`motion-${activeMotionPreset.id}`}
@@ -350,18 +432,18 @@ export function ExampleApp() {
             )}
           </div>
 
-          <aside className="example-inspector" aria-label="Story state">
+          <aside className="grid gap-4 lg:grid-cols-2 xl:grid-cols-1" aria-label="Story state">
             <StoryMinimap
               items={minimapItems}
               activeIndex={activeMinimapIndex}
               onSelect={isScrollerMode ? selectMinimapItem : undefined}
               collapsible
-              className="example-minimap"
+              className="border-[#17211f]/15 bg-white/85 shadow-[0_16px_36px_rgba(23,33,31,0.08)] lg:col-span-2 xl:col-span-1"
             />
 
-            <div className="example-state-panel">
-              <div>
-                <p className="example-panel-label">
+            <Card className="border-[#17211f]/15 bg-white/85 shadow-[0_16px_36px_rgba(23,33,31,0.08)]">
+              <CardHeader>
+                <Badge variant="outline" className="w-fit">
                   {isMotionStory
                     ? "Motion scene"
                     : isLinearStory
@@ -369,27 +451,38 @@ export function ExampleApp() {
                       : mode === "player"
                         ? "Active path"
                         : "Start path"}
-                </p>
-                <h2>
+                </Badge>
+                <CardTitle className="text-xl">
                   {isMotionStory
                     ? (motionLabScenes[activeMinimapIndex]?.title ?? "Motion scenes")
                     : isLinearStory
                       ? "Story cards"
                       : activePreset.label}
-                </h2>
-              </div>
-              <pre>
-                {isMotionStory
-                  ? getSceneSummary(motionLabScenes, activeMinimapIndex, sceneProgress)
-                  : getHistorySummary(activeExample.story, visibleHistory)}
-              </pre>
-            </div>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <StateSummary summary={stateSummary} />
+              </CardContent>
+            </Card>
 
             {showBranchControls ? (
-              <div className="example-state-panel">
-                <p className="example-panel-label">Choice ids</p>
-                <code>{activePreset.choiceIds.join(" -> ") || "none"}</code>
-              </div>
+              <Card className="border-[#17211f]/15 bg-white/85 shadow-[0_16px_36px_rgba(23,33,31,0.08)]">
+                <CardHeader>
+                  <Badge variant="outline" className="w-fit">
+                    Choice ids
+                  </Badge>
+                </CardHeader>
+                <CardContent>
+                  <code
+                    className={cn(
+                      "block overflow-x-auto whitespace-pre-wrap text-sm leading-7 text-[#2d3835]",
+                      activePreset.choiceIds.length === 0 ? "text-muted-foreground" : "",
+                    )}
+                  >
+                    {activePreset.choiceIds.join(" -> ") || "none"}
+                  </code>
+                </CardContent>
+              </Card>
             ) : null}
           </aside>
         </div>
