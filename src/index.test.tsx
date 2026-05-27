@@ -315,19 +315,21 @@ describe("@moritzbrantner/storytelling", () => {
     expect(await screen.findByText("Publish the report at noon.")).toBeTruthy();
   });
 
-  test("renders StoryScroller with overlaid choices and a progressively revealed graph", async () => {
+  test("renders StoryScroller story branches as scene-progress pages", async () => {
     render(<StoryScroller story={story} />);
 
-    expect(screen.getByRole("navigation", { name: "Story graph" })).toBeTruthy();
+    expect(screen.queryByRole("navigation", { name: "Story graph" })).toBeNull();
     expect(screen.queryByText("The city hears the pilot")).toBeNull();
     expect(screen.queryByText(/Scene 1 \//)).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /Answer immediately/ }));
 
     expect(await screen.findByText("The message is fragmented.")).toBeTruthy();
-    expect((await screen.findAllByText("The city hears the pilot")).length).toBeGreaterThan(0);
+    expect(screen.queryByText("Contact changes the route.")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.keyDown(screen.getByRole("region", { name: "Signal in the fog" }), {
+      key: "ArrowDown",
+    });
     expect(await screen.findByText("Contact changes the route.")).toBeTruthy();
 
     fireEvent.keyDown(screen.getByRole("region", { name: "Signal in the fog" }), {
@@ -340,11 +342,48 @@ describe("@moritzbrantner/storytelling", () => {
     render(<StoryScroller story={linearStory} />);
 
     expect(screen.getByText("Draft the morning brief.")).toBeTruthy();
-    expect(screen.getByText("Review the copy for sequence and clarity.")).toBeTruthy();
-    expect(screen.getByText("Publish the report at noon.")).toBeTruthy();
+    expect(screen.queryByText("Review the copy for sequence and clarity.")).toBeNull();
+    expect(screen.queryByText("Publish the report at noon.")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.keyDown(screen.getByRole("region", { name: "Linear report" }), {
+      key: "ArrowDown",
+    });
     expect(await screen.findByText("Review the copy for sequence and clarity.")).toBeTruthy();
+  });
+
+  test("passes a normalized 0-100 scroll value to custom StoryScroller scenes", async () => {
+    const { container } = render(
+      <StoryScroller
+        ariaLabel="Scroll value scenes"
+        scenes={[
+          {
+            id: "alpha",
+            title: "Alpha",
+            render: ({ value }) => <div>Alpha {Math.round(value)}</div>,
+          },
+          {
+            id: "beta",
+            title: "Beta",
+            render: ({ value }) => <div>Beta {Math.round(value)}</div>,
+          },
+        ]}
+      />,
+    );
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+
+    expect(viewport).toBeTruthy();
+    expect(screen.getByText("Alpha 0")).toBeTruthy();
+
+    Object.defineProperty(viewport!, "scrollHeight", { configurable: true, value: 300 });
+    Object.defineProperty(viewport!, "clientHeight", { configurable: true, value: 100 });
+
+    viewport!.scrollTop = 50;
+    fireEvent.scroll(viewport!);
+    expect(await screen.findByText("Alpha 50")).toBeTruthy();
+
+    viewport!.scrollTop = 100;
+    fireEvent.scroll(viewport!);
+    expect(await screen.findByText("Beta 0")).toBeTruthy();
   });
 
   test("minimizes and restores StoryMinimap items", () => {

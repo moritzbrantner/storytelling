@@ -98,13 +98,24 @@ export const linearStory = defineStory({
 ## React playback
 
 Use `StoryPlayer` for focused choice-driven playback, or `StoryScroller` when
-the reader should scroll through a snap-aligned sequence of story pages.
+the reader should scroll through scenes that receive a normalized `value` from
+`0` to `100`.
 
 ```tsx
-import { StoryPlayer } from "@moritzbrantner/storytelling";
+import { StoryScroller } from "@moritzbrantner/storytelling";
 
 export function StoryExperience() {
-  return <StoryPlayer story={story} />;
+  return (
+    <StoryScroller
+      scenes={[
+        {
+          id: "opening",
+          title: "Opening",
+          render: ({ value }) => <OpeningScene scrollValue={value} />,
+        },
+      ]}
+    />
+  );
 }
 ```
 

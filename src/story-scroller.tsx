@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 
 import { useReducedMotion } from "motion/react";
 
@@ -19,37 +27,58 @@ import type {
   StoryRendererRegistry,
 } from "./story-model";
 
+export type StoryScrollSceneRenderProps<TData = unknown> = {
+  value: number;
+  progress: number;
+  scene: StoryScrollScene<TData>;
+  sceneIndex: number;
+  sceneCount: number;
+  isActive: boolean;
+  scrollToScene: (index: number) => void;
+};
+
+export type StoryScrollScene<TData = unknown> = {
+  id: string;
+  title: string;
+  eyebrow?: string;
+  menuLabel?: string;
+  className?: string;
+  data?: TData;
+  render: (props: StoryScrollSceneRenderProps<TData>) => ReactNode;
+};
+
 export type StoryScrollerProps<TData extends StoryNodeData = StoryNodeData> = {
-  story: StoryDocument<TData>;
+  story?: StoryDocument<TData>;
+  scenes?: StoryScrollScene[];
   registry?: StoryRendererRegistry<TData>;
   pathChoiceIds?: string[];
   className?: string;
+  viewportClassName?: string;
   ariaLabel?: string;
   onChoice?: (choice: StoryChoice, history: StoryHistoryEntry<TData>[]) => void;
   onPathChange?: (history: StoryHistoryEntry<TData>[]) => void;
   onActiveIndexChange?: (index: number) => void;
+  onSceneProgressChange?: (value: number) => void;
 };
 
-type RevealedStoryGraphNode = {
-  id: string;
-  title: string;
-  eyebrow?: string;
-  state: "active" | "visited" | "available";
-  historyIndex?: number;
+type ScrollState = {
+  activeIndex: number;
+  value: number;
 };
 
-type RevealedStoryGraphEdge = {
-  id: string;
-  source: string;
-  target: string;
-  label: string;
-  selected: boolean;
-  disabled?: boolean;
+type ScrollTarget = {
+  index: number;
+  version: number;
 };
 
-type RevealedStoryGraph = {
-  nodes: RevealedStoryGraphNode[];
-  edges: RevealedStoryGraphEdge[];
+type StoryScrollTimelineProps<TSceneData = unknown> = {
+  scenes: StoryScrollScene<TSceneData>[];
+  className?: string;
+  viewportClassName?: string;
+  ariaLabel?: string;
+  scrollTarget?: ScrollTarget;
+  onActiveIndexChange?: (index: number) => void;
+  onSceneProgressChange?: (value: number) => void;
 };
 
 function resolveInitialHistory<TData extends StoryNodeData>(
@@ -62,290 +91,114 @@ function resolveInitialHistory<TData extends StoryNodeData>(
   }).history;
 }
 
-function getInitialActiveIndex<TData extends StoryNodeData>(
-  history: StoryHistoryEntry<TData>[],
-  choiceIds: string[],
-) {
-  return choiceIds.length > 0 ? Math.max(history.length - 1, 0) : 0;
-}
-
 function getHistoryChoiceIds<TData extends StoryNodeData>(history: StoryHistoryEntry<TData>[]) {
   return history.flatMap((entry) => (entry.choiceId ? [entry.choiceId] : []));
 }
 
-function getStoryScrollerPageId(storyId: string, nodeId: string) {
-  return `story-scroller-page-${storyId}-${nodeId}`;
+function getStoryScrollerPageId(storyId: string, sceneId: string) {
+  return `story-scroller-page-${storyId}-${sceneId}`;
 }
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
-function buildSelectedEdgeLookup<TData extends StoryNodeData>(history: StoryHistoryEntry<TData>[]) {
-  const selectedEdges = new Set<string>();
-
-  for (let index = 0; index < history.length - 1; index += 1) {
-    const source = history[index];
-    const target = history[index + 1];
-
-    if (source?.nodeId && target?.choiceId) {
-      selectedEdges.add(`${source.nodeId}:${target.choiceId}`);
-    }
+function getNextScrollState(element: HTMLElement, sceneCount: number): ScrollState {
+  if (sceneCount <= 0) {
+    return { activeIndex: 0, value: 0 };
   }
 
-  return selectedEdges;
-}
-
-function buildRevealedStoryGraph<TData extends StoryNodeData>(
-  story: StoryDocument<TData>,
-  history: StoryHistoryEntry<TData>[],
-  activeNodeId: string,
-): RevealedStoryGraph {
-  const historyIndexByNodeId = new Map<string, number>();
-  const visitedNodeIds = new Set<string>();
-  const selectedEdges = buildSelectedEdgeLookup(history);
-  const nodeOrder: string[] = [];
-  const revealedNodeIds = new Set<string>();
-  const edges = new Map<string, RevealedStoryGraphEdge>();
-
-  const revealNode = (nodeId: string) => {
-    if (revealedNodeIds.has(nodeId)) return;
-
-    revealedNodeIds.add(nodeId);
-    nodeOrder.push(nodeId);
-  };
-
-  history.forEach((entry, index) => {
-    visitedNodeIds.add(entry.nodeId);
-    if (!historyIndexByNodeId.has(entry.nodeId)) {
-      historyIndexByNodeId.set(entry.nodeId, index);
-    }
-  });
-
-  for (const entry of history) {
-    const node = getStoryNode(story, entry.nodeId);
-
-    revealNode(node.id);
-
-    for (const choice of getStoryChoices(story, node)) {
-      revealNode(choice.target);
-
-      const edgeId = `${node.id}:${choice.id}`;
-      edges.set(edgeId, {
-        id: edgeId,
-        source: node.id,
-        target: choice.target,
-        label: choice.label,
-        selected: selectedEdges.has(edgeId),
-        disabled: choice.disabled,
-      });
-    }
+  const maxScroll = Math.max(element.scrollHeight - element.clientHeight, 0);
+  if (maxScroll === 0) {
+    return { activeIndex: 0, value: 0 };
   }
 
-  return {
-    nodes: nodeOrder.map((nodeId) => {
-      const node = getStoryNode(story, nodeId);
-      const historyIndex = historyIndexByNodeId.get(nodeId);
+  const segmentSize = maxScroll / sceneCount;
+  const rawSceneProgress = clamp(element.scrollTop / segmentSize, 0, sceneCount);
+  const activeIndex = clamp(Math.floor(rawSceneProgress), 0, sceneCount - 1);
+  const value = clamp((rawSceneProgress - activeIndex) * 100, 0, 100);
 
-      return {
-        id: node.id,
-        title: node.title,
-        eyebrow: node.eyebrow,
-        state:
-          node.id === activeNodeId
-            ? "active"
-            : visitedNodeIds.has(node.id)
-              ? "visited"
-              : "available",
-        historyIndex,
-      };
-    }),
-    edges: [...edges.values()],
-  };
+  return { activeIndex, value };
 }
 
-export function StoryScroller<TData extends StoryNodeData = StoryNodeData>({
-  story: input,
-  registry,
-  pathChoiceIds = [],
+function shouldUpdateScrollState(current: ScrollState, next: ScrollState) {
+  return current.activeIndex !== next.activeIndex || Math.abs(current.value - next.value) >= 0.1;
+}
+
+function StoryScrollTimeline<TSceneData = unknown>({
+  scenes,
   className,
+  viewportClassName = "h-[76vh] min-h-[31rem] max-h-[48rem]",
   ariaLabel,
-  onChoice,
-  onPathChange,
+  scrollTarget,
   onActiveIndexChange,
-}: StoryScrollerProps<TData>) {
-  const story = useMemo(() => validateStory(input), [input]);
-  const initialChoiceKey = pathChoiceIds.join("|");
-  const initialHistory = useMemo(
-    () => resolveInitialHistory(story, pathChoiceIds),
-    // `initialChoiceKey` keeps this stable when callers pass a fresh array.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [initialChoiceKey, story],
-  );
-  const initialActiveIndex = useMemo(
-    () => getInitialActiveIndex(initialHistory, pathChoiceIds),
-    // `initialChoiceKey` keeps this stable when callers pass a fresh array.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [initialChoiceKey, initialHistory],
-  );
-  const [history, setHistory] = useState<StoryHistoryEntry<TData>[]>(() => initialHistory);
-  const [activeIndex, setActiveIndex] = useState(() => initialActiveIndex);
-  const reducedMotion = useReducedMotion();
+  onSceneProgressChange,
+}: StoryScrollTimelineProps<TSceneData>) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const pendingScrollIndexRef = useRef<number | null>(
-    initialActiveIndex > 0 ? initialActiveIndex : null,
-  );
-  const activeEntry = history[activeIndex] ?? history[history.length - 1];
-  const activeNode = activeEntry
-    ? getStoryNode(story, activeEntry.nodeId)
-    : getStoryNode(story, story.openingNodeId);
-  const graph = useMemo(
-    () => buildRevealedStoryGraph(story, history, activeNode.id),
-    [activeNode.id, history, story],
-  );
-  const showGraph = graph.nodes.length > 1;
+  const reducedMotion = useReducedMotion();
+  const [scrollState, setScrollState] = useState<ScrollState>({ activeIndex: 0, value: 0 });
+  const sceneCount = scenes.length;
+  const activeIndex = clamp(scrollState.activeIndex, 0, Math.max(sceneCount - 1, 0));
+  const activeScene = scenes[activeIndex];
+
+  const updateFromScroll = useCallback(() => {
+    const element = scrollRef.current;
+    if (!element) return;
+
+    const nextState = getNextScrollState(element, sceneCount);
+    setScrollState((current) =>
+      shouldUpdateScrollState(current, nextState) ? nextState : current,
+    );
+  }, [sceneCount]);
 
   const scrollToScene = useCallback(
     (index: number) => {
-      const nextIndex = clamp(index, 0, Math.max(history.length - 1, 0));
+      const element = scrollRef.current;
+      const nextIndex = clamp(index, 0, Math.max(sceneCount - 1, 0));
 
-      setActiveIndex(nextIndex);
+      setScrollState({ activeIndex: nextIndex, value: 0 });
 
-      const target = scrollRef.current?.querySelector<HTMLElement>(
-        `[data-story-scroller-index="${nextIndex}"]`,
-      );
+      if (!element) return;
 
-      target?.scrollIntoView?.({
-        behavior: reducedMotion ? "auto" : "smooth",
-        block: "start",
-      });
+      const maxScroll = Math.max(element.scrollHeight - element.clientHeight, 0);
+      const segmentSize = sceneCount > 0 ? maxScroll / sceneCount : 0;
+
+      const top = segmentSize * nextIndex;
+
+      if (typeof element.scrollTo === "function") {
+        element.scrollTo({
+          top,
+          behavior: reducedMotion ? "auto" : "smooth",
+        });
+        return;
+      }
+
+      element.scrollTop = top;
     },
-    [history.length, reducedMotion],
+    [reducedMotion, sceneCount],
   );
 
   useEffect(() => {
-    const nextHistory = initialHistory;
-    const nextActiveIndex = initialActiveIndex;
+    setScrollState((current) => {
+      const nextState = {
+        activeIndex: clamp(current.activeIndex, 0, Math.max(sceneCount - 1, 0)),
+        value: current.activeIndex >= sceneCount ? 0 : current.value,
+      };
 
-    setHistory(nextHistory);
-    setActiveIndex(nextActiveIndex);
-    pendingScrollIndexRef.current = nextActiveIndex > 0 ? nextActiveIndex : null;
-  }, [initialActiveIndex, initialHistory]);
-
-  useEffect(() => {
-    setActiveIndex((current) => Math.max(0, Math.min(current, history.length - 1)));
-  }, [history.length]);
+      return shouldUpdateScrollState(current, nextState) ? nextState : current;
+    });
+  }, [sceneCount]);
 
   useEffect(() => {
-    onPathChange?.(history);
-  }, [history, onPathChange]);
+    if (!scrollTarget) return;
+    scrollToScene(scrollTarget.index);
+  }, [scrollTarget, scrollToScene]);
 
   useEffect(() => {
     onActiveIndexChange?.(activeIndex);
   }, [activeIndex, onActiveIndexChange]);
 
   useEffect(() => {
-    const scrollElement = scrollRef.current;
-    if (!scrollElement || typeof IntersectionObserver === "undefined") return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const activeEntry = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-        const nextIndex = Number(
-          (activeEntry?.target as HTMLElement | undefined)?.dataset.storyScrollerIndex,
-        );
-
-        if (Number.isFinite(nextIndex)) {
-          setActiveIndex((current) => (current === nextIndex ? current : nextIndex));
-        }
-      },
-      {
-        root: scrollElement,
-        threshold: [0.45, 0.6, 0.75],
-      },
-    );
-
-    const pages = scrollElement.querySelectorAll<HTMLElement>("[data-story-scroller-page]");
-    pages.forEach((page) => observer.observe(page));
-
-    return () => observer.disconnect();
-  }, [history]);
-
-  useEffect(() => {
-    const pendingIndex = pendingScrollIndexRef.current;
-    if (pendingIndex === null) return;
-
-    pendingScrollIndexRef.current = null;
-
-    const scroll = () => scrollToScene(pendingIndex);
-
-    if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
-      scroll();
-      return;
-    }
-
-    const animationFrame = window.requestAnimationFrame(scroll);
-
-    return () => window.cancelAnimationFrame(animationFrame);
-  }, [history, scrollToScene]);
-
-  const chooseFrom = useCallback(
-    (index: number, choiceId: string) => {
-      const entry = history[index];
-      if (!entry) return;
-
-      const node = getStoryNode(story, entry.nodeId);
-      const choice = getStoryChoices(story, node).find(
-        (candidate) => candidate.id === choiceId && !candidate.disabled,
-      );
-      if (!choice) return;
-
-      const nextChoiceIds = [...getHistoryChoiceIds(history.slice(0, index + 1)), choice.id];
-      const nextHistory = resolveInitialHistory(story, nextChoiceIds);
-      const nextActiveIndex = Math.min(index + 1, nextHistory.length - 1);
-
-      pendingScrollIndexRef.current = nextActiveIndex;
-      setHistory(nextHistory);
-      setActiveIndex(nextActiveIndex);
-      onChoice?.(choice, nextHistory);
-    },
-    [history, onChoice, story],
-  );
-
-  const restart = useCallback(() => {
-    const nextHistory = resolveInitialHistory(story, []);
-
-    pendingScrollIndexRef.current = 0;
-    setHistory(nextHistory);
-    setActiveIndex(0);
-  }, [story]);
-
-  const buildRenderProps = (entry: StoryHistoryEntry<TData>, index: number) => {
-    const node = getStoryNode(story, entry.nodeId);
-    const nodeHistory = history.slice(0, index + 1);
-    const nodePath: ResolvedStoryPath<TData> = {
-      nodes: nodeHistory.map((historyEntry) => getStoryNode(story, historyEntry.nodeId)),
-      history: nodeHistory,
-      currentNode: node,
-      completed: isStoryEnding(story, node),
-    };
-    const choices = getStoryChoices(story, node);
-
-    return {
-      story,
-      node,
-      history: nodeHistory,
-      path: nodePath,
-      currentIndex: index,
-      progress: (index + 1) / Math.max(history.length, 1),
-      isEnding: isStoryEnding(story, node),
-      canGoBack: index > 0,
-      choices,
-      choose: (choiceId: string) => chooseFrom(index, choiceId),
-      goBack: () => scrollToScene(index - 1),
-      restart,
-    } satisfies StoryRenderProps<TData>;
-  };
+    onSceneProgressChange?.(scrollState.value);
+  }, [onSceneProgressChange, scrollState.value]);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     switch (event.key) {
@@ -365,71 +218,71 @@ export function StoryScroller<TData extends StoryNodeData = StoryNodeData>({
         return;
       case "End":
         event.preventDefault();
-        scrollToScene(history.length - 1);
+        scrollToScene(sceneCount - 1);
         return;
       default:
         return;
     }
   };
 
+  if (sceneCount === 0) {
+    return null;
+  }
+
   return (
     <section
       role="region"
-      aria-label={ariaLabel ?? story.labels?.scrollerLabel ?? story.title}
+      aria-label={ariaLabel ?? "Story scroller"}
       className={cn("rounded-lg border bg-card p-4 md:p-6", className)}
       tabIndex={0}
       onKeyDown={handleKeyDown}
     >
-      <div className={cn("grid gap-5", showGraph ? "lg:grid-cols-[14rem_minmax(0,1fr)]" : "")}>
-        {showGraph ? <StoryRevealedGraph graph={graph} onSelect={scrollToScene} /> : null}
-
-        <div className="min-w-0">
+      <div
+        ref={scrollRef}
+        className={cn(
+          "story-steps-scrollbar-hidden relative overflow-y-auto overscroll-contain",
+          viewportClassName,
+        )}
+        onScroll={updateFromScroll}
+        data-story-scroller-viewport
+      >
+        <div className="relative" style={{ height: `${Math.max(sceneCount + 1, 2) * 100}%` }}>
+          {scenes.map((scene, index) => (
+            <span
+              key={scene.id}
+              id={scene.id}
+              className="absolute size-px"
+              style={{ top: `${(index / Math.max(sceneCount + 1, 1)) * 100}%` }}
+              aria-hidden="true"
+              data-story-scroller-marker
+            />
+          ))}
           <div
-            ref={scrollRef}
-            className="story-steps-scrollbar-hidden grid h-[76vh] min-h-[31rem] max-h-[48rem] snap-y snap-mandatory gap-4 overflow-y-auto overscroll-contain pr-1"
+            className={cn(
+              "sticky top-0 overflow-hidden rounded-lg border bg-background",
+              viewportClassName,
+            )}
           >
-            {history.map((entry, index) => {
-              const renderProps = buildRenderProps(entry, index);
-              const { node, choices, isEnding } = renderProps;
-              const isActive = index === activeIndex;
-
-              return (
-                <article
-                  key={`${entry.nodeId}-${index}`}
-                  id={getStoryScrollerPageId(story.id, node.id)}
-                  className="relative min-h-full snap-start scroll-mt-0"
-                  data-active={isActive}
-                  data-story-scroller-index={index}
-                  data-story-scroller-page
-                  aria-label={`${index + 1}. ${node.title}`}
-                >
-                  <StoryStageFrame
-                    {...renderProps}
-                    registry={registry}
-                    className="min-h-[inherit]"
-                  />
-                  {isActive ? (
-                    <StoryChoiceOverlay
-                      choices={choices}
-                      choose={renderProps.choose}
-                      ending={isEnding}
-                      prompt={
-                        node.prompt ??
-                        (isEnding
-                          ? (story.labels?.endingPrompt ?? "This branch is complete.")
-                          : (story.labels?.choosePrompt ?? "Choose what happens next."))
-                      }
-                      completedLabel={
-                        story.labels?.completedBranch ??
-                        "Restart to explore another branch, or go back to choose a different path."
-                      }
-                      restartLabel={story.labels?.restart ?? "Restart"}
-                      restart={restart}
-                    />
-                  ) : null}
-                </article>
-              );
-            })}
+            {activeScene ? (
+              <article
+                key={activeScene.id}
+                className={cn("h-full min-h-0", activeScene.className)}
+                data-active="true"
+                data-story-scroller-index={activeIndex}
+                data-story-scroller-page
+                aria-label={`${activeIndex + 1}. ${activeScene.title}`}
+              >
+                {activeScene.render({
+                  value: scrollState.value,
+                  progress: scrollState.value / 100,
+                  scene: activeScene,
+                  sceneIndex: activeIndex,
+                  sceneCount,
+                  isActive: true,
+                  scrollToScene,
+                })}
+              </article>
+            ) : null}
           </div>
         </div>
       </div>
@@ -437,113 +290,195 @@ export function StoryScroller<TData extends StoryNodeData = StoryNodeData>({
   );
 }
 
-type StoryRevealedGraphProps = {
-  graph: RevealedStoryGraph;
-  onSelect?: (index: number) => void;
-};
-
-function StoryRevealedGraph({ graph, onSelect }: StoryRevealedGraphProps) {
-  if (graph.nodes.length < 2) {
-    return null;
-  }
-
-  const edgesBySource = graph.edges.reduce<Record<string, RevealedStoryGraphEdge[]>>(
-    (lookup, edge) => {
-      lookup[edge.source] = [...(lookup[edge.source] ?? []), edge];
-      return lookup;
-    },
-    {},
+function StoryDocumentScroller<TData extends StoryNodeData = StoryNodeData>({
+  story: input,
+  registry,
+  pathChoiceIds = [],
+  className,
+  viewportClassName,
+  ariaLabel,
+  onChoice,
+  onPathChange,
+  onActiveIndexChange,
+  onSceneProgressChange,
+}: Omit<StoryScrollerProps<TData>, "story" | "scenes"> & {
+  story: StoryDocument<TData>;
+}) {
+  const story = useMemo(() => validateStory(input), [input]);
+  const initialChoiceKey = pathChoiceIds.join("|");
+  const initialHistory = useMemo(
+    () => resolveInitialHistory(story, pathChoiceIds),
+    [initialChoiceKey, story],
   );
-  const nodeLookup = new Map(graph.nodes.map((node) => [node.id, node] as const));
+  const [history, setHistory] = useState<StoryHistoryEntry<TData>[]>(() => initialHistory);
+  const [scrollTarget, setScrollTarget] = useState<ScrollTarget | undefined>();
+
+  useEffect(() => {
+    setHistory(initialHistory);
+    setScrollTarget((current) => ({ index: 0, version: (current?.version ?? 0) + 1 }));
+  }, [initialHistory]);
+
+  useEffect(() => {
+    onPathChange?.(history);
+  }, [history, onPathChange]);
+
+  const requestScrollToScene = useCallback((index: number) => {
+    setScrollTarget((current) => ({ index, version: (current?.version ?? 0) + 1 }));
+  }, []);
+
+  const chooseFrom = useCallback(
+    (index: number, choiceId: string) => {
+      const entry = history[index];
+      if (!entry) return;
+
+      const node = getStoryNode(story, entry.nodeId);
+      const choice = getStoryChoices(story, node).find(
+        (candidate) => candidate.id === choiceId && !candidate.disabled,
+      );
+      if (!choice) return;
+
+      const nextChoiceIds = [...getHistoryChoiceIds(history.slice(0, index + 1)), choice.id];
+      const nextHistory = resolveInitialHistory(story, nextChoiceIds);
+      const nextActiveIndex = Math.min(index + 1, nextHistory.length - 1);
+
+      setHistory(nextHistory);
+      requestScrollToScene(nextActiveIndex);
+      onChoice?.(choice, nextHistory);
+    },
+    [history, onChoice, requestScrollToScene, story],
+  );
+
+  const restart = useCallback(() => {
+    const nextHistory = resolveInitialHistory(story, []);
+
+    setHistory(nextHistory);
+    requestScrollToScene(0);
+  }, [requestScrollToScene, story]);
+
+  const scenes = useMemo<StoryScrollScene[]>(
+    () =>
+      history.map((entry, index) => {
+        const node = getStoryNode(story, entry.nodeId);
+
+        return {
+          id: getStoryScrollerPageId(story.id, node.id),
+          title: node.title,
+          eyebrow: node.eyebrow,
+          render: ({ progress }) => {
+            const nodeHistory = history.slice(0, index + 1);
+            const nodePath: ResolvedStoryPath<TData> = {
+              nodes: nodeHistory.map((historyEntry) => getStoryNode(story, historyEntry.nodeId)),
+              history: nodeHistory,
+              currentNode: node,
+              completed: isStoryEnding(story, node),
+            };
+            const explicitChoices = node.choices ?? [];
+            const ending = isStoryEnding(story, node);
+            const renderProps: StoryRenderProps<TData> = {
+              story,
+              node,
+              history: nodeHistory,
+              path: nodePath,
+              currentIndex: index,
+              progress,
+              isEnding: ending,
+              canGoBack: index > 0,
+              choices: explicitChoices,
+              choose: (choiceId: string) => chooseFrom(index, choiceId),
+              goBack: () => requestScrollToScene(index - 1),
+              restart,
+            };
+
+            return (
+              <div className="grid h-full min-h-0 grid-rows-[minmax(0,1fr)_auto] gap-3">
+                <StoryStageFrame {...renderProps} registry={registry} className="h-full min-h-0" />
+                {explicitChoices.length > 0 || ending ? (
+                  <StoryChoicePanel
+                    choices={explicitChoices}
+                    choose={renderProps.choose}
+                    ending={ending}
+                    prompt={
+                      node.prompt ??
+                      (ending
+                        ? (story.labels?.endingPrompt ?? "This branch is complete.")
+                        : (story.labels?.choosePrompt ?? "Choose what happens next."))
+                    }
+                    completedLabel={
+                      story.labels?.completedBranch ??
+                      "Restart to explore another branch, or go back to choose a different path."
+                    }
+                    restartLabel={story.labels?.restart ?? "Restart"}
+                    restart={restart}
+                  />
+                ) : null}
+              </div>
+            );
+          },
+        };
+      }),
+    [chooseFrom, history, registry, requestScrollToScene, restart, story],
+  );
 
   return (
-    <nav className="rounded-lg border bg-background p-3" aria-label="Story graph">
-      <div className="mb-3 px-1">
-        <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-          Story graph
-        </p>
-      </div>
-
-      <ol className="story-steps-scrollbar-hidden flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0">
-        {graph.nodes.map((node) => {
-          const isSelectable = typeof node.historyIndex === "number";
-          const edges = edgesBySource[node.id] ?? [];
-
-          return (
-            <li key={node.id} className="min-w-[11rem] shrink-0 lg:min-w-0 lg:shrink">
-              <Button
-                type="button"
-                variant="ghost"
-                disabled={!isSelectable}
-                className={cn(
-                  "flex h-auto w-full items-start justify-start gap-3 whitespace-normal rounded-md border px-3 py-3 text-left disabled:opacity-100",
-                  node.state === "active"
-                    ? "border-foreground bg-foreground text-background"
-                    : node.state === "visited"
-                      ? "border-border text-foreground hover:bg-muted/70"
-                      : "border-dashed border-border text-muted-foreground",
-                )}
-                onClick={() => {
-                  if (typeof node.historyIndex === "number") {
-                    onSelect?.(node.historyIndex);
-                  }
-                }}
-                aria-current={node.state === "active" ? "step" : undefined}
-              >
-                <span
-                  className={cn(
-                    "mt-0.5 size-2.5 shrink-0 rounded-full",
-                    node.state === "active"
-                      ? "bg-background"
-                      : node.state === "visited"
-                        ? "bg-foreground"
-                        : "bg-muted-foreground/40",
-                  )}
-                  aria-hidden="true"
-                />
-                <span className="min-w-0">
-                  <span
-                    className={cn(
-                      "block text-xs uppercase tracking-[0.14em]",
-                      node.state === "active" ? "text-background/75" : "text-muted-foreground",
-                    )}
-                  >
-                    {node.state}
-                  </span>
-                  <span className="mt-1 block text-sm font-medium leading-5">{node.title}</span>
-                </span>
-              </Button>
-
-              {edges.length > 0 ? (
-                <ul className="ml-4 mt-2 space-y-1 border-l border-border pl-3 text-xs text-muted-foreground">
-                  {edges.map((edge) => {
-                    const target = nodeLookup.get(edge.target);
-
-                    return (
-                      <li
-                        key={edge.id}
-                        className={cn(
-                          "leading-5",
-                          edge.selected ? "font-medium text-foreground" : "",
-                          edge.disabled ? "opacity-50" : "",
-                        )}
-                      >
-                        <span aria-hidden="true">→</span> {edge.label}
-                        {target ? <span className="sr-only"> to {target.title}</span> : null}
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : null}
-            </li>
-          );
-        })}
-      </ol>
-    </nav>
+    <StoryScrollTimeline
+      scenes={scenes}
+      className={className}
+      viewportClassName={viewportClassName}
+      ariaLabel={ariaLabel ?? story.labels?.scrollerLabel ?? story.title}
+      scrollTarget={scrollTarget}
+      onActiveIndexChange={onActiveIndexChange}
+      onSceneProgressChange={onSceneProgressChange}
+    />
   );
 }
 
-type StoryChoiceOverlayProps = {
+export function StoryScroller<TData extends StoryNodeData = StoryNodeData>({
+  story,
+  scenes,
+  registry,
+  pathChoiceIds = [],
+  className,
+  viewportClassName,
+  ariaLabel,
+  onChoice,
+  onPathChange,
+  onActiveIndexChange,
+  onSceneProgressChange,
+}: StoryScrollerProps<TData>) {
+  if (scenes) {
+    return (
+      <StoryScrollTimeline
+        scenes={scenes}
+        className={className}
+        viewportClassName={viewportClassName}
+        ariaLabel={ariaLabel}
+        onActiveIndexChange={onActiveIndexChange}
+        onSceneProgressChange={onSceneProgressChange}
+      />
+    );
+  }
+
+  if (!story) {
+    throw new Error("StoryScroller requires either a story or a scenes array.");
+  }
+
+  return (
+    <StoryDocumentScroller
+      story={story}
+      registry={registry}
+      pathChoiceIds={pathChoiceIds}
+      className={className}
+      viewportClassName={viewportClassName}
+      ariaLabel={ariaLabel}
+      onChoice={onChoice}
+      onPathChange={onPathChange}
+      onActiveIndexChange={onActiveIndexChange}
+      onSceneProgressChange={onSceneProgressChange}
+    />
+  );
+}
+
+type StoryChoicePanelProps = {
   choices: StoryChoice[];
   choose: (choiceId: string) => void;
   ending: boolean;
@@ -553,7 +488,7 @@ type StoryChoiceOverlayProps = {
   restart: () => void;
 };
 
-function StoryChoiceOverlay({
+function StoryChoicePanel({
   choices,
   choose,
   ending,
@@ -561,42 +496,40 @@ function StoryChoiceOverlay({
   completedLabel,
   restartLabel,
   restart,
-}: StoryChoiceOverlayProps) {
+}: StoryChoicePanelProps) {
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 p-4 md:p-6">
-      <div className="pointer-events-auto max-h-[70%] overflow-y-auto rounded-lg border bg-background/95 p-4 shadow-xl shadow-black/10 backdrop-blur md:p-5">
-        <p className="text-sm font-medium">{prompt}</p>
-        {choices.length > 0 ? (
-          <div className="mt-4 grid gap-3 md:grid-cols-[repeat(auto-fit,minmax(13rem,1fr))]">
-            {choices.map((choice) => (
-              <Button
-                key={choice.id}
-                type="button"
-                variant="outline"
-                className="h-auto justify-start whitespace-normal px-4 py-3 text-left"
-                onClick={() => choose(choice.id)}
-                disabled={choice.disabled}
-              >
-                <span className="grid gap-1">
-                  <span>{choice.label}</span>
-                  {choice.description ? (
-                    <span className="text-sm font-normal text-muted-foreground">
-                      {choice.description}
-                    </span>
-                  ) : null}
-                </span>
-              </Button>
-            ))}
-          </div>
-        ) : ending ? (
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <p className="text-sm text-muted-foreground">{completedLabel}</p>
-            <Button type="button" variant="secondary" onClick={restart}>
-              {restartLabel}
+    <div className="rounded-lg border bg-background p-4 shadow-sm">
+      <p className="text-sm font-medium">{prompt}</p>
+      {choices.length > 0 ? (
+        <div className="mt-4 grid gap-3 md:grid-cols-[repeat(auto-fit,minmax(13rem,1fr))]">
+          {choices.map((choice) => (
+            <Button
+              key={choice.id}
+              type="button"
+              variant="outline"
+              className="h-auto justify-start whitespace-normal px-4 py-3 text-left"
+              onClick={() => choose(choice.id)}
+              disabled={choice.disabled}
+            >
+              <span className="grid gap-1">
+                <span>{choice.label}</span>
+                {choice.description ? (
+                  <span className="text-sm font-normal text-muted-foreground">
+                    {choice.description}
+                  </span>
+                ) : null}
+              </span>
             </Button>
-          </div>
-        ) : null}
-      </div>
+          ))}
+        </div>
+      ) : ending ? (
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <p className="text-sm text-muted-foreground">{completedLabel}</p>
+          <Button type="button" variant="secondary" onClick={restart}>
+            {restartLabel}
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }
