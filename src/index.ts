@@ -77,6 +77,7 @@ export {
   StoryScroller,
   type StoryScrollAutoplay,
   type StoryScrollAutoplayOptions,
+  type StoryScrollDirection,
   type StoryScrollScene,
   type StoryScrollSceneRenderProps,
   type StoryScrollTransition,

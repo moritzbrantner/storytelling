@@ -28,6 +28,7 @@ import {
   type StoryPathState,
   type StoryRenderProps,
   type StoryScrollSceneRenderProps,
+  type StoryScrollTransition,
 } from ".";
 
 type FixtureData = {
@@ -170,6 +171,39 @@ function renderScrollTransitionLabel(label: string) {
       {label} {isActive ? "active" : "preview"} {Math.round(value)}
     </div>
   );
+}
+
+function getScrollerPage(container: HTMLElement, index: number, active: boolean) {
+  return container.querySelector<HTMLElement>(
+    `[data-story-scroller-index="${index}"][data-active="${active ? "true" : "false"}"]`,
+  );
+}
+
+function renderTransitionScroller(transition: StoryScrollTransition) {
+  const rendered = render(
+    <StoryScroller
+      ariaLabel="Transition scenes"
+      transition={transition}
+      scenes={[
+        {
+          id: "alpha",
+          title: "Alpha",
+          render: renderScrollTransitionLabel("Alpha"),
+        },
+        {
+          id: "beta",
+          title: "Beta",
+          render: renderScrollTransitionLabel("Beta"),
+        },
+      ]}
+    />,
+  );
+  const viewport = rendered.container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+
+  expect(viewport).toBeTruthy();
+  setScrollerGeometry(viewport!, 2);
+
+  return { ...rendered, viewport: viewport! };
 }
 
 describe("@moritzbrantner/storytelling", () => {
@@ -937,47 +971,101 @@ describe("@moritzbrantner/storytelling", () => {
   });
 
   test("crossfades StoryScroller scenes during the configured global transition window", async () => {
-    const { container } = render(
-      <StoryScroller
-        ariaLabel="Fade scenes"
-        transition={{ type: "fade", scrollUnits: 20 }}
-        scenes={[
-          {
-            id: "alpha",
-            title: "Alpha",
-            render: renderScrollTransitionLabel("Alpha"),
-          },
-          {
-            id: "beta",
-            title: "Beta",
-            render: renderScrollTransitionLabel("Beta"),
-          },
-        ]}
-      />,
-    );
-    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+    const { container, viewport } = renderTransitionScroller({ type: "fade", scrollUnits: 20 });
 
-    expect(viewport).toBeTruthy();
-    setScrollerGeometry(viewport!, 2);
-
-    scrollScrollerViewport(viewport!, 79);
+    scrollScrollerViewport(viewport, 79);
     expect(await screen.findByText("Alpha active 79")).toBeTruthy();
     expect(screen.queryByText(/Beta/)).toBeNull();
 
-    scrollScrollerViewport(viewport!, 90);
+    scrollScrollerViewport(viewport, 90);
     expect(await screen.findByText("Alpha active 90")).toBeTruthy();
     expect(screen.getByText("Beta preview 0")).toBeTruthy();
+    expect(getScrollerPage(container, 0, true)?.style.opacity).toBe("0.5");
+    expect(getScrollerPage(container, 1, false)?.style.opacity).toBe("0.5");
 
-    scrollScrollerViewport(viewport!, 100);
+    scrollScrollerViewport(viewport, 100);
     expect(await screen.findByText("Beta active 0")).toBeTruthy();
     expect(screen.queryByText(/Alpha/)).toBeNull();
+  });
+
+  test("slides StoryScroller scene previews during the configured transition window", async () => {
+    const { container, viewport } = renderTransitionScroller({
+      type: "slide",
+      scrollUnits: 20,
+      direction: "up",
+    });
+
+    scrollScrollerViewport(viewport, 79);
+    expect(await screen.findByText("Alpha active 79")).toBeTruthy();
+    expect(screen.queryByText(/Beta/)).toBeNull();
+
+    scrollScrollerViewport(viewport, 90);
+    expect(await screen.findByText("Alpha active 90")).toBeTruthy();
+    expect(screen.getByText("Beta preview 0")).toBeTruthy();
+    expect(getScrollerPage(container, 0, true)?.style.transform).toBe("");
+    expect(getScrollerPage(container, 1, false)?.style.transform).toBe("translateY(50%)");
+
+    scrollScrollerViewport(viewport, 100);
+    expect(await screen.findByText("Beta active 0")).toBeTruthy();
+    expect(screen.queryByText(/Alpha/)).toBeNull();
+  });
+
+  test("pushes StoryScroller scenes during the configured transition window", async () => {
+    const { container, viewport } = renderTransitionScroller({
+      type: "push",
+      scrollUnits: 20,
+      direction: "left",
+    });
+
+    scrollScrollerViewport(viewport, 90);
+    expect(await screen.findByText("Alpha active 90")).toBeTruthy();
+    expect(screen.getByText("Beta preview 0")).toBeTruthy();
+    expect(getScrollerPage(container, 0, true)?.style.transform).toBe("translateX(-50%)");
+    expect(getScrollerPage(container, 1, false)?.style.transform).toBe("translateX(50%)");
+
+    scrollScrollerViewport(viewport, 100);
+    expect(await screen.findByText("Beta active 0")).toBeTruthy();
+    expect(screen.queryByText(/Alpha/)).toBeNull();
+  });
+
+  test("wipes StoryScroller scene previews during the configured transition window", async () => {
+    const { container, viewport } = renderTransitionScroller({
+      type: "wipe",
+      scrollUnits: 20,
+      direction: "right",
+    });
+
+    scrollScrollerViewport(viewport, 90);
+    expect(await screen.findByText("Alpha active 90")).toBeTruthy();
+    expect(screen.getByText("Beta preview 0")).toBeTruthy();
+    expect(getScrollerPage(container, 1, false)?.style.clipPath).toBe("inset(0 50% 0 0)");
+  });
+
+  test("zooms StoryScroller scene previews during the configured transition window", async () => {
+    const { container, viewport } = renderTransitionScroller({ type: "zoom", scrollUnits: 20 });
+
+    scrollScrollerViewport(viewport, 90);
+    expect(await screen.findByText("Alpha active 90")).toBeTruthy();
+    expect(screen.getByText("Beta preview 0")).toBeTruthy();
+    expect(getScrollerPage(container, 0, true)?.style.transform).toBe("scale(1.03)");
+    expect(getScrollerPage(container, 1, false)?.style.transform).toBe("scale(0.96)");
+  });
+
+  test("blurs StoryScroller scene previews during the configured transition window", async () => {
+    const { container, viewport } = renderTransitionScroller({ type: "blur", scrollUnits: 20 });
+
+    scrollScrollerViewport(viewport, 90);
+    expect(await screen.findByText("Alpha active 90")).toBeTruthy();
+    expect(screen.getByText("Beta preview 0")).toBeTruthy();
+    expect(getScrollerPage(container, 0, true)?.style.filter).toBe("blur(8px)");
+    expect(getScrollerPage(container, 1, false)?.style.filter).toBe("blur(8px)");
   });
 
   test("lets StoryScroller scene transitions override the global transition", async () => {
     const { container } = render(
       <StoryScroller
         ariaLabel="Override scenes"
-        transition={{ type: "fade", scrollUnits: 20 }}
+        transition={{ type: "push", scrollUnits: 20, direction: "left" }}
         scenes={[
           {
             id: "alpha",
@@ -1003,11 +1091,11 @@ describe("@moritzbrantner/storytelling", () => {
     expect(screen.queryByText(/Beta/)).toBeNull();
   });
 
-  test("treats zero-unit StoryScroller fade transitions as direct scene changes", async () => {
+  test("treats zero-unit StoryScroller animated transitions as direct scene changes", async () => {
     const { container } = render(
       <StoryScroller
-        ariaLabel="Zero fade scenes"
-        transition={{ type: "fade", scrollUnits: 0 }}
+        ariaLabel="Zero transition scenes"
+        transition={{ type: "slide", scrollUnits: 0 }}
         scenes={[
           {
             id: "alpha",
@@ -1032,7 +1120,7 @@ describe("@moritzbrantner/storytelling", () => {
     expect(screen.queryByText(/Beta/)).toBeNull();
   });
 
-  test("disables StoryScroller fade previews for reduced motion users", async () => {
+  test("disables StoryScroller animated previews for reduced motion users", async () => {
     vi.stubGlobal("matchMedia", (query: string) => ({
       matches: true,
       media: query,
@@ -1047,7 +1135,7 @@ describe("@moritzbrantner/storytelling", () => {
     const { container } = render(
       <StoryScroller
         ariaLabel="Reduced motion scenes"
-        transition={{ type: "fade", scrollUnits: 20 }}
+        transition={{ type: "push", scrollUnits: 20, direction: "left" }}
         scenes={[
           {
             id: "alpha",

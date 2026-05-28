@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent,
   type ReactNode,
   type WheelEvent,
@@ -41,7 +42,16 @@ export type StoryScrollSceneRenderProps<TData = unknown> = {
   scrollToScene: (index: number) => void;
 };
 
-export type StoryScrollTransition = { type: "none" } | { type: "fade"; scrollUnits: number };
+export type StoryScrollDirection = "up" | "down" | "left" | "right";
+
+export type StoryScrollTransition =
+  | { type: "none" }
+  | { type: "fade"; scrollUnits: number }
+  | { type: "slide"; scrollUnits: number; direction?: StoryScrollDirection }
+  | { type: "push"; scrollUnits: number; direction?: StoryScrollDirection }
+  | { type: "wipe"; scrollUnits: number; direction?: StoryScrollDirection }
+  | { type: "zoom"; scrollUnits: number; fromScale?: number; toScale?: number }
+  | { type: "blur"; scrollUnits: number; maxBlur?: number };
 
 export type StoryScrollAutoplayOptions = {
   enabled?: boolean;
@@ -164,6 +174,10 @@ const DEFAULT_AUTOPLAY_UNITS_PER_SECOND = 20;
 const AUTOPLAY_INTERVAL_MS = 1000 / 60;
 const STORY_BRANCH_REVEAL_START = 0.9;
 const STORY_BRANCH_REVEAL_END = 1;
+const DEFAULT_SCROLL_TRANSITION_DIRECTION: StoryScrollDirection = "up";
+const DEFAULT_SCROLL_TRANSITION_FROM_SCALE = 0.92;
+const DEFAULT_SCROLL_TRANSITION_TO_SCALE = 1.06;
+const DEFAULT_SCROLL_TRANSITION_MAX_BLUR = 16;
 
 function getPrefersReducedMotion() {
   return (
@@ -184,12 +198,181 @@ function resolveScrollTransition(
 
   const transition = sceneTransition ?? timelineTransition ?? DEFAULT_SCROLL_TRANSITION;
 
-  if (transition.type === "fade") {
-    const scrollUnits = clamp(transition.scrollUnits, 0, 100);
-    return scrollUnits > 0 ? { type: "fade", scrollUnits } : DEFAULT_SCROLL_TRANSITION;
+  if (transition.type === "none") {
+    return DEFAULT_SCROLL_TRANSITION;
   }
 
-  return DEFAULT_SCROLL_TRANSITION;
+  const scrollUnits = clamp(transition.scrollUnits, 0, 100);
+
+  if (scrollUnits <= 0) {
+    return DEFAULT_SCROLL_TRANSITION;
+  }
+
+  return { ...transition, scrollUnits };
+}
+
+type StoryScrollTransitionStyles = {
+  activeStyle: CSSProperties;
+  previewStyle: CSSProperties;
+};
+
+function getDirectionalPreviewTransform(direction: StoryScrollDirection, progress: number) {
+  const distance = (1 - progress) * 100;
+
+  switch (direction) {
+    case "down":
+      return `translateY(${-distance}%)`;
+    case "left":
+      return `translateX(${distance}%)`;
+    case "right":
+      return `translateX(${-distance}%)`;
+    case "up":
+    default:
+      return `translateY(${distance}%)`;
+  }
+}
+
+function getDirectionalActiveTransform(direction: StoryScrollDirection, progress: number) {
+  const distance = progress * 100;
+
+  switch (direction) {
+    case "down":
+      return `translateY(${distance}%)`;
+    case "left":
+      return `translateX(${-distance}%)`;
+    case "right":
+      return `translateX(${distance}%)`;
+    case "up":
+    default:
+      return `translateY(${-distance}%)`;
+  }
+}
+
+function getDirectionalClipPath(direction: StoryScrollDirection, progress: number) {
+  const hidden = 100 - progress * 100;
+
+  switch (direction) {
+    case "down":
+      return `inset(0 0 ${hidden}% 0)`;
+    case "left":
+      return `inset(0 0 0 ${hidden}%)`;
+    case "right":
+      return `inset(0 ${hidden}% 0 0)`;
+    case "up":
+    default:
+      return `inset(${hidden}% 0 0 0)`;
+  }
+}
+
+function getScrollTransitionStyles(
+  transition: StoryScrollTransition,
+  progress: number,
+): StoryScrollTransitionStyles {
+  const normalizedProgress = clamp(progress, 0, 1);
+  const baseActiveStyle: CSSProperties = { opacity: 1, zIndex: 1 };
+  const basePreviewStyle: CSSProperties = { opacity: 1, zIndex: 2 };
+
+  switch (transition.type) {
+    case "fade":
+      return {
+        activeStyle: { ...baseActiveStyle, opacity: 1 - normalizedProgress },
+        previewStyle: { ...basePreviewStyle, opacity: normalizedProgress },
+      };
+    case "slide": {
+      const direction = transition.direction ?? DEFAULT_SCROLL_TRANSITION_DIRECTION;
+
+      return {
+        activeStyle: baseActiveStyle,
+        previewStyle: {
+          ...basePreviewStyle,
+          transform: getDirectionalPreviewTransform(direction, normalizedProgress),
+          willChange: "transform",
+        },
+      };
+    }
+    case "push": {
+      const direction = transition.direction ?? DEFAULT_SCROLL_TRANSITION_DIRECTION;
+
+      return {
+        activeStyle: {
+          ...baseActiveStyle,
+          transform: getDirectionalActiveTransform(direction, normalizedProgress),
+          willChange: "transform",
+        },
+        previewStyle: {
+          ...basePreviewStyle,
+          transform: getDirectionalPreviewTransform(direction, normalizedProgress),
+          willChange: "transform",
+        },
+      };
+    }
+    case "wipe": {
+      const direction = transition.direction ?? DEFAULT_SCROLL_TRANSITION_DIRECTION;
+
+      return {
+        activeStyle: baseActiveStyle,
+        previewStyle: {
+          ...basePreviewStyle,
+          clipPath: getDirectionalClipPath(direction, normalizedProgress),
+          willChange: "clip-path",
+        },
+      };
+    }
+    case "zoom": {
+      const fromScale =
+        transition.fromScale === undefined || !Number.isFinite(transition.fromScale)
+          ? DEFAULT_SCROLL_TRANSITION_FROM_SCALE
+          : transition.fromScale;
+      const toScale =
+        transition.toScale === undefined || !Number.isFinite(transition.toScale)
+          ? DEFAULT_SCROLL_TRANSITION_TO_SCALE
+          : transition.toScale;
+      const activeScale = 1 + (toScale - 1) * normalizedProgress;
+      const previewScale = fromScale + (1 - fromScale) * normalizedProgress;
+
+      return {
+        activeStyle: {
+          ...baseActiveStyle,
+          opacity: 1 - normalizedProgress * 0.45,
+          transform: `scale(${activeScale})`,
+          willChange: "opacity, transform",
+        },
+        previewStyle: {
+          ...basePreviewStyle,
+          opacity: normalizedProgress,
+          transform: `scale(${previewScale})`,
+          willChange: "opacity, transform",
+        },
+      };
+    }
+    case "blur": {
+      const maxBlur =
+        transition.maxBlur === undefined || !Number.isFinite(transition.maxBlur)
+          ? DEFAULT_SCROLL_TRANSITION_MAX_BLUR
+          : Math.max(transition.maxBlur, 0);
+
+      return {
+        activeStyle: {
+          ...baseActiveStyle,
+          opacity: 1 - normalizedProgress,
+          filter: `blur(${maxBlur * normalizedProgress}px)`,
+          willChange: "filter, opacity",
+        },
+        previewStyle: {
+          ...basePreviewStyle,
+          opacity: normalizedProgress,
+          filter: `blur(${maxBlur * (1 - normalizedProgress)}px)`,
+          willChange: "filter, opacity",
+        },
+      };
+    }
+    case "none":
+    default:
+      return {
+        activeStyle: baseActiveStyle,
+        previewStyle: { ...basePreviewStyle, opacity: 0 },
+      };
+  }
 }
 
 function getNextScrollState(element: HTMLElement, sceneCount: number): ScrollState {
@@ -291,16 +474,17 @@ function StoryScrollTimeline<TSceneData = unknown>({
     transition,
     Boolean(reducedMotion) || getPrefersReducedMotion(),
   );
-  const fadeProgress =
-    activeTransition.type === "fade" && nextScene
+  const transitionProgress =
+    activeTransition.type !== "none" && nextScene
       ? clamp(
           (scrollState.value - (100 - activeTransition.scrollUnits)) / activeTransition.scrollUnits,
           0,
           1,
         )
       : 0;
-  const shouldRenderFadePreview =
-    activeTransition.type === "fade" && Boolean(nextScene) && fadeProgress > 0;
+  const shouldRenderTransitionPreview =
+    activeTransition.type !== "none" && Boolean(nextScene) && transitionProgress > 0;
+  const transitionStyles = getScrollTransitionStyles(activeTransition, transitionProgress);
 
   const updateFromScroll = useCallback(() => {
     const element = scrollRef.current;
@@ -518,12 +702,16 @@ function StoryScrollTimeline<TSceneData = unknown>({
                 value={scrollState.value}
                 scrollValue={scrollValue}
                 scrollProgress={scrollProgress}
-                opacity={shouldRenderFadePreview ? 1 - fadeProgress : 1}
+                style={
+                  shouldRenderTransitionPreview
+                    ? transitionStyles.activeStyle
+                    : { opacity: 1, zIndex: 1 }
+                }
                 isActive
                 scrollToScene={scrollToScene}
               />
             ) : null}
-            {shouldRenderFadePreview && nextScene ? (
+            {shouldRenderTransitionPreview && nextScene ? (
               <StoryScrollMotionFrame
                 key={`${nextScene.id}-preview`}
                 scene={nextScene}
@@ -532,7 +720,7 @@ function StoryScrollTimeline<TSceneData = unknown>({
                 value={0}
                 scrollValue={previewScrollValue}
                 scrollProgress={previewScrollProgress}
-                opacity={fadeProgress}
+                style={transitionStyles.previewStyle}
                 isActive={false}
                 scrollToScene={scrollToScene}
               />
@@ -551,7 +739,7 @@ type StoryScrollMotionFrameProps<TSceneData = unknown> = {
   value: number;
   scrollValue: MotionValue<number>;
   scrollProgress: MotionValue<number>;
-  opacity: number;
+  style: CSSProperties;
   isActive: boolean;
   scrollToScene: (index: number) => void;
 };
@@ -563,7 +751,7 @@ function StoryScrollMotionFrame<TSceneData = unknown>({
   value,
   scrollValue,
   scrollProgress,
-  opacity,
+  style,
   isActive,
   scrollToScene,
 }: StoryScrollMotionFrameProps<TSceneData>) {
@@ -579,7 +767,7 @@ function StoryScrollMotionFrame<TSceneData = unknown>({
       data-story-scroller-page
       aria-label={`${sceneIndex + 1}. ${scene.title}`}
       aria-hidden={!isActive}
-      style={{ opacity }}
+      style={style}
     >
       <div className="h-full min-h-0" data-story-scroller-motion-frame>
         {scene.render({

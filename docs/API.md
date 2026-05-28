@@ -33,6 +33,19 @@ This reference tracks the package exports that are intended for consumers.
 - `scrollInputScale` still applies to wheel and arrow-key input while autoscroll is enabled.
 - Autoscroll is disabled when the user prefers reduced motion.
 
+### `StoryScroller` Transitions
+
+- `transition` sets the default scene handoff for the whole scroller.
+- `transitionToNext` on a scene overrides the global transition for that scene boundary.
+- Supported transition types are `none`, `fade`, `slide`, `push`, `wipe`, `zoom`, and `blur`.
+- Animated transitions use `scrollUnits` from `0` to `100` as normalized scene-local units.
+- `scrollUnits: 0` is treated as a direct `none` transition.
+- `slide`, `push`, and `wipe` accept `direction: "up" | "down" | "left" | "right"`.
+- `zoom` accepts `fromScale` and `toScale`.
+- `blur` accepts `maxBlur`.
+- Existing `{ type: "none" }` and `{ type: "fade", scrollUnits }` values remain compatible.
+- Animated transition previews are disabled when the user prefers reduced motion.
+
 ## `./media`
 
 - `StorySubtitleFile`, `StoryAudioFile`, and `StoryVideoFile` render media-focused story stages.

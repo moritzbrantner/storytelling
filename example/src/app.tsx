@@ -110,8 +110,24 @@ const exampleCatalog: ExampleCatalog = {
     },
   ],
   motionPresets: [
-    { id: "soft-fade", label: "Soft fade", transition: { type: "fade", scrollUnits: 18 } },
-    { id: "long-fade", label: "Long fade", transition: { type: "fade", scrollUnits: 34 } },
+    { id: "soft-fade", label: "Fade", transition: { type: "fade", scrollUnits: 18 } },
+    {
+      id: "slide-up",
+      label: "Slide",
+      transition: { type: "slide", scrollUnits: 22, direction: "up" },
+    },
+    {
+      id: "push-left",
+      label: "Push",
+      transition: { type: "push", scrollUnits: 24, direction: "left" },
+    },
+    {
+      id: "wipe-right",
+      label: "Wipe",
+      transition: { type: "wipe", scrollUnits: 24, direction: "right" },
+    },
+    { id: "zoom", label: "Zoom", transition: { type: "zoom", scrollUnits: 24 } },
+    { id: "blur", label: "Blur", transition: { type: "blur", scrollUnits: 22 } },
     { id: "direct", label: "Direct", transition: { type: "none" } },
   ],
   autoscrollPresets: [
@@ -126,9 +142,9 @@ const exampleCatalog: ExampleCatalog = {
     {
       id: "tour",
       label: "Guided tour",
-      description: "Uses the default autoplay pace with a longer visual handoff.",
+      description: "Uses the default autoplay pace with a pushed visual handoff.",
       autoplay: true,
-      transition: { type: "fade", scrollUnits: 26 },
+      transition: { type: "push", scrollUnits: 26, direction: "up" },
       scrollInputScale: 0.75,
     },
     {
@@ -213,6 +229,14 @@ function getAutoscrollPaceLabel(autoplay: StoryScrollAutoplay) {
   return `${autoplay.unitsPerSecond ?? 20} units/s`;
 }
 
+function getTransitionSummary(transition: StoryScrollTransition) {
+  if (transition.type === "none") {
+    return "direct";
+  }
+
+  return `${transition.scrollUnits} units ${transition.type}`;
+}
+
 function StateSummary({ summary }: { summary: string }) {
   return <pre className="m-0 whitespace-pre-wrap text-sm leading-7 text-[#2d3835]">{summary}</pre>;
 }
@@ -293,11 +317,7 @@ export function ExampleApp() {
     activeAutoscrollPreset &&
     `Pace ${getAutoscrollPaceLabel(activeAutoscrollPreset.autoplay)}
 Input scale ${activeAutoscrollPreset.scrollInputScale}
-Transition ${
-      activeAutoscrollPreset.transition.type === "fade"
-        ? `${activeAutoscrollPreset.transition.scrollUnits} units fade`
-        : "direct"
-    }`;
+Transition ${getTransitionSummary(activeAutoscrollPreset.transition)}`;
 
   useEffect(() => {
     setScrollerActiveIndex(0);

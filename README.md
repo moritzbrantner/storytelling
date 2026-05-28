@@ -164,7 +164,7 @@ function OpeningMotionScene({
 export function StoryExperience() {
   return (
     <StoryScroller
-      transition={{ type: "fade", scrollUnits: 20 }}
+      transition={{ type: "slide", scrollUnits: 20, direction: "up" }}
       scrollInputScale={0.5}
       autoplay={{ unitsPerSecond: 18 }}
       scenes={[
@@ -183,10 +183,43 @@ export function StoryExperience() {
 ```
 
 `StoryScroller` changes scenes directly by default. Add
-`transition={{ type: "fade", scrollUnits: 20 }}` for a scroll-driven crossfade
-between every scene, or use `transitionToNext` on an individual scene to
-override that boundary. Scroll transition units are normalized scene-local units
-from `0` to `100`, not pixels, frames, or seconds.
+`transition={{ type: "fade", scrollUnits: 20 }}` or another scroll-driven
+transition to animate between every scene. Use `transitionToNext` on an
+individual scene to override that boundary. Scroll transition units are
+normalized scene-local units from `0` to `100`, not pixels, frames, or seconds.
+
+Supported scroller transitions are:
+
+- `none` for direct scene switching.
+- `fade` for a crossfade.
+- `slide` for the incoming scene sliding over the current scene.
+- `push` for the incoming scene pushing the current scene away.
+- `wipe` for a directional clipped reveal.
+- `zoom` for a scale-and-fade handoff.
+- `blur` for a blurred crossfade.
+
+Directional transitions accept `direction: "up" | "down" | "left" | "right"`.
+`zoom` accepts `fromScale` and `toScale`; `blur` accepts `maxBlur`. Animated
+transitions are disabled for users who prefer reduced motion.
+
+```tsx
+<StoryScroller
+  transition={{ type: "push", scrollUnits: 24, direction: "left" }}
+  scenes={[
+    {
+      id: "overview",
+      title: "Overview",
+      transitionToNext: { type: "wipe", scrollUnits: 18, direction: "right" },
+      render: OverviewScene,
+    },
+    {
+      id: "details",
+      title: "Details",
+      render: DetailsScene,
+    },
+  ]}
+/>
+```
 
 Use `scrollInputScale` to tune wheel and arrow-key input. `1` is the default:
 one arrow press advances by one scene, and wheel deltas are left unchanged.
