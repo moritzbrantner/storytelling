@@ -23,14 +23,8 @@ import {
 } from "./story-runtime";
 import { resolveStoryPath } from "./story-path";
 import { getStoryChoices, getStoryNode, isStoryEnding, validateStory } from "./story-validation";
-import type {
-  StoryChoice,
-  StoryDocument,
-  StoryHistoryEntry,
-  StoryNodeData,
-  StoryRenderProps,
-  StoryRendererRegistry,
-} from "./story-model";
+import type { StoryChoice, StoryDocument, StoryHistoryEntry, StoryNodeData } from "./story-model";
+import type { StoryRendererRegistry, StoryRenderProps } from "./story-render-types";
 import type { StoryPathState } from "./story-state";
 
 const STORY_BRANCH_REVEAL_START = 0.9;

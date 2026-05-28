@@ -4,13 +4,12 @@ import { Fragment } from "react";
 
 import { cn } from "@moritzbrantner/ui";
 
+import type { StoryContentBlock, StoryMediaTextTrack } from "./story-model";
 import type {
-  StoryContentBlock,
   StoryContentRenderer,
   StoryContentRendererProps,
   StoryContentRendererRegistry,
-  StoryMediaTextTrack,
-} from "./story-model";
+} from "./story-render-types";
 
 export type StoryContentProps = StoryContentRendererProps & {
   className?: string;

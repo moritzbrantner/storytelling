@@ -11,6 +11,8 @@ Three-friendly rendering helpers.
 - `compileStory(story)` / `enumerateStoryPaths(story, options)`
 - `analyzeStory(story, options)` / `applyStoryPatch(story, patch, options)`
 - `serializeStoryPath(...)` / `parseStoryPath(...)`
+- `@moritzbrantner/storytelling/core` for non-React validation, graph, path, authoring, and patch helpers
+- `@moritzbrantner/storytelling/schema` for `storyDocumentJsonSchema`
 - `useStoryRuntime(...)`, `StoryPlayer`, `StoryControls`, `StoryScroller`, `StoryScrollTimeline`, `StoryProgress`, and `StoryMinimap`
 - `createStoryRendererRegistry(...)`, `getStoryRendererKey(...)`, and `getStoryStageProps(...)`
 - `@moritzbrantner/storytelling/media` for media-oriented stage helpers
@@ -111,6 +113,24 @@ const renamed = applyStoryPatch(story, {
   nextNodeId: "finale",
 });
 ```
+
+Server-side tools can import the same serializable core helpers without loading
+React components or adapter code:
+
+```ts
+import {
+  analyzeStory,
+  applyStoryPatch,
+  defineStory,
+  resolveStoryPath,
+  validateStoryDocument,
+} from "@moritzbrantner/storytelling/core";
+import { storyDocumentJsonSchema } from "@moritzbrantner/storytelling/schema";
+```
+
+Pass `includeFixes: true` to `analyzeStory()` to receive deterministic safe
+patch suggestions for fixable draft issues such as unreachable nodes, empty
+reachable nodes, disabled-only empty branches, and blank strict-mode fields.
 
 ### Linear stories
 
@@ -507,4 +527,6 @@ bun run verify
 
 The release gate covers formatting, Oxlint diagnostics, forbidden import checks,
 type checking, unit tests, build output, package export smoke tests, temporary
-consumer install smoke coverage, and package dry-run contents.
+consumer install smoke coverage, and package dry-run contents. After publishing,
+run `bun run test:published` to verify npm metadata, the `latest` dist-tag, and
+clean-project installability from the public registry.

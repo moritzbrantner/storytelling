@@ -27,6 +27,7 @@ const publishedVersion = getPublishedVersion(packageJson.name);
 
 if (publishedVersion === packageJson.version) {
   console.log(`Skipping ${packageJson.name}@${packageJson.version}; already published.`);
+  verifyPublishedPackage();
   process.exit(0);
 }
 
@@ -40,6 +41,7 @@ execFileSync("npm", ["publish", "--access", "public", "--registry", registry], {
     npm_config_userconfig: npmUserConfig,
   },
 });
+verifyPublishedPackage();
 
 function getPublishedVersion(name) {
   try {
@@ -68,4 +70,16 @@ function createNpmUserConfig() {
 
 function isGitHubActionsTagContext() {
   return process.env.GITHUB_REF_TYPE === "tag" || process.env.GITHUB_REF?.startsWith("refs/tags/");
+}
+
+function verifyPublishedPackage() {
+  execFileSync("node", ["scripts/verify-published-package.mjs"], {
+    cwd: repoRoot,
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      npm_config_registry: registry,
+      npm_config_userconfig: npmUserConfig,
+    },
+  });
 }

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,6 +10,10 @@ const distRoot = path.join(packageRoot, "dist");
 for (const requiredFile of [
   "index.js",
   "index.d.ts",
+  "core.js",
+  "core.d.ts",
+  "schema.js",
+  "schema.d.ts",
   "remotion.js",
   "three.js",
   "media.js",
@@ -30,6 +34,25 @@ assert.equal(
   typeof root.createStoryRendererRegistry,
   "function",
   "root export should include createStoryRendererRegistry",
+);
+
+const core = await import(path.join(distRoot, "core.js"));
+assert.equal(typeof core.defineStory, "function", "core export should include defineStory");
+assert.equal(typeof core.StoryPlayer, "undefined", "core export must not include React UI");
+
+const coreTypes = readFileSync(path.join(distRoot, "core.d.ts"), "utf8");
+assert.equal(coreTypes.includes("react"), false, "core types must not reference React");
+assert.equal(
+  coreTypes.includes("StoryRenderProps"),
+  false,
+  "core types must not expose React render props",
+);
+
+const schema = await import(path.join(distRoot, "schema.js"));
+assert.equal(
+  typeof schema.storyDocumentJsonSchema,
+  "object",
+  "schema export should include storyDocumentJsonSchema",
 );
 
 const remotion = await import(path.join(distRoot, "remotion.js"));
@@ -80,6 +103,10 @@ const packageFiles = new Set(packageMetadata.files.map((file) => file.path));
 for (const requiredFile of [
   "dist/index.js",
   "dist/index.d.ts",
+  "dist/core.js",
+  "dist/core.d.ts",
+  "dist/schema.js",
+  "dist/schema.d.ts",
   "dist/remotion.js",
   "dist/remotion.d.ts",
   "dist/three.js",

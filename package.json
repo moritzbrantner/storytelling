@@ -1,6 +1,6 @@
 {
   "name": "@moritzbrantner/storytelling",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Serializable story documents, branching React playback, and Remotion or Three adapters.",
   "private": false,
   "type": "module",
@@ -20,6 +20,14 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./core": {
+      "types": "./dist/core.d.ts",
+      "import": "./dist/core.js"
+    },
+    "./schema": {
+      "types": "./dist/schema.d.ts",
+      "import": "./dist/schema.js"
     },
     "./remotion": {
       "types": "./dist/remotion.d.ts",
@@ -61,7 +69,7 @@
     }
   },
   "dependencies": {
-    "@moritzbrantner/ui": "https://registry.npmjs.org/@moritzbrantner/ui/-/ui-0.8.0.tgz",
+    "@moritzbrantner/ui": "^0.8.0",
     "motion": "^12.35.0"
   },
   "devDependencies": {
@@ -94,13 +102,14 @@
   "scripts": {
     "dev": "vite --config example/vite.config.ts",
     "build:example": "vite build --config example/vite.config.ts",
-    "build": "tsup src/index.ts src/remotion.tsx src/three.tsx src/media.tsx src/workflow.ts src/timeline.ts --format esm --dts --clean --out-dir dist",
+    "build": "tsup src/index.ts src/core.ts src/schema.ts src/remotion.tsx src/three.tsx src/media.tsx src/workflow.ts src/timeline.ts --format esm --dts --clean --out-dir dist",
     "check-types": "tsc --noEmit",
     "lint": "oxfmt --check && oxlint --format=github && node scripts/verify-package-imports.mjs ./src @/ next/ next-intl",
     "test": "vitest run src",
     "test:e2e": "playwright test",
     "test:package": "node scripts/verify-package.mjs",
     "test:consumer": "node scripts/verify-consumer.mjs",
+    "test:published": "node scripts/verify-published-package.mjs",
     "pack:dry": "npm pack --dry-run --ignore-scripts --json",
     "prepack": "bun run build",
     "verify": "bun run lint && bun run check-types && bun run test && bun run build && bun run build:example && bun run test:e2e && bun run test:package && bun run test:consumer && bun run pack:dry",

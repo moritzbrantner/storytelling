@@ -22,14 +22,8 @@ import {
 import { StoryProgress } from "./story-progress";
 import { StoryStageFrame } from "./story-stage-frame";
 import { useStoryRuntime } from "./story-runtime";
-import type {
-  StoryChoice,
-  StoryDocument,
-  StoryHistoryEntry,
-  StoryNodeData,
-  StoryRenderProps,
-  StoryRendererRegistry,
-} from "./story-model";
+import type { StoryChoice, StoryDocument, StoryHistoryEntry, StoryNodeData } from "./story-model";
+import type { StoryRendererRegistry, StoryRenderProps } from "./story-render-types";
 import type { StoryPathState } from "./story-state";
 
 export type StoryPlayerLayout = "split" | "stacked" | "stage-only";

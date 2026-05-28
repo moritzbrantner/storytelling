@@ -9,8 +9,8 @@ import type {
   StoryHistoryEntry,
   StoryLabels,
   StoryNodeData,
-  StoryRenderProps,
 } from "./story-model";
+import type { StoryRenderProps } from "./story-render-types";
 import { createStoryPathState, type StoryPathState } from "./story-state";
 import { useStoryPathState, type UseStoryPathStateOptions } from "./use-story-path-state";
 import { defineStory, getStoryChoices, getStoryNode, isStoryEnding } from "./story-validation";

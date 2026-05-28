@@ -2,6 +2,28 @@
 
 This reference tracks the package exports that are intended for consumers.
 
+## Core Export
+
+`@moritzbrantner/storytelling/core` exposes server-safe, serializable helpers
+only. It does not import React components, Motion, Remotion, Three, or DOM-only
+UI modules.
+
+- `defineStory`, `validateStory`, `assertStoryDocument`, and
+  `validateStoryDocument`
+- `resolveStoryPath`, `buildStoryTimeline`, `serializeStoryPath`,
+  `parseStoryPath`, and `createStoryPathState`
+- `compileStory`, `enumerateStoryPaths`, `getStoryBranches`, and
+  `getStoryEndings`
+- `analyzeStory`, `getStoryReachability`, `applyStoryPatch`, and
+  `createStoryNode`
+- Story model, validation, graph, path, authoring, and patch types
+
+## Schema Export
+
+`@moritzbrantner/storytelling/schema` exports `storyDocumentJsonSchema`, a JSON
+schema for `StoryDocument`, nodes, choices, content blocks, stage descriptors,
+labels, defaults, and validation-compatible numeric constraints.
+
 ## Root Export
 
 - `defineStory(story, options?)` validates and returns a serializable `StoryDocument`.
@@ -84,9 +106,25 @@ This reference tracks the package exports that are intended for consumers.
   `{ onMissing: "ignore" }` for legacy no-op behavior.
 - Use `{ type: "rename-node", nodeId, nextNodeId }` to change a node id. This
   updates `openingNodeId`, `next`, and choice targets.
+- Use `move-node` and `move-choice` to reorder authoring lists without changing
+  ids, references, choice targets, or node data.
+- Use `add-content-block`, `update-content-block`, `remove-content-block`, and
+  `move-content-block` for immutable content edits. Invalid content indexes
+  always throw, even with `{ onMissing: "ignore" }`.
 - `update-node` rejects `fields.id`; callers must use `rename-node`.
 - Removing the opening node requires `nextOpeningNodeId` unless no nodes remain.
 - `validate: true` honors `validationMode`.
+
+### Authoring Fixes
+
+- `analyzeStory(story, { includeFixes: true })` adds `fixes` to safe,
+  deterministic diagnostics.
+- Initial fixes cover removing unreachable nodes, adding placeholder paragraph
+  content to reachable empty nodes, removing disabled-only empty branch choices,
+  removing strict-mode blank choice descriptions, and normalizing simple blank
+  titles or ids when the result is deterministic.
+- Diagnostics omit fixes when no safe automatic patch exists, such as missing
+  author-written choice descriptions.
 
 ### `StoryScroller` Autoscroll
 

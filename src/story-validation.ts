@@ -22,6 +22,7 @@ export type StoryValidationIssueCode =
   | "duplicate-choice-id"
   | "empty-choice-label"
   | "blank-choice-label"
+  | "blank-choice-description"
   | "blank-choice-target"
   | "node-has-next-and-choices"
   | "invalid-node-duration"
@@ -402,6 +403,17 @@ export function validateStoryDocument<TData extends StoryNodeData>(
           nodeId: node.id,
           choiceId: choice.id,
           target: choice.target,
+        });
+      }
+
+      if (strict && choice.description !== undefined && isBlankString(choice.description)) {
+        addIssue(issues, {
+          code: "blank-choice-description",
+          message: `Choice "${choice.id}" on "${node.id}" description must not be blank.`,
+          path: `${choicePath}.description`,
+          storyId,
+          nodeId: node.id,
+          choiceId: choice.id,
         });
       }
     }

@@ -6,13 +6,8 @@ import { motion } from "motion/react";
 
 import { Button, cn } from "@moritzbrantner/ui";
 
-import type {
-  StoryChoice,
-  StoryDocument,
-  StoryHistoryEntry,
-  StoryNodeData,
-  StoryRenderProps,
-} from "./story-model";
+import type { StoryChoice, StoryDocument, StoryHistoryEntry, StoryNodeData } from "./story-model";
+import type { StoryRenderProps } from "./story-render-types";
 import { getStoryNode } from "./story-validation";
 
 const STORY_BRANCH_REVEAL_START = 0.9;

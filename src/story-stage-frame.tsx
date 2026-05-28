@@ -4,12 +4,12 @@ import { cn } from "@moritzbrantner/ui";
 
 import { StoryContent } from "./story-content";
 import { getStoryRendererKey } from "./story-render-registry";
+import type { StoryNodeData } from "./story-model";
 import type {
-  StoryNodeData,
-  StoryRenderProps,
   StoryRendererRegistry,
+  StoryRenderProps,
   StoryStageComponent,
-} from "./story-model";
+} from "./story-render-types";
 
 export type StoryStageFrameProps<TData extends StoryNodeData = StoryNodeData> =
   StoryRenderProps<TData> & {

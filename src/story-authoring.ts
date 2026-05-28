@@ -1,4 +1,5 @@
 import type { StoryChoice, StoryDocument, StoryNode, StoryNodeData } from "./story-model";
+import type { StoryPatch } from "./story-edit";
 import {
   compileStory,
   enumerateStoryPaths,
@@ -33,6 +34,12 @@ export type StoryAuthoringIssue = {
   nodeId?: string;
   choiceId?: string;
   target?: string;
+  fixes?: StoryIssueFix[];
+};
+
+export type StoryIssueFix<TData extends StoryNodeData = StoryNodeData> = {
+  label: string;
+  patch: StoryPatch<TData> | StoryPatch<TData>[];
 };
 
 export type StoryAuthoringMetrics = {
@@ -55,6 +62,7 @@ export type AnalyzeStoryOptions = {
   wordsPerMinute?: number;
   requireChoiceDescriptions?: boolean;
   validationMode?: StoryValidationMode;
+  includeFixes?: boolean;
 };
 
 export type StoryAuthoringReport<TData extends StoryNodeData = StoryNodeData> = {
@@ -85,6 +93,131 @@ function mapValidationIssue(issue: StoryValidationIssue, severity: StoryAuthorin
     choiceId: issue.choiceId,
     target: issue.target,
   } satisfies StoryAuthoringIssue;
+}
+
+function getUniqueFallbackId(existingIds: ReadonlySet<string>, prefix: string) {
+  for (let index = 1; index < 1000; index += 1) {
+    const id = `${prefix}-${index}`;
+    if (!existingIds.has(id)) {
+      return id;
+    }
+  }
+
+  return null;
+}
+
+function getValidationFixes<TData extends StoryNodeData>(
+  story: StoryDocument<TData>,
+  issue: StoryValidationIssue,
+): StoryIssueFix<TData>[] | undefined {
+  switch (issue.code) {
+    case "blank-story-id":
+      return [
+        {
+          label: 'Set story id to "story"',
+          patch: { type: "set-story-fields", fields: { id: "story" } },
+        },
+      ];
+    case "blank-story-title":
+      return [
+        {
+          label: 'Set story title to "Untitled story"',
+          patch: { type: "set-story-fields", fields: { title: "Untitled story" } },
+        },
+      ];
+    case "blank-node-title":
+      return issue.nodeId
+        ? [
+            {
+              label: 'Set node title to "Untitled node"',
+              patch: {
+                type: "update-node",
+                nodeId: issue.nodeId,
+                fields: { title: "Untitled node" },
+              },
+            },
+          ]
+        : undefined;
+    case "blank-node-id": {
+      if (!issue.nodeId) return undefined;
+
+      const matchingNodes = story.nodes.filter((node) => node.id === issue.nodeId);
+      if (matchingNodes.length !== 1) return undefined;
+
+      const existingIds = new Set(story.nodes.map((node) => node.id));
+      const nextNodeId = getUniqueFallbackId(existingIds, "node");
+      if (!nextNodeId) return undefined;
+
+      return [
+        {
+          label: `Rename blank node id to "${nextNodeId}"`,
+          patch: { type: "rename-node", nodeId: issue.nodeId, nextNodeId },
+        },
+      ];
+    }
+    case "blank-choice-id": {
+      if (!issue.nodeId || issue.choiceId === undefined) return undefined;
+
+      const node = story.nodes.find((candidate) => candidate.id === issue.nodeId);
+      if (!node) return undefined;
+
+      const matchingChoices = (node.choices ?? []).filter((choice) => choice.id === issue.choiceId);
+      if (matchingChoices.length !== 1) return undefined;
+
+      const existingChoiceIds = new Set((node.choices ?? []).map((choice) => choice.id));
+      const nextChoiceId = getUniqueFallbackId(existingChoiceIds, "choice");
+      if (!nextChoiceId) return undefined;
+
+      return [
+        {
+          label: `Rename blank choice id to "${nextChoiceId}"`,
+          patch: {
+            type: "update-choice",
+            nodeId: issue.nodeId,
+            choiceId: issue.choiceId,
+            fields: { id: nextChoiceId },
+          },
+        },
+      ];
+    }
+    case "blank-choice-label":
+      return issue.nodeId && issue.choiceId !== undefined
+        ? [
+            {
+              label: 'Set choice label to "Untitled choice"',
+              patch: {
+                type: "update-choice",
+                nodeId: issue.nodeId,
+                choiceId: issue.choiceId,
+                fields: { label: "Untitled choice" },
+              },
+            },
+          ]
+        : undefined;
+    case "blank-choice-description":
+      return issue.nodeId && issue.choiceId !== undefined
+        ? [
+            {
+              label: "Remove blank choice description",
+              patch: {
+                type: "update-choice",
+                nodeId: issue.nodeId,
+                choiceId: issue.choiceId,
+                fields: { description: undefined },
+              },
+            },
+          ]
+        : undefined;
+    default:
+      return undefined;
+  }
+}
+
+function withFixes<TData extends StoryNodeData>(
+  issue: StoryAuthoringIssue,
+  fixes: StoryIssueFix<TData>[] | undefined,
+) {
+  return fixes && fixes.length > 0 ? { ...issue, fixes } : issue;
 }
 
 function getChoiceTarget(choice: StoryChoice) {
@@ -204,7 +337,10 @@ export function analyzeStory<TData extends StoryNodeData>(
   const validationMode = options.validationMode ?? "compat";
   const validationIssues = validateStoryDocument(story, { mode: validationMode });
   const issues: StoryAuthoringIssue[] = validationIssues.map((issue) =>
-    mapValidationIssue(issue, "error"),
+    withFixes(
+      mapValidationIssue(issue, "error"),
+      options.includeFixes ? getValidationFixes(story, issue) : undefined,
+    ),
   );
 
   if (!options.validationMode) {
@@ -213,7 +349,14 @@ export function analyzeStory<TData extends StoryNodeData>(
       (issue) => !validationIssueKeys.has(getIssueKey(issue)),
     );
 
-    issues.push(...strictWarnings.map((issue) => mapValidationIssue(issue, "warning")));
+    issues.push(
+      ...strictWarnings.map((issue) =>
+        withFixes(
+          mapValidationIssue(issue, "warning"),
+          options.includeFixes ? getValidationFixes(story, issue) : undefined,
+        ),
+      ),
+    );
   }
   const reachability = getStoryReachability(story);
   let branches: StoryNode<TData>[] = [];
@@ -257,33 +400,79 @@ export function analyzeStory<TData extends StoryNodeData>(
     const nodePath = `nodes.${nodeIndex}`;
 
     if (node.id && !reachableNodeSet.has(node.id)) {
-      issues.push({
-        code: "unreachable-node",
-        severity: "warning",
-        message: `Node "${node.id}" is not reachable from the opening node.`,
-        path: `${nodePath}.id`,
-        nodeId: node.id,
-      });
+      issues.push(
+        withFixes(
+          {
+            code: "unreachable-node",
+            severity: "warning",
+            message: `Node "${node.id}" is not reachable from the opening node.`,
+            path: `${nodePath}.id`,
+            nodeId: node.id,
+          },
+          options.includeFixes && node.id !== story.openingNodeId
+            ? [
+                {
+                  label: `Remove unreachable node "${node.id}"`,
+                  patch: { type: "remove-node", nodeId: node.id },
+                },
+              ]
+            : undefined,
+        ),
+      );
     }
 
+    const isReachable = !node.id || reachableNodeSet.has(node.id);
+
     if (!node.content?.length && !node.stage?.renderer) {
-      issues.push({
-        code: "empty-content",
-        severity: "warning",
-        message: `Node "${node.id}" has no content or custom stage renderer.`,
-        path: nodePath,
-        nodeId: node.id,
-      });
+      issues.push(
+        withFixes(
+          {
+            code: "empty-content",
+            severity: "warning",
+            message: `Node "${node.id}" has no content or custom stage renderer.`,
+            path: nodePath,
+            nodeId: node.id,
+          },
+          options.includeFixes && isReachable
+            ? [
+                {
+                  label: "Add placeholder paragraph content",
+                  patch: {
+                    type: "add-content-block",
+                    nodeId: node.id,
+                    block: { type: "paragraph", text: "Draft content." },
+                  },
+                },
+              ]
+            : undefined,
+        ),
+      );
     }
 
     if ((node.choices?.length ?? 0) > 0 && node.choices?.every((choice) => choice.disabled)) {
-      issues.push({
-        code: "disabled-only-branch",
-        severity: "warning",
-        message: `Node "${node.id}" only has disabled outgoing choices.`,
-        path: `${nodePath}.choices`,
-        nodeId: node.id,
-      });
+      issues.push(
+        withFixes(
+          {
+            code: "disabled-only-branch",
+            severity: "warning",
+            message: `Node "${node.id}" only has disabled outgoing choices.`,
+            path: `${nodePath}.choices`,
+            nodeId: node.id,
+          },
+          options.includeFixes && !node.content?.length && !node.stage?.renderer
+            ? [
+                {
+                  label: "Remove disabled choices",
+                  patch: (node.choices ?? []).map((choice) => ({
+                    type: "remove-choice",
+                    nodeId: node.id,
+                    choiceId: choice.id,
+                  })),
+                },
+              ]
+            : undefined,
+        ),
+      );
     }
 
     if (options.requireChoiceDescriptions) {

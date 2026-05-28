@@ -10,11 +10,13 @@ import type {
   StoryContentBlock,
   StoryDocument,
   StoryNodeData,
+} from "./story-model";
+import type {
   StoryRemotionSceneComponent,
   StoryRemotionSceneProps,
-  StoryRenderProps,
   StoryRendererRegistry,
-} from "./story-model";
+  StoryRenderProps,
+} from "./story-render-types";
 
 export { buildStoryTimeline } from "./story-path";
 

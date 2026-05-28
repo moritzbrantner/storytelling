@@ -55,6 +55,8 @@ try {
     [
       'import assert from "node:assert/strict";',
       'import { defineStory, validateStory, StoryPlayer } from "@moritzbrantner/storytelling";',
+      'import { analyzeStory, applyStoryPatch } from "@moritzbrantner/storytelling/core";',
+      'import { storyDocumentJsonSchema } from "@moritzbrantner/storytelling/schema";',
       'import { getStoryCompositionProps } from "@moritzbrantner/storytelling/remotion";',
       'import { StoryCanvasStage } from "@moritzbrantner/storytelling/three";',
       'import { StoryVideoFile } from "@moritzbrantner/storytelling/media";',
@@ -63,6 +65,9 @@ try {
       'assert.equal(typeof defineStory, "function");',
       'assert.equal(typeof validateStory, "function");',
       'assert.equal(typeof StoryPlayer, "function");',
+      'assert.equal(typeof analyzeStory, "function");',
+      'assert.equal(typeof applyStoryPatch, "function");',
+      'assert.equal(typeof storyDocumentJsonSchema, "object");',
       'assert.equal(typeof getStoryCompositionProps, "function");',
       'assert.equal(typeof StoryCanvasStage, "function");',
       'assert.equal(typeof StoryVideoFile, "function");',
@@ -76,6 +81,47 @@ try {
     cwd: tempRoot,
     stdio: "inherit",
   });
+
+  const coreOnlyRoot = mkdtempSync(path.join(tmpdir(), "storytelling-core-consumer-"));
+
+  try {
+    writeFileSync(
+      path.join(coreOnlyRoot, "package.json"),
+      JSON.stringify(
+        {
+          private: true,
+          type: "module",
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    execFileSync("npm", ["install", "--ignore-scripts", "--legacy-peer-deps", packageTarballPath], {
+      cwd: coreOnlyRoot,
+      stdio: "inherit",
+    });
+
+    writeFileSync(
+      path.join(coreOnlyRoot, "verify-core.mjs"),
+      [
+        'import assert from "node:assert/strict";',
+        'import { defineStory, analyzeStory, applyStoryPatch } from "@moritzbrantner/storytelling/core";',
+        'assert.equal(typeof defineStory, "function");',
+        'assert.equal(typeof analyzeStory, "function");',
+        'assert.equal(typeof applyStoryPatch, "function");',
+      ].join("\n"),
+      "utf8",
+    );
+
+    execFileSync("node", ["verify-core.mjs"], {
+      cwd: coreOnlyRoot,
+      stdio: "inherit",
+    });
+  } finally {
+    rmSync(coreOnlyRoot, { recursive: true, force: true });
+  }
 
   console.log("@moritzbrantner/storytelling consumer imports verified");
 } finally {

@@ -4,12 +4,8 @@ import { useEffect, useMemo, useState, type ComponentPropsWithoutRef, type React
 
 import { cn } from "@moritzbrantner/ui";
 
-import type {
-  StoryMediaTextTrack,
-  StoryNodeData,
-  StoryRenderProps,
-  StoryStageComponent,
-} from "./story-model";
+import type { StoryMediaTextTrack, StoryNodeData } from "./story-model";
+import type { StoryRenderProps, StoryStageComponent } from "./story-render-types";
 
 export type { StoryMediaTextTrack } from "./story-model";
 

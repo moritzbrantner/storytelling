@@ -1,9 +1,16 @@
-import type { StoryChoice, StoryDocument, StoryNode, StoryNodeData } from "./story-model";
+import type {
+  StoryChoice,
+  StoryContentBlock,
+  StoryDocument,
+  StoryNode,
+  StoryNodeData,
+} from "./story-model";
 import { assertStoryDocument, type StoryValidationMode } from "./story-validation";
 
 export type StoryPatch<TData extends StoryNodeData = StoryNodeData> =
   | { type: "set-story-fields"; fields: Partial<Omit<StoryDocument<TData>, "nodes">> }
   | { type: "add-node"; node: StoryNode<TData>; index?: number }
+  | { type: "move-node"; nodeId: string; index: number }
   | { type: "update-node"; nodeId: string; fields: Partial<StoryNode<TData>> }
   | { type: "rename-node"; nodeId: string; nextNodeId: string }
   | {
@@ -13,8 +20,13 @@ export type StoryPatch<TData extends StoryNodeData = StoryNodeData> =
       nextOpeningNodeId?: string;
     }
   | { type: "add-choice"; nodeId: string; choice: StoryChoice; index?: number }
+  | { type: "move-choice"; nodeId: string; choiceId: string; index: number }
   | { type: "update-choice"; nodeId: string; choiceId: string; fields: Partial<StoryChoice> }
   | { type: "remove-choice"; nodeId: string; choiceId: string }
+  | { type: "add-content-block"; nodeId: string; block: StoryContentBlock; index?: number }
+  | { type: "update-content-block"; nodeId: string; index: number; block: StoryContentBlock }
+  | { type: "remove-content-block"; nodeId: string; index: number }
+  | { type: "move-content-block"; nodeId: string; fromIndex: number; toIndex: number }
   | { type: "set-next"; nodeId: string; target?: string }
   | { type: "set-opening-node"; nodeId: string };
 
@@ -36,6 +48,27 @@ function clampInsertIndex(index: number | undefined, length: number) {
   }
 
   return Math.min(Math.max(Math.floor(index), 0), length);
+}
+
+function assertItemIndex(index: number, length: number, label: string) {
+  if (!Number.isInteger(index) || index < 0 || index >= length) {
+    throw new Error(`${label} index ${index} is out of range.`);
+  }
+}
+
+function assertMoveTargetIndex(index: number, length: number, label: string) {
+  if (!Number.isInteger(index) || index < 0 || index >= length) {
+    throw new Error(`${label} move target index ${index} is out of range.`);
+  }
+}
+
+function moveArrayItem<T>(items: T[], fromIndex: number, toIndex: number) {
+  const nextItems = [...items];
+  const [item] = nextItems.splice(fromIndex, 1);
+
+  nextItems.splice(toIndex, 0, item!);
+
+  return nextItems;
 }
 
 function updateNode<TData extends StoryNodeData>(
@@ -102,6 +135,20 @@ function applySingleStoryPatch<TData extends StoryNodeData>(
       return {
         ...story,
         nodes: [...story.nodes.slice(0, index), patch.node, ...story.nodes.slice(index)],
+      };
+    }
+    case "move-node": {
+      const currentIndex = story.nodes.findIndex((node) => node.id === patch.nodeId);
+      if (currentIndex < 0) {
+        if (options.onMissing === "ignore") return story;
+        throw new Error(`Story "${story.id}" does not contain node "${patch.nodeId}".`);
+      }
+
+      assertMoveTargetIndex(patch.index, story.nodes.length, "Story node");
+
+      return {
+        ...story,
+        nodes: moveArrayItem(story.nodes, currentIndex, patch.index),
       };
     }
     case "update-node": {
@@ -207,6 +254,28 @@ function applySingleStoryPatch<TData extends StoryNodeData>(
         },
         options,
       );
+    case "move-choice":
+      return updateNode(
+        story,
+        patch.nodeId,
+        (node) => {
+          const choices = node.choices ?? [];
+          const currentIndex = choices.findIndex((choice) => choice.id === patch.choiceId);
+
+          if (currentIndex < 0) {
+            assertChoiceExists(story, node, patch.choiceId, options);
+            return node;
+          }
+
+          assertMoveTargetIndex(patch.index, choices.length, "Story choice");
+
+          return {
+            ...node,
+            choices: moveArrayItem(choices, currentIndex, patch.index),
+          };
+        },
+        options,
+      );
     case "update-choice":
       return updateNode(
         story,
@@ -234,6 +303,70 @@ function applySingleStoryPatch<TData extends StoryNodeData>(
           return {
             ...node,
             choices: choices && choices.length > 0 ? choices : undefined,
+          };
+        },
+        options,
+      );
+    case "add-content-block":
+      return updateNode(
+        story,
+        patch.nodeId,
+        (node) => {
+          const content = [...(node.content ?? [])];
+          const index = clampInsertIndex(patch.index, content.length);
+
+          content.splice(index, 0, patch.block);
+
+          return {
+            ...node,
+            content,
+          };
+        },
+        options,
+      );
+    case "update-content-block":
+      return updateNode(
+        story,
+        patch.nodeId,
+        (node) => {
+          const content = node.content ?? [];
+          assertItemIndex(patch.index, content.length, "Story content block");
+
+          return {
+            ...node,
+            content: content.map((block, index) => (index === patch.index ? patch.block : block)),
+          };
+        },
+        options,
+      );
+    case "remove-content-block":
+      return updateNode(
+        story,
+        patch.nodeId,
+        (node) => {
+          const content = node.content ?? [];
+          assertItemIndex(patch.index, content.length, "Story content block");
+          const nextContent = content.filter((_, index) => index !== patch.index);
+
+          return {
+            ...node,
+            content: nextContent.length > 0 ? nextContent : undefined,
+          };
+        },
+        options,
+      );
+    case "move-content-block":
+      return updateNode(
+        story,
+        patch.nodeId,
+        (node) => {
+          const content = node.content ?? [];
+          assertItemIndex(patch.fromIndex, content.length, "Story content block");
+          assertMoveTargetIndex(patch.toIndex, content.length, "Story content block");
+
+          return {
+            ...node,
+            content: moveArrayItem(content, patch.fromIndex, patch.toIndex),
           };
         },
         options,

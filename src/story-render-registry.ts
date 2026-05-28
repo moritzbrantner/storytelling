@@ -1,4 +1,5 @@
-import type { StoryNode, StoryNodeData, StoryRendererRegistry } from "./story-model";
+import type { StoryNode, StoryNodeData } from "./story-model";
+import type { StoryRendererRegistry } from "./story-render-types";
 
 export function createStoryRendererRegistry<TData extends StoryNodeData = StoryNodeData>(
   registry: StoryRendererRegistry<TData> = {},

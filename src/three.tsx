@@ -7,13 +7,13 @@ import type { Mesh } from "three";
 import { cn } from "@moritzbrantner/ui";
 
 import { getStoryRendererKey, getStoryStageProps } from "./story-render-registry";
+import type { StoryNodeData } from "./story-model";
 import type {
-  StoryNodeData,
-  StoryRenderProps,
   StoryRendererRegistry,
+  StoryRenderProps,
   StoryThreeSceneComponent,
   StoryThreeSceneProps,
-} from "./story-model";
+} from "./story-render-types";
 
 export type StoryCanvasStageProps<TData extends StoryNodeData = StoryNodeData> =
   StoryRenderProps<TData> & {

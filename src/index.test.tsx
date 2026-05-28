@@ -23,11 +23,13 @@ import {
   parseStoryPath,
   resolveStoryPath,
   serializeStoryPath,
+  storyDocumentJsonSchema,
   useStoryPathState,
   useStoryRuntime,
   validateStory,
   validateStoryDocument,
   type StoryDocument,
+  type StoryContentBlock,
   type StoryPathState,
   type StoryRenderProps,
   type StoryScrollSceneRenderProps,
@@ -217,7 +219,123 @@ function renderTransitionScroller(transition: StoryScrollTransition) {
   return { ...rendered, viewport: viewport! };
 }
 
+function matchesJsonSchema(value: unknown, schema: Record<string, unknown> | boolean): boolean {
+  if (schema === true) return true;
+  if (schema === false) return false;
+
+  if ("const" in schema && value !== schema.const) return false;
+
+  if (Array.isArray(schema.enum) && !schema.enum.includes(value)) {
+    return false;
+  }
+
+  if (Array.isArray(schema.oneOf)) {
+    return (
+      schema.oneOf.filter((candidate) => matchesJsonSchema(value, candidate as never)).length === 1
+    );
+  }
+
+  switch (schema.type) {
+    case "object": {
+      if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+
+      const record = value as Record<string, unknown>;
+      const required = Array.isArray(schema.required) ? schema.required : [];
+      for (const key of required) {
+        if (typeof key === "string" && !(key in record)) return false;
+      }
+
+      const properties = (schema.properties ?? {}) as Record<string, Record<string, unknown>>;
+      if (schema.additionalProperties === false) {
+        for (const key of Object.keys(record)) {
+          if (!(key in properties)) return false;
+        }
+      }
+
+      return Object.entries(properties).every(
+        ([key, childSchema]) => !(key in record) || matchesJsonSchema(record[key], childSchema),
+      );
+    }
+    case "array": {
+      if (!Array.isArray(value)) return false;
+      if (typeof schema.minItems === "number" && value.length < schema.minItems) return false;
+
+      const itemSchema = schema.items as Record<string, unknown> | undefined;
+      return itemSchema ? value.every((item) => matchesJsonSchema(item, itemSchema)) : true;
+    }
+    case "string":
+      return typeof value === "string";
+    case "boolean":
+      return typeof value === "boolean";
+    case "integer":
+      return (
+        Number.isInteger(value) &&
+        (typeof schema.minimum !== "number" || (value as number) >= schema.minimum)
+      );
+    case "number":
+      return (
+        typeof value === "number" &&
+        Number.isFinite(value) &&
+        (typeof schema.exclusiveMinimum !== "number" || value > (schema.exclusiveMinimum as number))
+      );
+    default:
+      return true;
+  }
+}
+
 describe("@moritzbrantner/storytelling", () => {
+  test("provides server-safe core and schema entrypoints", async () => {
+    const core = (await import("./core")) as Record<string, unknown>;
+    const schema = await import("./schema");
+
+    expect(typeof core.defineStory).toBe("function");
+    expect(typeof core.validateStoryDocument).toBe("function");
+    expect(typeof core.resolveStoryPath).toBe("function");
+    expect(typeof core.analyzeStory).toBe("function");
+    expect(typeof core.applyStoryPatch).toBe("function");
+    expect(core.StoryPlayer).toBeUndefined();
+    expect(core.StoryScroller).toBeUndefined();
+    expect(schema.storyDocumentJsonSchema).toBe(storyDocumentJsonSchema);
+  });
+
+  test("exports a story document JSON schema aligned with content block variants", () => {
+    expect(matchesJsonSchema(story, storyDocumentJsonSchema)).toBe(true);
+    expect(matchesJsonSchema({ id: "missing" }, storyDocumentJsonSchema)).toBe(false);
+
+    const contentVariants: StoryContentBlock[] = [
+      { type: "paragraph", text: "Paragraph." },
+      { type: "heading", text: "Heading", level: 2 },
+      { type: "quote", text: "Quote.", cite: "Source" },
+      { type: "list", items: ["One", "Two"] },
+      { type: "image", src: "/image.png", alt: "Image", caption: "Caption" },
+      {
+        type: "audio",
+        src: "/audio.mp3",
+        title: "Audio",
+        tracks: [{ src: "/audio.vtt", label: "English", kind: "captions", default: true }],
+      },
+      {
+        type: "video",
+        src: "/video.mp4",
+        title: "Video",
+        poster: "/poster.png",
+        tracks: [{ src: "/video.vtt", label: "English", srcLang: "en" }],
+      },
+    ];
+
+    expect(
+      matchesJsonSchema(
+        {
+          id: "content-fixture",
+          title: "Content fixture",
+          openingNodeId: "start",
+          nodes: [{ id: "start", title: "Start", content: contentVariants }],
+        },
+        storyDocumentJsonSchema,
+      ),
+    ).toBe(true);
+  });
+
   test("validates stories and rejects invalid graph references", () => {
     expect(() =>
       validateStory({
@@ -432,6 +550,73 @@ describe("@moritzbrantner/storytelling", () => {
     expect(report.metrics.nodeCount).toBe(1);
   });
 
+  test("returns deterministic opt-in authoring fixes for safe diagnostics", () => {
+    const draft: StoryDocument = {
+      id: " ",
+      title: " ",
+      openingNodeId: "start",
+      nodes: [
+        {
+          id: "start",
+          title: "Start",
+          choices: [{ id: "go", label: "Go", target: "end", description: " " }],
+        },
+        {
+          id: "end",
+          title: " ",
+          content: [{ type: "paragraph", text: "Ending." }],
+        },
+        {
+          id: "locked",
+          title: "Locked",
+          choices: [{ id: "disabled", label: "Disabled", target: "end", disabled: true }],
+        },
+      ],
+    };
+
+    const report = analyzeStory(draft, { includeFixes: true });
+    const fixesByCode = new Map(report.issues.map((issue) => [issue.code, issue.fixes ?? []]));
+
+    expect(fixesByCode.get("blank-story-title")?.[0]?.patch).toEqual({
+      type: "set-story-fields",
+      fields: { title: "Untitled story" },
+    });
+    expect(fixesByCode.get("blank-node-title")?.[0]?.patch).toEqual({
+      type: "update-node",
+      nodeId: "end",
+      fields: { title: "Untitled node" },
+    });
+    expect(fixesByCode.get("blank-choice-description")?.[0]?.patch).toEqual({
+      type: "update-choice",
+      nodeId: "start",
+      choiceId: "go",
+      fields: { description: undefined },
+    });
+    const reachableEmptyContent = report.issues.find(
+      (issue) => issue.code === "empty-content" && issue.nodeId === "start",
+    );
+
+    expect(reachableEmptyContent?.fixes?.[0]?.patch).toEqual({
+      type: "add-content-block",
+      nodeId: "start",
+      block: { type: "paragraph", text: "Draft content." },
+    });
+    expect(fixesByCode.get("unreachable-node")?.[0]?.patch).toEqual({
+      type: "remove-node",
+      nodeId: "locked",
+    });
+    expect(fixesByCode.get("disabled-only-branch")?.[0]?.patch).toEqual([
+      { type: "remove-choice", nodeId: "locked", choiceId: "disabled" },
+    ]);
+
+    const missingDescription = analyzeStory(story, {
+      includeFixes: true,
+      requireChoiceDescriptions: true,
+    }).issues.find((issue) => issue.code === "missing-choice-description");
+
+    expect(missingDescription?.fixes).toBeUndefined();
+  });
+
   test("applies immutable story patches and can validate patched output", () => {
     const originalNodeCount = story.nodes.length;
     const draftNode = createStoryNode<FixtureData>({
@@ -481,6 +666,88 @@ describe("@moritzbrantner/storytelling", () => {
     expect(() =>
       applyStoryPatch(story, { type: "set-opening-node", nodeId: "missing" }, { validate: true }),
     ).toThrow("references missing opening node");
+  });
+
+  test("moves nodes, choices, and content blocks without mutating the source story", () => {
+    const reorderedNodes = applyStoryPatch(story, {
+      type: "move-node",
+      nodeId: "trace-node",
+      index: 1,
+    });
+
+    expect(reorderedNodes.nodes.map((node) => node.id)).toEqual([
+      "wake",
+      "trace-node",
+      "answer-node",
+      "pilot-ending",
+    ]);
+    expect(reorderedNodes.nodes[0]?.choices?.find((choice) => choice.id === "trace")?.target).toBe(
+      "trace-node",
+    );
+    expect(story.nodes.map((node) => node.id)).toEqual([
+      "wake",
+      "answer-node",
+      "pilot-ending",
+      "trace-node",
+    ]);
+
+    const reorderedChoices = applyStoryPatch(story, {
+      type: "move-choice",
+      nodeId: "wake",
+      choiceId: "locked",
+      index: 0,
+    });
+
+    expect(reorderedChoices.nodes[0]?.choices?.map((choice) => choice.id)).toEqual([
+      "locked",
+      "answer",
+      "trace",
+    ]);
+
+    const contentDraft = applyStoryPatch(story, [
+      {
+        type: "add-content-block",
+        nodeId: "trace-node",
+        index: 0,
+        block: { type: "heading", text: "Harbor", level: 2 },
+      },
+      {
+        type: "add-content-block",
+        nodeId: "trace-node",
+        block: { type: "paragraph", text: "Second draft." },
+      },
+      { type: "move-content-block", nodeId: "trace-node", fromIndex: 2, toIndex: 0 },
+      {
+        type: "update-content-block",
+        nodeId: "trace-node",
+        index: 0,
+        block: { type: "paragraph", text: "Updated second draft." },
+      },
+      { type: "remove-content-block", nodeId: "trace-node", index: 1 },
+    ]);
+    const traceContent = contentDraft.nodes.find((node) => node.id === "trace-node")?.content;
+
+    expect(traceContent).toEqual([
+      { type: "paragraph", text: "Updated second draft." },
+      {
+        type: "paragraph",
+        text: "The signal comes from a cove nobody has charted in decades.",
+      },
+    ]);
+    expect(story.nodes.find((node) => node.id === "trace-node")?.content).toHaveLength(1);
+
+    expect(() =>
+      applyStoryPatch(
+        story,
+        {
+          type: "update-content-block",
+          nodeId: "trace-node",
+          index: 10,
+          block: { type: "paragraph", text: "Nope." },
+        },
+        { onMissing: "ignore" },
+      ),
+    ).toThrow("Story content block index 10 is out of range");
   });
 
   test("serializes and parses story path choice ids", () => {

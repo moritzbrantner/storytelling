@@ -52,6 +52,7 @@ export {
   type StoryAuthoringMetrics,
   type StoryAuthoringReport,
   type StoryAuthoringSeverity,
+  type StoryIssueFix,
 } from "./story-authoring";
 export {
   applyStoryPatch,
@@ -124,13 +125,11 @@ export {
 } from "./story-scroll-timeline";
 export { StoryStageFrame, type StoryStageFrameProps } from "./story-stage-frame";
 export { StoryMinimap, type StoryMinimapItem, type StoryMinimapProps } from "./story-minimap";
+export { storyDocumentJsonSchema, type StoryDocumentJsonSchema } from "./schema";
 export type {
   ResolvedStoryPath,
   StoryChoice,
   StoryContentBlock,
-  StoryContentRenderer,
-  StoryContentRendererProps,
-  StoryContentRendererRegistry,
   StoryDefaults,
   StoryDocument,
   StoryHistoryEntry,
@@ -138,15 +137,20 @@ export type {
   StoryMediaTextTrack,
   StoryNode,
   StoryNodeData,
+  StoryStageDescriptor,
+  StoryTimeline,
+  StoryTimelineScene,
+  StoryTransition,
+} from "./story-model";
+export type {
+  StoryContentRenderer,
+  StoryContentRendererProps,
+  StoryContentRendererRegistry,
   StoryRendererRegistry,
   StoryRenderProps,
   StoryRemotionSceneComponent,
   StoryRemotionSceneProps,
   StoryStageComponent,
-  StoryStageDescriptor,
   StoryThreeSceneComponent,
   StoryThreeSceneProps,
-  StoryTimeline,
-  StoryTimelineScene,
-  StoryTransition,
-} from "./story-model";
+} from "./story-render-types";
