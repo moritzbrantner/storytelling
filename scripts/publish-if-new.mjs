@@ -6,15 +6,23 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const packageJson = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8"));
-const registry = "https://npm.pkg.github.com";
-const authToken = process.env.GH_PACKAGES_TOKEN;
+const registry = "https://registry.npmjs.org";
+const authToken = process.env.NPM_TOKEN;
+const expectedTag = `v${packageJson.version}`;
 
 if (!authToken) {
-  console.error("GH_PACKAGES_TOKEN is required to publish packages.");
+  console.error("NPM_TOKEN is required to publish packages to the public npm registry.");
   process.exit(1);
 }
 
-const npmUserConfig = createGitHubPackagesUserConfig();
+if (isGitHubActionsTagContext() && process.env.GITHUB_REF_NAME !== expectedTag) {
+  console.error(
+    `Ref tag ${process.env.GITHUB_REF_NAME ?? "<unknown>"} does not match package version ${expectedTag}.`,
+  );
+  process.exit(1);
+}
+
+const npmUserConfig = createNpmUserConfig();
 const publishedVersion = getPublishedVersion(packageJson.name);
 
 if (publishedVersion === packageJson.version) {
@@ -23,12 +31,11 @@ if (publishedVersion === packageJson.version) {
 }
 
 console.log(`Publishing ${packageJson.name}@${packageJson.version}`);
-execFileSync("npm", ["publish"], {
+execFileSync("npm", ["publish", "--access", "public", "--registry", registry], {
   cwd: repoRoot,
   stdio: "inherit",
   env: {
     ...process.env,
-    GH_PACKAGES_TOKEN: authToken,
     npm_config_registry: registry,
     npm_config_userconfig: npmUserConfig,
   },
@@ -42,7 +49,6 @@ function getPublishedVersion(name) {
       stdio: ["ignore", "pipe", "pipe"],
       env: {
         ...process.env,
-        GH_PACKAGES_TOKEN: authToken,
         npm_config_userconfig: npmUserConfig,
       },
     }).trim();
@@ -51,15 +57,15 @@ function getPublishedVersion(name) {
   }
 }
 
-function createGitHubPackagesUserConfig() {
+function createNpmUserConfig() {
   const tempDir = mkdtempSync(path.join(tmpdir(), "storytelling-npmrc-"));
   const userConfigPath = path.join(tempDir, ".npmrc");
 
-  writeFileSync(
-    userConfigPath,
-    `@moritzbrantner:registry=${registry}\n//npm.pkg.github.com/:_authToken=${authToken}\n`,
-    "utf8",
-  );
+  writeFileSync(userConfigPath, `//registry.npmjs.org/:_authToken=${authToken}\n`, "utf8");
 
   return userConfigPath;
+}
+
+function isGitHubActionsTagContext() {
+  return process.env.GITHUB_REF_TYPE === "tag" || process.env.GITHUB_REF?.startsWith("refs/tags/");
 }

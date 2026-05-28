@@ -29,8 +29,20 @@ async function expectActiveScene(page: Page, label: RegExp) {
   await expect(activeScrollerPage(page)).toHaveAttribute("aria-label", label);
 }
 
+async function expectPlayerHeading(region: Locator, name: string) {
+  await expect(region.getByRole("heading", { name }).last()).toBeVisible();
+}
+
 function storyStateSummary(page: Page) {
   return page.getByLabel("Story state").locator("pre").first();
+}
+
+function choiceIdsSummary(page: Page) {
+  return page.getByLabel("Story state").locator("code").first();
+}
+
+function autoscrollDetails(page: Page) {
+  return page.getByLabel("Story state").locator("pre").nth(1);
 }
 
 async function waitForScrollStateToSettle(page: Page) {
@@ -44,7 +56,78 @@ async function focusScroller(region: Locator) {
   await expect(region).toBeFocused();
 }
 
+async function expectMotionPresetReset(page: Page, region: Locator, preset: string) {
+  await page.getByRole("button", { name: preset }).click();
+  await expect(region).toBeVisible();
+  await expect(storyStateSummary(page)).toHaveText("Signal resolves\nProgress 0%\nScene 1 of 4");
+  await expectActiveScene(page, /1\. Signal resolves/);
+}
+
+async function setScrollerSceneProgress(page: Page, progress: number) {
+  await scrollerViewport(page).evaluate((element, nextProgress) => {
+    const activePage = element.querySelector<HTMLElement>(
+      '[data-story-scroller-page][data-active="true"]',
+    );
+    const activeIndex = Number(activePage?.dataset.storyScrollerIndex ?? 0);
+    const sceneCount = element.querySelectorAll("[data-story-scroller-marker]").length || 1;
+    const transitionUnits = 16;
+    const totalUnits = sceneCount * 100 + Math.max(sceneCount - 1, 0) * transitionUnits;
+    const targetUnit = activeIndex * (100 + transitionUnits) + nextProgress * 100;
+    const maxScrollTop = Math.max(element.scrollHeight - element.clientHeight, 0);
+
+    element.scrollTop = (targetUnit / totalUnits) * maxScrollTop;
+    element.dispatchEvent(new Event("scroll", { bubbles: true }));
+  }, progress);
+}
+
 test.describe("StoryScroller example app", () => {
+  test("branching story player supports choices, back navigation, and completed branches", async ({
+    page,
+  }) => {
+    await openExample(page);
+
+    const region = page.getByRole("region", { name: "Observatory Relay" });
+    await expect(region).toBeVisible();
+    await expectPlayerHeading(region, "Wake the observatory");
+
+    await page.getByRole("button", { name: "Answer the pulse" }).click();
+    await expectPlayerHeading(region, "A pilot breaks through");
+
+    await page.keyboard.press("Backspace");
+    await expectPlayerHeading(region, "Wake the observatory");
+
+    await page.getByRole("button", { name: "Trace the source" }).click();
+    await expectPlayerHeading(region, "The map reveals a hidden harbor");
+
+    await page.getByRole("button", { name: /Broadcast the fix/ }).click();
+    await expectPlayerHeading(region, "Every receiver answers back");
+    await expect(region.getByText("This branch is complete.").first()).toBeVisible();
+    await expect(storyStateSummary(page)).toContainText("Wake the observatory");
+    await expect(storyStateSummary(page)).toContainText("The map reveals a hidden harbor");
+    await expect(storyStateSummary(page)).toContainText("Every receiver answers back");
+  });
+
+  test("branching story player honors start path presets and resets to opening", async ({
+    page,
+  }) => {
+    await openExample(page);
+
+    await page.getByRole("button", { name: "Harbor team" }).click();
+    await expect(choiceIdsSummary(page)).toHaveText("trace -> send-team");
+    await expectPlayerHeading(
+      page.getByRole("region", { name: "Observatory Relay" }),
+      "The field team finds the beacon",
+    );
+    await expect(storyStateSummary(page)).toContainText("The field team finds the beacon");
+
+    await page.getByRole("button", { name: "Opening" }).click();
+    await expect(choiceIdsSummary(page)).toHaveText("none");
+    await expectPlayerHeading(
+      page.getByRole("region", { name: "Observatory Relay" }),
+      "Wake the observatory",
+    );
+  });
+
   test("linear story scroller supports vertical scrolling and horizontal scene navigation", async ({
     page,
   }) => {
@@ -89,6 +172,29 @@ test.describe("StoryScroller example app", () => {
 
     await region.press("Home");
     await expectActiveScene(page, /1\. Wake the observatory/);
+  });
+
+  test("branching story minimap selects scenes and collapses", async ({ page }) => {
+    await openExample(page);
+    await page.getByRole("button", { name: "Pilot route" }).click();
+    await chooseComponent(page, "Scroller");
+
+    const region = page.getByRole("region", { name: "Observatory Relay scroller" });
+    await expect(region).toBeVisible();
+
+    const secondScene = page.getByRole("button", {
+      name: "Go to scene 2: A pilot breaks through",
+    });
+    await secondScene.click();
+    await expectActiveScene(page, /2\. A pilot breaks through/);
+
+    await page.getByRole("button", { name: "Minimize minimap" }).focus();
+    await page.keyboard.press("Enter");
+    await expect(secondScene).toBeHidden();
+
+    await page.getByRole("button", { name: "Show minimap" }).focus();
+    await page.keyboard.press("Enter");
+    await expect(secondScene).toBeVisible();
   });
 
   test("branching story choices appear as an overlay and support numeric hotkeys", async ({
@@ -149,6 +255,28 @@ test.describe("StoryScroller example app", () => {
     await expectActiveScene(page, /2\. A pilot breaks through/);
   });
 
+  test("branching story scroller allows choosing a different branch after returning", async ({
+    page,
+  }) => {
+    await openExample(page);
+    await chooseComponent(page, "Scroller");
+
+    const region = page.getByRole("region", { name: "Observatory Relay scroller" });
+    await expect(region).toBeVisible();
+    await focusScroller(region);
+
+    await setScrollerSceneProgress(page, 0.95);
+    await page.getByRole("button", { name: /Trace the source/ }).click();
+    await expectActiveScene(page, /2\. The map reveals a hidden harbor/);
+
+    await region.press("Home");
+    await expectActiveScene(page, /1\. Wake the observatory/);
+
+    await setScrollerSceneProgress(page, 0.95);
+    await page.getByRole("button", { name: /Answer the pulse/ }).click();
+    await expectActiveScene(page, /2\. A pilot breaks through/);
+  });
+
   test("custom motion scroller supports scene jumps, direct end navigation, and reverse scroll", async ({
     page,
   }) => {
@@ -176,6 +304,28 @@ test.describe("StoryScroller example app", () => {
     await expectActiveScene(page, /1\. Signal resolves/);
   });
 
+  test("motion transition presets reset the visible scene and direct mode remains navigable", async ({
+    page,
+  }) => {
+    await openExample(page);
+    await chooseStoryType(page, "Motion");
+
+    const region = page.getByRole("region", { name: "Motion examples" });
+    await expect(region).toBeVisible();
+
+    await expectMotionPresetReset(page, region, "Fade");
+    await expectMotionPresetReset(page, region, "Slide");
+    await expectMotionPresetReset(page, region, "Push");
+    await expectMotionPresetReset(page, region, "Wipe");
+    await expectMotionPresetReset(page, region, "Zoom");
+    await expectMotionPresetReset(page, region, "Blur");
+    await expectMotionPresetReset(page, region, "Direct");
+
+    await focusScroller(region);
+    await region.press("ArrowRight");
+    await expectActiveScene(page, /2\. Field shifts/);
+  });
+
   test("autoscroll scroller advances itself and still accepts keyboard navigation", async ({
     page,
   }) => {
@@ -195,5 +345,26 @@ test.describe("StoryScroller example app", () => {
 
     await region.press("ArrowLeft");
     await expectActiveScene(page, /1\. Briefing opens/);
+  });
+
+  test("autoscroll presets update rendered details and continue advancing", async ({ page }) => {
+    await openExample(page);
+    await chooseStoryType(page, "Autoscroll");
+
+    const region = page.getByRole("region", { name: "Autoscroll examples" });
+    await expect(region).toBeVisible();
+
+    await page.getByRole("button", { name: "Fast scan" }).click();
+    await expect(autoscrollDetails(page)).toHaveText(
+      "Pace 34 units/s\nInput scale 1.25\nTransition direct",
+    );
+
+    const initialTop = await getScrollerScrollTop(page);
+    await expect.poll(() => getScrollerScrollTop(page)).toBeGreaterThan(initialTop);
+
+    await page.getByRole("button", { name: "Reading pace" }).click();
+    await expect(autoscrollDetails(page)).toHaveText(
+      "Pace 12 units/s\nInput scale 0.5\nTransition 14 units fade",
+    );
   });
 });

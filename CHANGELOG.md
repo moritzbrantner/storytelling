@@ -1,6 +1,6 @@
 # @moritzbrantner/storytelling
 
-## Unreleased
+## 0.4.0 - 2026-05-28
 
 ### Minor Changes
 
@@ -22,6 +22,8 @@
   Remotion scenes, and invalid timeline item durations.
 - Add draft-safe workflow conversion with `allowInvalid` and diagnostics.
 - Skip subtitle cues with invalid or non-increasing time ranges.
+- Add MIT license and public npm release automation.
+- Expand release gate with example build and e2e coverage.
 
 ## 0.3.1
 

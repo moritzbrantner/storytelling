@@ -2,8 +2,8 @@ name: Publish Package
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - "v*.*.*"
   workflow_dispatch:
 
 env:
@@ -11,7 +11,6 @@ env:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
   publish:
@@ -26,11 +25,13 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: "24"
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@moritzbrantner"
+          registry-url: "https://registry.npmjs.org"
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: bunx playwright install --with-deps chromium
 
       - name: Verify
         run: bun run verify
@@ -38,4 +39,4 @@ jobs:
       - name: Publish package
         run: bun run publish:package
         env:
-          GH_PACKAGES_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -1,6 +1,6 @@
 {
   "name": "@moritzbrantner/storytelling",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "Serializable story documents, branching React playback, and Remotion or Three adapters.",
   "private": false,
   "type": "module",
@@ -9,7 +9,7 @@
     "type": "git",
     "url": "git+https://github.com/moritzbrantner/storytelling.git"
   },
-  "license": "UNLICENSED",
+  "license": "MIT",
   "files": [
     "dist",
     "docs"
@@ -88,8 +88,8 @@
     "vitest": "^4.1.2"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com",
-    "access": "restricted"
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
   },
   "scripts": {
     "dev": "vite --config example/vite.config.ts",
@@ -103,7 +103,7 @@
     "test:consumer": "node scripts/verify-consumer.mjs",
     "pack:dry": "npm pack --dry-run --ignore-scripts --json",
     "prepack": "bun run build",
-    "verify": "bun run lint && bun run check-types && bun run test && bun run build && bun run test:package && bun run test:consumer && bun run pack:dry",
+    "verify": "bun run lint && bun run check-types && bun run test && bun run build && bun run build:example && bun run test:e2e && bun run test:package && bun run test:consumer && bun run pack:dry",
     "publish:package": "node scripts/publish-if-new.mjs"
   }
 }
