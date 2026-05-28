@@ -173,7 +173,10 @@ const clamp = (value: number, min: number, max: number) => Math.min(Math.max(val
 const DEFAULT_SCROLL_TRANSITION: StoryScrollTransition = { type: "none" };
 const DEFAULT_SCROLL_INPUT_SCALE = 1;
 const DEFAULT_SCENE_SCROLL_UNITS = 100;
-const DEFAULT_KEYBOARD_SCROLL_UNITS = 20;
+const DEFAULT_KEYBOARD_SCROLL_UNITS = 10;
+const KEYBOARD_SCROLL_TAP_MS = 300;
+const KEYBOARD_SCROLL_HOLD_UNITS_PER_SECOND = 20;
+const KEYBOARD_SCROLL_HOLD_INTERVAL_MS = 1000 / 60;
 const DEFAULT_AUTOPLAY_UNITS_PER_SECOND = 20;
 const AUTOPLAY_INTERVAL_MS = 1000 / 60;
 const SCROLL_UNIT_PRECISION = 1_000_000;
@@ -563,6 +566,11 @@ function StoryScrollTimeline<TSceneData = unknown>({
   onSceneProgressChange,
 }: StoryScrollTimelineProps<TSceneData>) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const keyboardScrollHoldDelayRef = useRef<number | undefined>(undefined);
+  const keyboardScrollHoldIntervalRef = useRef<number | undefined>(undefined);
+  const keyboardScrollHoldStartedRef = useRef(false);
+  const keyboardScrollHoldKeyRef = useRef<"ArrowDown" | "ArrowUp" | undefined>(undefined);
+  const handledScrollTargetVersionRef = useRef<number | undefined>(undefined);
   const reducedMotion = useReducedMotion();
   const scrollValue = useMotionValue(0);
   const scrollProgress = useMotionValue(0);
@@ -643,6 +651,65 @@ function StoryScrollTimeline<TSceneData = unknown>({
     [setScrollTop, timeline, totalUnits],
   );
 
+  const stopKeyboardScrollHold = useCallback((key?: "ArrowDown" | "ArrowUp") => {
+    if (key && keyboardScrollHoldKeyRef.current !== key) return;
+
+    if (typeof window !== "undefined") {
+      if (keyboardScrollHoldDelayRef.current !== undefined) {
+        window.clearTimeout(keyboardScrollHoldDelayRef.current);
+      }
+
+      if (keyboardScrollHoldIntervalRef.current !== undefined) {
+        window.clearInterval(keyboardScrollHoldIntervalRef.current);
+      }
+    }
+
+    keyboardScrollHoldDelayRef.current = undefined;
+    keyboardScrollHoldIntervalRef.current = undefined;
+    keyboardScrollHoldStartedRef.current = false;
+    keyboardScrollHoldKeyRef.current = undefined;
+  }, []);
+
+  const startKeyboardScrollHold = useCallback(
+    (key: "ArrowDown" | "ArrowUp") => {
+      const direction = key === "ArrowDown" ? 1 : -1;
+      stopKeyboardScrollHold();
+
+      if (typeof window === "undefined") return;
+
+      keyboardScrollHoldKeyRef.current = key;
+      keyboardScrollHoldDelayRef.current = window.setTimeout(() => {
+        keyboardScrollHoldStartedRef.current = true;
+        keyboardScrollHoldDelayRef.current = undefined;
+        keyboardScrollHoldIntervalRef.current = window.setInterval(() => {
+          scrollByTimelineUnits(
+            direction *
+              KEYBOARD_SCROLL_HOLD_UNITS_PER_SECOND *
+              resolvedScrollInputScale *
+              (KEYBOARD_SCROLL_HOLD_INTERVAL_MS / 1000),
+          );
+        }, KEYBOARD_SCROLL_HOLD_INTERVAL_MS);
+      }, KEYBOARD_SCROLL_TAP_MS);
+    },
+    [resolvedScrollInputScale, scrollByTimelineUnits, stopKeyboardScrollHold],
+  );
+
+  const finishKeyboardScrollPress = useCallback(
+    (key: "ArrowDown" | "ArrowUp") => {
+      if (keyboardScrollHoldKeyRef.current !== key) return;
+
+      const shouldApplyTap = !keyboardScrollHoldStartedRef.current;
+      const direction = key === "ArrowDown" ? 1 : -1;
+
+      stopKeyboardScrollHold(key);
+
+      if (shouldApplyTap) {
+        scrollByTimelineUnits(direction * DEFAULT_KEYBOARD_SCROLL_UNITS * resolvedScrollInputScale);
+      }
+    },
+    [resolvedScrollInputScale, scrollByTimelineUnits, stopKeyboardScrollHold],
+  );
+
   const scrollToScene = useCallback(
     (index: number) => {
       const element = scrollRef.current;
@@ -657,18 +724,13 @@ function StoryScrollTimeline<TSceneData = unknown>({
       if (!element) return;
 
       const top = getScrollTopForUnit(element, targetUnit, totalUnits);
+      const maxScroll = Math.max(element.scrollHeight - element.clientHeight, 0);
 
-      if (typeof element.scrollTo === "function") {
-        element.scrollTo({
-          top,
-          behavior: reducedMotion ? "auto" : "smooth",
-        });
-        return;
+      if (maxScroll > 0) {
+        setScrollTop(top);
       }
-
-      element.scrollTop = top;
     },
-    [reducedMotion, sceneCount, scrollProgress, scrollValue, timeline, totalUnits],
+    [sceneCount, scrollProgress, scrollValue, setScrollTop, timeline, totalUnits],
   );
 
   useEffect(() => {
@@ -690,6 +752,9 @@ function StoryScrollTimeline<TSceneData = unknown>({
 
   useEffect(() => {
     if (!scrollTarget) return;
+    if (handledScrollTargetVersionRef.current === scrollTarget.version) return;
+
+    handledScrollTargetVersionRef.current = scrollTarget.version;
     scrollToScene(scrollTarget.index);
   }, [scrollTarget, scrollToScene]);
 
@@ -735,6 +800,8 @@ function StoryScrollTimeline<TSceneData = unknown>({
     onSceneProgressChange?.(scrollState.value);
   }, [onSceneProgressChange, scrollState.value]);
 
+  useEffect(() => stopKeyboardScrollHold, [stopKeyboardScrollHold]);
+
   const handleWheel = (event: WheelEvent<HTMLDivElement>) => {
     if (resolvedScrollInputScale === DEFAULT_SCROLL_INPUT_SCALE) return;
 
@@ -743,32 +810,50 @@ function StoryScrollTimeline<TSceneData = unknown>({
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
-    const keyboardScrollUnits = DEFAULT_KEYBOARD_SCROLL_UNITS * resolvedScrollInputScale;
-
     switch (event.key) {
       case "ArrowDown":
         event.preventDefault();
-        scrollByTimelineUnits(keyboardScrollUnits);
+        if (!event.repeat) {
+          startKeyboardScrollHold("ArrowDown");
+        }
         return;
       case "ArrowUp":
         event.preventDefault();
-        scrollByTimelineUnits(-keyboardScrollUnits);
+        if (!event.repeat) {
+          startKeyboardScrollHold("ArrowUp");
+        }
         return;
       case "ArrowRight":
         event.preventDefault();
+        stopKeyboardScrollHold();
         scrollToScene(activeIndex + 1);
         return;
       case "ArrowLeft":
         event.preventDefault();
+        stopKeyboardScrollHold();
         scrollToScene(activeIndex - 1);
         return;
       case "Home":
         event.preventDefault();
+        stopKeyboardScrollHold();
         scrollToScene(0);
         return;
       case "End":
         event.preventDefault();
+        stopKeyboardScrollHold();
         scrollToScene(sceneCount - 1);
+        return;
+      default:
+        return;
+    }
+  };
+
+  const handleKeyUp = (event: KeyboardEvent<HTMLElement>) => {
+    switch (event.key) {
+      case "ArrowDown":
+      case "ArrowUp":
+        event.preventDefault();
+        finishKeyboardScrollPress(event.key);
         return;
       default:
         return;
@@ -786,6 +871,8 @@ function StoryScrollTimeline<TSceneData = unknown>({
       className={cn("rounded-lg border bg-card p-4 md:p-6", className)}
       tabIndex={0}
       onKeyDown={handleKeyDown}
+      onKeyUp={handleKeyUp}
+      onBlur={() => stopKeyboardScrollHold()}
     >
       <div
         ref={scrollRef}
@@ -1028,7 +1115,7 @@ function StoryDocumentScroller<TData extends StoryNodeData = StoryNodeData>({
             };
 
             return (
-              <div className="grid h-full min-h-0 grid-rows-[minmax(0,1fr)_auto] gap-3">
+              <div className="relative h-full min-h-0">
                 <StoryStageFrame {...renderProps} registry={registry} className="h-full min-h-0" />
                 {explicitChoices.length > 0 || ending ? (
                   <StoryChoicePanel
@@ -1163,47 +1250,86 @@ function StoryChoicePanel({
   );
   const isReady = progress >= STORY_BRANCH_REVEAL_END;
 
+  useEffect(() => {
+    if (!isReady || choices.length === 0 || typeof window === "undefined") {
+      return;
+    }
+
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      const target = event.target;
+
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        (target instanceof HTMLElement && target.isContentEditable)
+      ) {
+        return;
+      }
+
+      const choiceIndex = Number(event.key) - 1;
+      const choice = choices[choiceIndex];
+
+      if (!choice || choice.disabled) return;
+
+      event.preventDefault();
+      choose(choice.id);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [choose, choices, isReady]);
+
   if (revealProgress <= 0) {
     return null;
   }
 
   return (
     <motion.div
-      className="rounded-lg border bg-background p-4 shadow-sm"
-      style={{ opacity: revealProgress }}
+      className="pointer-events-none absolute inset-x-0 bottom-0 z-10 p-3 md:p-5"
+      style={{
+        opacity: revealProgress,
+        transform: `translateY(${(1 - revealProgress) * 1.25}rem)`,
+      }}
       aria-hidden={!isReady}
     >
-      <p className="text-sm font-medium">{prompt}</p>
-      {choices.length > 0 ? (
-        <div className="mt-4 grid gap-3 md:grid-cols-[repeat(auto-fit,minmax(13rem,1fr))]">
-          {choices.map((choice) => (
-            <Button
-              key={choice.id}
-              type="button"
-              variant="outline"
-              className="h-auto justify-start whitespace-normal px-4 py-3 text-left"
-              onClick={() => choose(choice.id)}
-              disabled={choice.disabled || !isReady}
-            >
-              <span className="grid gap-1">
-                <span>{choice.label}</span>
-                {choice.description ? (
-                  <span className="text-sm font-normal text-muted-foreground">
-                    {choice.description}
-                  </span>
-                ) : null}
-              </span>
+      <div className="pointer-events-auto rounded-lg border border-white/20 bg-background/92 p-4 shadow-[0_18px_48px_rgba(0,0,0,0.24)] backdrop-blur-md">
+        <p className="text-sm font-medium">{prompt}</p>
+        {choices.length > 0 ? (
+          <div className="mt-4 grid gap-3 md:grid-cols-[repeat(auto-fit,minmax(13rem,1fr))]">
+            {choices.map((choice, index) => (
+              <Button
+                key={choice.id}
+                type="button"
+                variant="outline"
+                className="h-auto justify-start whitespace-normal px-4 py-3 text-left"
+                onClick={() => choose(choice.id)}
+                disabled={choice.disabled || !isReady}
+              >
+                <span className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1">
+                  <kbd className="row-span-2 inline-flex size-6 items-center justify-center rounded border bg-muted text-xs font-semibold text-muted-foreground">
+                    {index + 1}
+                  </kbd>
+                  <span className="font-medium">{choice.label}</span>
+                  {choice.description ? (
+                    <span className="col-start-2 text-sm font-normal text-muted-foreground">
+                      {choice.description}
+                    </span>
+                  ) : null}
+                </span>
+              </Button>
+            ))}
+          </div>
+        ) : ending ? (
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <p className="text-sm text-muted-foreground">{completedLabel}</p>
+            <Button type="button" variant="secondary" onClick={restart} disabled={!isReady}>
+              {restartLabel}
             </Button>
-          ))}
-        </div>
-      ) : ending ? (
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <p className="text-sm text-muted-foreground">{completedLabel}</p>
-          <Button type="button" variant="secondary" onClick={restart} disabled={!isReady}>
-            {restartLabel}
-          </Button>
-        </div>
-      ) : null}
+          </div>
+        ) : null}
+      </div>
     </motion.div>
   );
 }

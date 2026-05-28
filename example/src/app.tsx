@@ -520,7 +520,7 @@ Transition ${getTransitionSummary(activeAutoscrollPreset.transition)}`;
         </header>
 
         <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]">
-          <div className="[&>section]:shadow-[0_18px_54px_rgba(23,33,31,0.10)]">
+          <div className="example-component-frame [&>section]:shadow-[0_18px_54px_rgba(23,33,31,0.10)]">
             {isMotionStory ? (
               <StoryScroller
                 key={`motion-${activeMotionPreset.id}`}

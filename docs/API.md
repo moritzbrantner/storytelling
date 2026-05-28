@@ -31,6 +31,7 @@ This reference tracks the package exports that are intended for consumers.
 - `autoplay={{ unitsPerSecond: 12 }}` sets a custom pace.
 - `autoplay={{ enabled, unitsPerSecond }}` supports external play/pause controls.
 - `scrollInputScale` still applies to wheel and Arrow Up/Arrow Down scroll input while autoscroll is enabled.
+- Tapping Arrow Up or Arrow Down for less than `300ms` scrolls by `10` scene units on release; holding past that threshold scrolls smoothly at `20` scene units per second.
 - Arrow Right and Arrow Left jump to the next or previous scene.
 - Autoscroll is disabled when the user prefers reduced motion.
 

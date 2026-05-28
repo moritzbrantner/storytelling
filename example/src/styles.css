@@ -199,7 +199,8 @@ select {
 }
 
 .example-component-frame [data-story-scroller-page] .demo-stage {
-  min-height: clamp(32rem, 74vh, 46rem);
+  height: 100%;
+  min-height: 0;
   transition:
     border-color 180ms ease,
     box-shadow 180ms ease;

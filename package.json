@@ -65,9 +65,10 @@
     "motion": "^12.35.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@react-three/fiber": "^9.4.0",
-    "@tanstack/react-query": "^5.100.14",
     "@tailwindcss/vite": "^4.3.0",
+    "@tanstack/react-query": "^5.100.14",
     "@testing-library/react": "^16.3.0",
     "@types/node": "^25.6.0",
     "@types/react": "^19.2.2",
@@ -97,6 +98,7 @@
     "check-types": "tsc --noEmit",
     "lint": "oxfmt --check && oxlint --format=github && node scripts/verify-package-imports.mjs ./src @/ next/ next-intl",
     "test": "vitest run src",
+    "test:e2e": "playwright test",
     "test:package": "node scripts/verify-package.mjs",
     "test:consumer": "node scripts/verify-consumer.mjs",
     "pack:dry": "npm pack --dry-run --ignore-scripts --json",

@@ -720,6 +720,26 @@ describe("@moritzbrantner/storytelling", () => {
     expect(await screen.findByText("A low signal reaches the tower.")).toBeTruthy();
   });
 
+  test("renders StoryScroller branch choices as an overlay with numeric hotkeys", async () => {
+    const { container } = render(<StoryScroller story={story} />);
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+
+    expect(viewport).toBeTruthy();
+    setScrollerGeometry(viewport!, 1);
+    scrollScrollerViewport(viewport!, 100);
+
+    expect(screen.getByRole("button", { name: /Answer immediately/ })).toBeTruthy();
+    expect(
+      screen.getByText("What should the operator do first?").closest(".absolute"),
+    ).toBeTruthy();
+
+    fireEvent.keyDown(window, { key: "2" });
+
+    expect(
+      await screen.findByText("The signal comes from a cove nobody has charted in decades."),
+    ).toBeTruthy();
+  });
+
   test("renders linear StoryScroller stories from the opening node", async () => {
     render(<StoryScroller story={linearStory} />);
 
@@ -975,16 +995,74 @@ describe("@moritzbrantner/storytelling", () => {
     setScrollerGeometry(viewport!, 2);
 
     fireEvent.keyDown(region, { key: "ArrowDown" });
-    expect(await screen.findByText("Alpha active 10")).toBeTruthy();
-    expect(viewport!.scrollTop).toBe(10);
+    expect(viewport!.scrollTop).toBe(0);
+    fireEvent.keyUp(region, { key: "ArrowDown" });
+    expect(await screen.findByText("Alpha active 5")).toBeTruthy();
+    expect(viewport!.scrollTop).toBe(5);
 
     fireEvent.keyDown(region, { key: "ArrowDown" });
-    expect(await screen.findByText("Alpha active 20")).toBeTruthy();
-    expect(viewport!.scrollTop).toBe(20);
-
-    fireEvent.keyDown(region, { key: "ArrowUp" });
+    expect(viewport!.scrollTop).toBe(5);
+    fireEvent.keyUp(region, { key: "ArrowDown" });
     expect(await screen.findByText("Alpha active 10")).toBeTruthy();
     expect(viewport!.scrollTop).toBe(10);
+
+    fireEvent.keyDown(region, { key: "ArrowUp" });
+    expect(viewport!.scrollTop).toBe(10);
+    fireEvent.keyUp(region, { key: "ArrowUp" });
+    expect(await screen.findByText("Alpha active 5")).toBeTruthy();
+    expect(viewport!.scrollTop).toBe(5);
+  });
+
+  test("scrolls StoryScroller vertical arrow-key input smoothly and slowly while held", async () => {
+    vi.useFakeTimers();
+
+    const { container } = render(
+      <StoryScroller
+        ariaLabel="Held arrow scenes"
+        scenes={[
+          {
+            id: "alpha",
+            title: "Alpha",
+            render: renderScrollTransitionLabel("Alpha"),
+          },
+          {
+            id: "beta",
+            title: "Beta",
+            render: renderScrollTransitionLabel("Beta"),
+          },
+        ]}
+      />,
+    );
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+    const region = screen.getByRole("region", { name: "Held arrow scenes" });
+
+    expect(viewport).toBeTruthy();
+    setScrollerGeometry(viewport!, 2);
+
+    fireEvent.keyDown(region, { key: "ArrowDown" });
+    expect(viewport!.scrollTop).toBe(0);
+
+    fireEvent.keyDown(region, { key: "ArrowDown", repeat: true });
+    expect(viewport!.scrollTop).toBe(0);
+
+    await act(async () => {
+      vi.advanceTimersByTime(299);
+    });
+    expect(viewport!.scrollTop).toBe(0);
+
+    await act(async () => {
+      vi.advanceTimersByTime(201);
+    });
+    expect(viewport!.scrollTop).toBeGreaterThan(3);
+    expect(viewport!.scrollTop).toBeLessThan(5);
+
+    fireEvent.keyUp(region, { key: "ArrowDown" });
+    const stoppedTop = viewport!.scrollTop;
+
+    await act(async () => {
+      vi.advanceTimersByTime(200);
+    });
+    expect(viewport!.scrollTop).toBe(stoppedTop);
   });
 
   test("uses horizontal arrow-key input for adjacent scene navigation", async () => {
