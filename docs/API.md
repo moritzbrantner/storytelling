@@ -30,7 +30,8 @@ This reference tracks the package exports that are intended for consumers.
 - `autoplay={true}` advances at the default pace of `20` scene units per second.
 - `autoplay={{ unitsPerSecond: 12 }}` sets a custom pace.
 - `autoplay={{ enabled, unitsPerSecond }}` supports external play/pause controls.
-- `scrollInputScale` still applies to wheel and arrow-key input while autoscroll is enabled.
+- `scrollInputScale` still applies to wheel and Arrow Up/Arrow Down scroll input while autoscroll is enabled.
+- Arrow Right and Arrow Left jump to the next or previous scene.
 - Autoscroll is disabled when the user prefers reduced motion.
 
 ### `StoryScroller` Transitions

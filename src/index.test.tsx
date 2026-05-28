@@ -728,7 +728,7 @@ describe("@moritzbrantner/storytelling", () => {
     expect(screen.queryByText("Publish the report at noon.")).toBeNull();
 
     fireEvent.keyDown(screen.getByRole("region", { name: "Linear report" }), {
-      key: "ArrowDown",
+      key: "ArrowRight",
     });
     expect(await screen.findByText("Review the copy for sequence and clarity.")).toBeTruthy();
   });
@@ -949,7 +949,7 @@ describe("@moritzbrantner/storytelling", () => {
     expect(viewport!.scrollTop).toBe(50);
   });
 
-  test("scales StoryScroller arrow-key input", async () => {
+  test("scales StoryScroller vertical arrow-key scroll input", async () => {
     const { container } = render(
       <StoryScroller
         ariaLabel="Scaled arrow scenes"
@@ -975,15 +975,50 @@ describe("@moritzbrantner/storytelling", () => {
     setScrollerGeometry(viewport!, 2);
 
     fireEvent.keyDown(region, { key: "ArrowDown" });
-    expect(await screen.findByText("Alpha active 50")).toBeTruthy();
-    expect(viewport!.scrollTop).toBe(50);
+    expect(await screen.findByText("Alpha active 10")).toBeTruthy();
+    expect(viewport!.scrollTop).toBe(10);
 
     fireEvent.keyDown(region, { key: "ArrowDown" });
-    expect(await screen.findByText("Beta active 0")).toBeTruthy();
-    expect(viewport!.scrollTop).toBe(100);
+    expect(await screen.findByText("Alpha active 20")).toBeTruthy();
+    expect(viewport!.scrollTop).toBe(20);
+
+    fireEvent.keyDown(region, { key: "ArrowUp" });
+    expect(await screen.findByText("Alpha active 10")).toBeTruthy();
+    expect(viewport!.scrollTop).toBe(10);
   });
 
-  test("advances StoryScroller arrow-key input through boundary transitions", async () => {
+  test("uses horizontal arrow-key input for adjacent scene navigation", async () => {
+    const { container } = render(
+      <StoryScroller
+        ariaLabel="Horizontal arrow scenes"
+        scenes={[
+          {
+            id: "alpha",
+            title: "Alpha",
+            render: renderScrollTransitionLabel("Alpha"),
+          },
+          {
+            id: "beta",
+            title: "Beta",
+            render: renderScrollTransitionLabel("Beta"),
+          },
+        ]}
+      />,
+    );
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+    const region = screen.getByRole("region", { name: "Horizontal arrow scenes" });
+
+    expect(viewport).toBeTruthy();
+    setScrollerGeometry(viewport!, 2);
+
+    fireEvent.keyDown(region, { key: "ArrowRight" });
+    expect(await screen.findByText("Beta active 0")).toBeTruthy();
+
+    fireEvent.keyDown(region, { key: "ArrowLeft" });
+    expect(await screen.findByText("Alpha active 0")).toBeTruthy();
+  });
+
+  test("advances StoryScroller horizontal arrow-key navigation through boundary transitions", async () => {
     const { viewport } = renderTransitionScroller({
       type: "slide",
       scrollUnits: 20,
@@ -991,10 +1026,10 @@ describe("@moritzbrantner/storytelling", () => {
     });
     const region = screen.getByRole("region", { name: "Transition scenes" });
 
-    fireEvent.keyDown(region, { key: "ArrowDown" });
+    fireEvent.keyDown(region, { key: "ArrowRight" });
 
     expect(await screen.findByText("Beta active 0")).toBeTruthy();
-    expect(viewport.scrollTop).toBe(120);
+    expect(viewport.scrollTop).toBeCloseTo(120);
   });
 
   test("autoplays StoryScroller at the configured scene pace", async () => {

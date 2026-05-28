@@ -230,9 +230,11 @@ transitions are disabled for users who prefer reduced motion.
 />
 ```
 
-Use `scrollInputScale` to tune wheel and arrow-key input. `1` is the default:
-one arrow press advances by one scene, and wheel deltas are left unchanged.
-Values below `1` slow scrolling down; values above `1` speed it up.
+Use `scrollInputScale` to tune wheel and vertical arrow-key input. `1` is the
+default: each Arrow Down or Arrow Up press scrolls by `20` scene units, and
+wheel deltas are left unchanged. Values below `1` slow scrolling down; values
+above `1` speed it up. Arrow Right and Arrow Left move directly to the next or
+previous scene.
 
 Use `autoplay` when the scroller should advance itself. Passing `true` uses the
 default pace of `20` scene units per second; pass

@@ -173,6 +173,7 @@ const clamp = (value: number, min: number, max: number) => Math.min(Math.max(val
 const DEFAULT_SCROLL_TRANSITION: StoryScrollTransition = { type: "none" };
 const DEFAULT_SCROLL_INPUT_SCALE = 1;
 const DEFAULT_SCENE_SCROLL_UNITS = 100;
+const DEFAULT_KEYBOARD_SCROLL_UNITS = 20;
 const DEFAULT_AUTOPLAY_UNITS_PER_SECOND = 20;
 const AUTOPLAY_INTERVAL_MS = 1000 / 60;
 const SCROLL_UNIT_PRECISION = 1_000_000;
@@ -629,6 +630,19 @@ function StoryScrollTimeline<TSceneData = unknown>({
     [setScrollTop],
   );
 
+  const scrollByTimelineUnits = useCallback(
+    (deltaUnits: number) => {
+      const element = scrollRef.current;
+      if (!element || deltaUnits === 0 || totalUnits <= 0) return;
+
+      const currentState = getNextScrollState(element, timeline);
+      const nextTop = getScrollTopForUnit(element, currentState.unit + deltaUnits, totalUnits);
+
+      setScrollTop(nextTop);
+    },
+    [setScrollTop, timeline, totalUnits],
+  );
+
   const scrollToScene = useCallback(
     (index: number) => {
       const element = scrollRef.current;
@@ -729,31 +743,24 @@ function StoryScrollTimeline<TSceneData = unknown>({
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
-    const element = scrollRef.current;
-    const maxScroll = element ? Math.max(element.scrollHeight - element.clientHeight, 0) : 0;
-    const activeSpanUnits = activeEntry
-      ? Math.max(activeEntry.endUnit - activeEntry.startUnit, activeEntry.scrollUnits)
-      : 0;
-    const activeScrollSize = totalUnits > 0 ? (maxScroll * activeSpanUnits) / totalUnits : 0;
+    const keyboardScrollUnits = DEFAULT_KEYBOARD_SCROLL_UNITS * resolvedScrollInputScale;
 
     switch (event.key) {
       case "ArrowDown":
-      case "ArrowRight":
         event.preventDefault();
-        if (activeScrollSize === 0) {
-          scrollToScene(activeIndex + 1);
-          return;
-        }
-        scrollByInputDelta(activeScrollSize * resolvedScrollInputScale);
+        scrollByTimelineUnits(keyboardScrollUnits);
         return;
       case "ArrowUp":
+        event.preventDefault();
+        scrollByTimelineUnits(-keyboardScrollUnits);
+        return;
+      case "ArrowRight":
+        event.preventDefault();
+        scrollToScene(activeIndex + 1);
+        return;
       case "ArrowLeft":
         event.preventDefault();
-        if (activeScrollSize === 0) {
-          scrollToScene(activeIndex - 1);
-          return;
-        }
-        scrollByInputDelta(-activeScrollSize * resolvedScrollInputScale);
+        scrollToScene(activeIndex - 1);
         return;
       case "Home":
         event.preventDefault();
