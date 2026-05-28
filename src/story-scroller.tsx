@@ -1286,7 +1286,7 @@ function StoryChoicePanel({
     0,
     1,
   );
-  const isReady = progress >= STORY_BRANCH_REVEAL_END;
+  const isReady = revealProgress > 0;
 
   useEffect(() => {
     if (!isReady || choices.length === 0 || typeof window === "undefined") {

@@ -119,6 +119,26 @@ test.describe("StoryScroller example app", () => {
     await expectActiveScene(page, /2\. The map reveals a hidden harbor/);
   });
 
+  test("branching story opening choices are selectable during overlay reveal", async ({ page }) => {
+    await openExample(page);
+    await chooseComponent(page, "Scroller");
+
+    const region = page.getByRole("region", { name: "Observatory Relay scroller" });
+    await expect(region).toBeVisible();
+
+    await scrollerViewport(page).evaluate((element) => {
+      element.scrollTop = (element.scrollHeight - element.clientHeight) * 0.95;
+      element.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+
+    const answerChoice = page.getByRole("button", { name: /Answer the pulse/ });
+    await expect(answerChoice).toBeVisible();
+    await expect(answerChoice).toBeEnabled();
+
+    await answerChoice.click();
+    await expectActiveScene(page, /2\. A pilot breaks through/);
+  });
+
   test("custom motion scroller supports scene jumps, direct end navigation, and reverse scroll", async ({
     page,
   }) => {

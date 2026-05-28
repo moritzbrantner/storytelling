@@ -697,14 +697,6 @@ describe("@moritzbrantner/storytelling", () => {
 
     setScrollerGeometry(viewport!, 1);
     scrollScrollerViewport(viewport!, 95);
-    expect(
-      screen.getByRole<HTMLButtonElement>("button", {
-        name: /Answer immediately/,
-        hidden: true,
-      }).disabled,
-    ).toBe(true);
-
-    scrollScrollerViewport(viewport!, 100);
     fireEvent.click(screen.getByRole("button", { name: /Answer immediately/ }));
 
     expect(await screen.findByText("The message is fragmented.")).toBeTruthy();
