@@ -20,6 +20,14 @@ This reference tracks the package exports that are intended for consumers.
 - `StoryContent`, `StoryControls`, `StoryProgress`, `StoryMinimap`, and `StoryStageFrame` expose composable UI pieces.
 - `createStoryRendererRegistry(...)`, `getStoryRendererKey(...)`, and `getStoryStageProps(...)` connect serializable stage descriptors to renderer components.
 
+### `StoryScroller` Autoscroll
+
+- `autoplay={true}` advances at the default pace of `20` scene units per second.
+- `autoplay={{ unitsPerSecond: 12 }}` sets a custom pace.
+- `autoplay={{ enabled, unitsPerSecond }}` supports external play/pause controls.
+- `scrollInputScale` still applies to wheel and arrow-key input while autoscroll is enabled.
+- Autoscroll is disabled when the user prefers reduced motion.
+
 ## `./media`
 
 - `StorySubtitleFile`, `StoryAudioFile`, and `StoryVideoFile` render media-focused story stages.

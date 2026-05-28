@@ -178,6 +178,47 @@ default pace of `20` scene units per second; pass
 `autoplay={{ unitsPerSecond: 18 }}` to set a custom pace. Autoplay is disabled
 for users who prefer reduced motion.
 
+### Autoscroll examples
+
+Custom scene arrays can autoscroll without a story document. This is useful for
+guided editorial, report, or kiosk-style experiences where each scene owns its
+own visual treatment.
+
+```tsx
+<StoryScroller
+  ariaLabel="Guided report"
+  scenes={reportScenes}
+  transition={{ type: "fade", scrollUnits: 16 }}
+  autoplay={{ unitsPerSecond: 12 }}
+  scrollInputScale={0.5}
+/>
+```
+
+Story-backed scrollers can autoscroll too. Linear stories work especially well
+because `StoryScroller` resolves the full `next` chain into scrollable scenes.
+
+```tsx
+<StoryScroller
+  story={linearStory}
+  registry={storyRegistry}
+  transition={{ type: "fade", scrollUnits: 18 }}
+  autoplay
+/>
+```
+
+Use the object form when the page needs a play/pause control or a preset menu.
+
+```tsx
+const [running, setRunning] = useState(true);
+
+<StoryScroller
+  scenes={tourScenes}
+  autoplay={{ enabled: running, unitsPerSecond: 24 }}
+  onActiveIndexChange={setActiveSceneIndex}
+  onSceneProgressChange={setSceneProgress}
+/>;
+```
+
 Both `StoryPlayer` and story-backed `StoryScroller` support controlled choice
 state with `choiceIds`, `defaultChoiceIds`, and `onChoiceIdsChange`. Use
 `serializeStoryPath()` and `parseStoryPath()` to put the current path in a URL or

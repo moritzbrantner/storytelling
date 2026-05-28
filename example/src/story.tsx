@@ -507,6 +507,90 @@ export const motionLabScenes: StoryScrollScene<MotionLabSceneData>[] = [
   },
 ];
 
+export const autoscrollLabScenes: StoryScrollScene<MotionLabSceneData>[] = [
+  {
+    id: "autoscroll-lab-briefing",
+    title: "Briefing opens",
+    eyebrow: "Auto 01",
+    data: {
+      accent: "#5ac8a8",
+      deck: "Autoscroll starts the reader in a stable scene while the progress value drives the image crop and lower meter.",
+      imageAlt: "A desk covered with notes, charts, and a laptop",
+      imageSrc:
+        "https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1400&q=80",
+      metricLabel: "Pace",
+      metricValue: "12/s",
+      readouts: [
+        { label: "Mode", value: "Auto" },
+        { label: "Input", value: "0.5x" },
+        { label: "Fade", value: "14" },
+      ],
+    },
+    render: (props) => <MotionLabScene {...props} />,
+  },
+  {
+    id: "autoscroll-lab-evidence",
+    title: "Evidence passes",
+    eyebrow: "Auto 02",
+    data: {
+      accent: "#f1b851",
+      deck: "Longer copy can stay readable because the scroll pace is defined in normalized scene units instead of pixels.",
+      imageAlt: "Printed photographs arranged on a light table",
+      imageSrc:
+        "https://images.unsplash.com/photo-1492724441997-5dc865305da7?auto=format&fit=crop&w=1400&q=80",
+      metricLabel: "Read",
+      metricValue: "68%",
+      readouts: [
+        { label: "Segment", value: "2/4" },
+        { label: "Motion", value: "Safe" },
+        { label: "Manual", value: "Wheel" },
+      ],
+    },
+    render: (props) => <MotionLabScene {...props} />,
+  },
+  {
+    id: "autoscroll-lab-handoff",
+    title: "Handoff fades",
+    eyebrow: "Auto 03",
+    data: {
+      accent: "#ef8b72",
+      deck: "Fade presets show how autoplay can move through boundaries without asking the reader to touch the wheel.",
+      imageAlt: "A train platform with passengers in morning light",
+      imageSrc:
+        "https://images.unsplash.com/photo-1474487548417-781cb71495f3?auto=format&fit=crop&w=1400&q=80",
+      metricLabel: "Handoff",
+      metricValue: "Live",
+      readouts: [
+        { label: "Next", value: "Queued" },
+        { label: "Units", value: "26" },
+        { label: "State", value: "Active" },
+      ],
+    },
+    render: (props) => <MotionLabScene {...props} />,
+  },
+  {
+    id: "autoscroll-lab-ending",
+    title: "Ending holds",
+    eyebrow: "Auto 04",
+    transitionToNext: { type: "none" },
+    data: {
+      accent: "#7ab8ff",
+      deck: "The interval stops at the end of the scroll range, leaving the final scene available for review.",
+      imageAlt: "A newspaper and coffee cup on a cafe table",
+      imageSrc:
+        "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=1400&q=80",
+      metricLabel: "End",
+      metricValue: "Hold",
+      readouts: [
+        { label: "Loop", value: "No" },
+        { label: "Reduced", value: "Stops" },
+        { label: "Review", value: "Ready" },
+      ],
+    },
+    render: (props) => <MotionLabScene {...props} />,
+  },
+];
+
 function SignalStage({ node, progress, currentIndex }: StoryRenderProps<SignalStoryData>) {
   const data = node.data;
 

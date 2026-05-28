@@ -8,11 +8,13 @@ import {
   resolveStoryPath,
   type StoryDocument,
   type StoryHistoryEntry,
+  type StoryScrollAutoplay,
   type StoryScrollScene,
   type StoryScrollTransition,
 } from "@moritzbrantner/storytelling";
 
 import {
+  autoscrollLabScenes,
   linearStory,
   motionLabScenes,
   signalStory,
@@ -35,7 +37,7 @@ import {
 } from "@moritzbrantner/ui";
 
 type ExampleMode = "player" | "scroller";
-type ExampleStoryId = "branching" | "linear" | "motion";
+type ExampleStoryId = "branching" | "linear" | "motion" | "autoscroll";
 
 type PathPreset = {
   id: string;
@@ -56,10 +58,20 @@ type MotionPreset = {
   transition: StoryScrollTransition;
 };
 
+type AutoscrollPreset = {
+  id: string;
+  label: string;
+  description: string;
+  autoplay: StoryScrollAutoplay;
+  transition: StoryScrollTransition;
+  scrollInputScale: number;
+};
+
 type ExampleCatalog = {
   storyOptions: { id: ExampleStoryId; label: string }[];
   stories: ExampleStory[];
   motionPresets: MotionPreset[];
+  autoscrollPresets: AutoscrollPreset[];
 };
 
 const exampleCatalog: ExampleCatalog = {
@@ -67,6 +79,7 @@ const exampleCatalog: ExampleCatalog = {
     { id: "branching", label: "Branching" },
     { id: "linear", label: "Linear" },
     { id: "motion", label: "Motion" },
+    { id: "autoscroll", label: "Autoscroll" },
   ],
   stories: [
     {
@@ -101,6 +114,32 @@ const exampleCatalog: ExampleCatalog = {
     { id: "long-fade", label: "Long fade", transition: { type: "fade", scrollUnits: 34 } },
     { id: "direct", label: "Direct", transition: { type: "none" } },
   ],
+  autoscrollPresets: [
+    {
+      id: "reading",
+      label: "Reading pace",
+      description: "Autoscrolls at a measured pace with a short crossfade between panels.",
+      autoplay: { unitsPerSecond: 12 },
+      transition: { type: "fade", scrollUnits: 14 },
+      scrollInputScale: 0.5,
+    },
+    {
+      id: "tour",
+      label: "Guided tour",
+      description: "Uses the default autoplay pace with a longer visual handoff.",
+      autoplay: true,
+      transition: { type: "fade", scrollUnits: 26 },
+      scrollInputScale: 0.75,
+    },
+    {
+      id: "scan",
+      label: "Fast scan",
+      description: "Moves quickly through scenes while keeping manual wheel input responsive.",
+      autoplay: { unitsPerSecond: 34 },
+      transition: { type: "none" },
+      scrollInputScale: 1.25,
+    },
+  ],
 };
 
 async function getExampleCatalog() {
@@ -112,6 +151,10 @@ function getDefaultPresetId(storyId: ExampleStoryId, catalog: ExampleCatalog) {
     return catalog.motionPresets[0]?.id ?? "soft-fade";
   }
 
+  if (storyId === "autoscroll") {
+    return catalog.autoscrollPresets[0]?.id ?? "reading";
+  }
+
   return catalog.stories.find((example) => example.id === storyId)?.presets[0]?.id ?? "opening";
 }
 
@@ -119,6 +162,7 @@ const storyOptionsFallback: { id: ExampleStoryId; label: string }[] = [
   { id: "branching", label: "Branching" },
   { id: "linear", label: "Linear" },
   { id: "motion", label: "Motion" },
+  { id: "autoscroll", label: "Autoscroll" },
 ];
 
 function getStoryScrollerPageId(storyId: string, nodeId: string) {
@@ -157,6 +201,18 @@ function getSceneSummary(
   }`;
 }
 
+function getAutoscrollPaceLabel(autoplay: StoryScrollAutoplay) {
+  if (autoplay === true) {
+    return "20 units/s";
+  }
+
+  if (!autoplay || autoplay.enabled === false) {
+    return "Off";
+  }
+
+  return `${autoplay.unitsPerSecond ?? 20} units/s`;
+}
+
 function StateSummary({ summary }: { summary: string }) {
   return <pre className="m-0 whitespace-pre-wrap text-sm leading-7 text-[#2d3835]">{summary}</pre>;
 }
@@ -176,13 +232,19 @@ export function ExampleApp() {
   const storyOptions = catalog?.storyOptions ?? storyOptionsFallback;
   const exampleStories = catalog?.stories ?? [];
   const motionPresets = catalog?.motionPresets ?? [];
+  const autoscrollPresets = catalog?.autoscrollPresets ?? [];
   const isMotionStory = storyId === "motion";
+  const isAutoscrollStory = storyId === "autoscroll";
+  const isCustomSceneStory = isMotionStory || isAutoscrollStory;
   const activeExample =
     exampleStories.find((example) => example.id === storyId) ?? exampleStories[0]!;
   const activePreset =
     activeExample.presets.find((preset) => preset.id === presetId) ?? activeExample.presets[0]!;
   const activeMotionPreset =
     motionPresets.find((preset) => preset.id === presetId) ?? motionPresets[0]!;
+  const activeAutoscrollPreset =
+    autoscrollPresets.find((preset) => preset.id === presetId) ?? autoscrollPresets[0]!;
+  const customScenes = isAutoscrollStory ? autoscrollLabScenes : motionLabScenes;
   const presetPath = useMemo(
     () =>
       resolveStoryPath(activeExample.story, {
@@ -199,7 +261,7 @@ export function ExampleApp() {
     [activeExample.story],
   );
   const isLinearStory = storyId === "linear";
-  const isScrollerMode = isMotionStory || isLinearStory || mode === "scroller";
+  const isScrollerMode = isCustomSceneStory || isLinearStory || mode === "scroller";
   const visibleHistory = isLinearStory
     ? linearScrollPath.history
     : history.length > 0
@@ -208,9 +270,9 @@ export function ExampleApp() {
   const activeMinimapIndex = isScrollerMode
     ? scrollerActiveIndex
     : Math.max(visibleHistory.length - 1, 0);
-  const showBranchControls = !isLinearStory && !isMotionStory;
-  const minimapItems = isMotionStory
-    ? motionLabScenes.map((scene) => ({
+  const showBranchControls = !isLinearStory && !isCustomSceneStory;
+  const minimapItems = isCustomSceneStory
+    ? customScenes.map((scene) => ({
         id: scene.id,
         title: scene.title,
         eyebrow: scene.eyebrow,
@@ -224,26 +286,35 @@ export function ExampleApp() {
           eyebrow: node?.eyebrow,
         };
       });
-  const stateSummary = isMotionStory
-    ? getSceneSummary(motionLabScenes, activeMinimapIndex, sceneProgress)
+  const stateSummary = isCustomSceneStory
+    ? getSceneSummary(customScenes, activeMinimapIndex, sceneProgress)
     : getHistorySummary(activeExample.story, visibleHistory);
+  const autoscrollSummary =
+    activeAutoscrollPreset &&
+    `Pace ${getAutoscrollPaceLabel(activeAutoscrollPreset.autoplay)}
+Input scale ${activeAutoscrollPreset.scrollInputScale}
+Transition ${
+      activeAutoscrollPreset.transition.type === "fade"
+        ? `${activeAutoscrollPreset.transition.scrollUnits} units fade`
+        : "direct"
+    }`;
 
   useEffect(() => {
     setScrollerActiveIndex(0);
     setSceneProgress(0);
-  }, [storyId, activePreset.id, activeMotionPreset.id, mode]);
+  }, [storyId, activePreset.id, activeMotionPreset.id, activeAutoscrollPreset?.id, mode]);
 
   useEffect(() => {
-    if ((isLinearStory || isMotionStory) && mode !== "scroller") {
+    if ((isLinearStory || isCustomSceneStory) && mode !== "scroller") {
       setMode("scroller");
     }
-  }, [isLinearStory, isMotionStory, mode]);
+  }, [isCustomSceneStory, isLinearStory, mode]);
 
   const selectMinimapItem = (index: number) => {
     if (!isScrollerMode) return;
 
-    if (isMotionStory) {
-      const scene = motionLabScenes[index];
+    if (isCustomSceneStory) {
+      const scene = customScenes[index];
       if (!scene) return;
 
       setScrollerActiveIndex(index);
@@ -311,7 +382,11 @@ export function ExampleApp() {
 
                 setStoryId(typedStoryId);
                 setPresetId(getDefaultPresetId(typedStoryId, catalog));
-                if (typedStoryId === "linear" || typedStoryId === "motion") {
+                if (
+                  typedStoryId === "linear" ||
+                  typedStoryId === "motion" ||
+                  typedStoryId === "autoscroll"
+                ) {
                   setMode("scroller");
                 }
                 setHistory([]);
@@ -398,6 +473,29 @@ export function ExampleApp() {
                 ))}
               </div>
             ) : null}
+
+            {isAutoscrollStory ? (
+              <div
+                className="flex flex-wrap justify-start gap-1 rounded-lg border border-[#17211f]/15 bg-white/75 p-1 shadow-[0_10px_24px_rgba(23,33,31,0.06)] lg:justify-end"
+                aria-label="Autoscroll preset"
+              >
+                {autoscrollPresets.map((preset) => (
+                  <Button
+                    key={preset.id}
+                    type="button"
+                    variant={preset.id === activeAutoscrollPreset.id ? "default" : "ghost"}
+                    size="sm"
+                    className="min-h-9"
+                    onClick={() => {
+                      setPresetId(preset.id);
+                      setHistory([]);
+                    }}
+                  >
+                    {preset.label}
+                  </Button>
+                ))}
+              </div>
+            ) : null}
           </div>
         </header>
 
@@ -409,6 +507,17 @@ export function ExampleApp() {
                 scenes={motionLabScenes}
                 transition={activeMotionPreset.transition}
                 ariaLabel="Motion examples"
+                onActiveIndexChange={setScrollerActiveIndex}
+                onSceneProgressChange={setSceneProgress}
+              />
+            ) : isAutoscrollStory ? (
+              <StoryScroller
+                key={`autoscroll-${activeAutoscrollPreset.id}`}
+                scenes={autoscrollLabScenes}
+                transition={activeAutoscrollPreset.transition}
+                autoplay={activeAutoscrollPreset.autoplay}
+                scrollInputScale={activeAutoscrollPreset.scrollInputScale}
+                ariaLabel="Autoscroll examples"
                 onActiveIndexChange={setScrollerActiveIndex}
                 onSceneProgressChange={setSceneProgress}
               />
@@ -448,15 +557,17 @@ export function ExampleApp() {
                 <Badge variant="outline" className="w-fit">
                   {isMotionStory
                     ? "Motion scene"
-                    : isLinearStory
-                      ? "Scroll sequence"
-                      : mode === "player"
-                        ? "Active path"
-                        : "Start path"}
+                    : isAutoscrollStory
+                      ? "Autoscroll scene"
+                      : isLinearStory
+                        ? "Scroll sequence"
+                        : mode === "player"
+                          ? "Active path"
+                          : "Start path"}
                 </Badge>
                 <CardTitle className="text-xl">
-                  {isMotionStory
-                    ? (motionLabScenes[activeMinimapIndex]?.title ?? "Motion scenes")
+                  {isCustomSceneStory
+                    ? (customScenes[activeMinimapIndex]?.title ?? "Scroll scenes")
                     : isLinearStory
                       ? "Story cards"
                       : activePreset.label}
@@ -483,6 +594,23 @@ export function ExampleApp() {
                   >
                     {activePreset.choiceIds.join(" -> ") || "none"}
                   </code>
+                </CardContent>
+              </Card>
+            ) : null}
+
+            {isAutoscrollStory && activeAutoscrollPreset ? (
+              <Card className="border-[#17211f]/15 bg-white/85 shadow-[0_16px_36px_rgba(23,33,31,0.08)]">
+                <CardHeader>
+                  <Badge variant="outline" className="w-fit">
+                    Autoplay
+                  </Badge>
+                  <CardTitle className="text-xl">{activeAutoscrollPreset.label}</CardTitle>
+                </CardHeader>
+                <CardContent className="grid gap-3">
+                  <p className="m-0 text-sm leading-6 text-[#2d3835]">
+                    {activeAutoscrollPreset.description}
+                  </p>
+                  <StateSummary summary={autoscrollSummary || "No autoscroll preset"} />
                 </CardContent>
               </Card>
             ) : null}
