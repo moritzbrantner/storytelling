@@ -64,12 +64,34 @@ export {
   type UseStoryPathStateOptions,
   type UseStoryPathStateResult,
 } from "./use-story-path-state";
-export { defaultStoryTheme, type StoryTheme } from "./story-theme";
-export { StoryContent, type StoryContentProps } from "./story-content";
 export {
+  buildPathFromHistory,
+  createStoryPathStateFromHistory,
+  createStoryRenderProps,
+  getHistoryChoiceIds,
+  useStoryRuntime,
+  type CreateStoryRenderPropsInput,
+  type StoryRuntimeLabels,
+  type UseStoryRuntimeOptions,
+  type UseStoryRuntimeResult,
+} from "./story-runtime";
+export { defaultStoryTheme, type StoryTheme } from "./story-theme";
+export {
+  StoryContent,
+  defaultStoryContentRenderers,
+  type StoryContentProps,
+} from "./story-content";
+export {
+  StoryActionBar,
+  StoryChoiceList,
+  StoryChoicePanel,
   StoryControls,
   StoryPathTrail,
   StoryPlayer,
+  type StoryActionBarProps,
+  type StoryChoiceListProps,
+  type StoryChoicePanelProps,
+  type StoryChoicePanelRenderProps,
   type StoryControlsProps,
   type StoryPathTrailProps,
   type StoryPlayerProps,
@@ -77,6 +99,8 @@ export {
 export { StoryProgress, type StoryProgressProps } from "./story-progress";
 export {
   StoryScroller,
+  type StoryScrollerChoicePanelRenderProps,
+  type StoryScrollerMinimapProps,
   type StoryScrollAutoplay,
   type StoryScrollAutoplayOptions,
   type StoryScrollDirection,
@@ -85,13 +109,28 @@ export {
   type StoryScrollTransition,
   type StoryScrollerProps,
 } from "./story-scroller";
+export {
+  StoryScrollTimeline,
+  buildScrollTimeline,
+  getScrollTransitionStyles,
+  useStoryScrollTimeline,
+  type StoryScrollFrameProps,
+  type StoryScrollTarget,
+  type StoryScrollTimelineEntry,
+  type StoryScrollTimelineProps,
+  type StoryScrollTransitionStyles,
+  type UseStoryScrollTimelineOptions,
+  type UseStoryScrollTimelineResult,
+} from "./story-scroll-timeline";
 export { StoryStageFrame, type StoryStageFrameProps } from "./story-stage-frame";
 export { StoryMinimap, type StoryMinimapItem, type StoryMinimapProps } from "./story-minimap";
 export type {
   ResolvedStoryPath,
   StoryChoice,
   StoryContentBlock,
+  StoryContentRenderer,
   StoryContentRendererProps,
+  StoryContentRendererRegistry,
   StoryDefaults,
   StoryDocument,
   StoryHistoryEntry,

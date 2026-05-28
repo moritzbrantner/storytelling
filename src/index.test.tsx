@@ -3,8 +3,10 @@ import type { ReactNode } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import {
+  StoryContent,
   StoryMinimap,
   StoryPlayer,
+  StoryScrollTimeline,
   StoryScroller,
   StoryStageFrame,
   analyzeStory,
@@ -22,6 +24,7 @@ import {
   resolveStoryPath,
   serializeStoryPath,
   useStoryPathState,
+  useStoryRuntime,
   validateStory,
   validateStoryDocument,
   type StoryDocument,
@@ -607,6 +610,75 @@ describe("@moritzbrantner/storytelling", () => {
     ).toBeTruthy();
   });
 
+  test("provides reusable StoryPlayer runtime state", async () => {
+    const onChoice = vi.fn();
+
+    function RuntimeProbe() {
+      const runtime = useStoryRuntime(story, { onChoice });
+
+      return (
+        <div>
+          <p>Runtime node {runtime.renderProps.node.id}</p>
+          <p>Runtime progress {Math.round(runtime.progress * 100)}</p>
+          <button type="button" onClick={() => runtime.choose("trace")}>
+            Runtime choose trace
+          </button>
+          <button type="button" onClick={runtime.goBack}>
+            Runtime go back
+          </button>
+          <button type="button" onClick={runtime.restart}>
+            Runtime restart
+          </button>
+        </div>
+      );
+    }
+
+    render(<RuntimeProbe />);
+
+    expect(screen.getByText("Runtime node wake")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Runtime choose trace" }));
+    expect(await screen.findByText("Runtime node trace-node")).toBeTruthy();
+    expect(onChoice).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "trace" }),
+      expect.arrayContaining([expect.objectContaining({ nodeId: "trace-node" })]),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Runtime go back" }));
+    expect(await screen.findByText("Runtime node wake")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Runtime choose trace" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Runtime restart" }));
+    expect(await screen.findByText("Runtime node wake")).toBeTruthy();
+  });
+
+  test("renders StoryPlayer slot content with render props", async () => {
+    render(
+      <StoryPlayer
+        story={story}
+        renderStage={(props) => <div>Slot stage {props.node.id}</div>}
+        renderHeader={(props) => <div>Slot header {props.currentIndex}</div>}
+        renderControls={(props) => (
+          <button type="button" onClick={() => props.choose("trace")}>
+            Slot choose {props.choices.length}
+          </button>
+        )}
+        renderActions={(props) => <div>Slot actions {String(props.canGoBack)}</div>}
+        renderProgress={(props) => <div>Slot progress {Math.round(props.progress * 100)}</div>}
+        renderTrail={(props) => <div>Slot trail {props.history.length}</div>}
+      />,
+    );
+
+    expect(screen.getByText("Slot stage wake")).toBeTruthy();
+    expect(screen.getByText("Slot header 0")).toBeTruthy();
+    expect(screen.getByText("Slot choose 3")).toBeTruthy();
+    expect(screen.getByText("Slot actions false")).toBeTruthy();
+    expect(screen.getByText("Slot progress 25")).toBeTruthy();
+    expect(screen.getByText("Slot trail 1")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Slot choose 3" }));
+    expect(await screen.findByText("Slot stage trace-node")).toBeTruthy();
+  });
+
   test("provides headless story path state for custom editor controls", async () => {
     function PathStateProbe({
       choiceIds,
@@ -816,6 +888,107 @@ describe("@moritzbrantner/storytelling", () => {
         currentNode: expect.objectContaining({ id: "pilot-ending" }),
       }),
     );
+  });
+
+  test("renders custom StoryScroller scene, choice panel, and minimap slots", async () => {
+    const { container } = render(
+      <StoryScroller
+        story={story}
+        renderScene={(props) => (
+          <div>
+            Custom scene {props.node.id} {Math.round(props.value)}
+            {props.choices.length > 0 ? (
+              <button type="button" onClick={() => props.choose("trace")}>
+                Custom choose trace
+              </button>
+            ) : null}
+          </div>
+        )}
+        renderMinimap={(props) => (
+          <nav aria-label="Custom minimap">
+            {props.items.map((item, index) => (
+              <button key={item.id} type="button" onClick={() => props.scrollToScene(index)}>
+                {item.title}
+              </button>
+            ))}
+          </nav>
+        )}
+      />,
+    );
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+
+    expect(viewport).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Custom minimap" })).toBeTruthy();
+    expect(screen.getByText("Custom scene wake 0")).toBeTruthy();
+
+    setScrollerGeometry(viewport!, 1);
+    scrollScrollerViewport(viewport!, 100);
+    fireEvent.click(screen.getByRole("button", { name: "Custom choose trace" }));
+
+    expect(await screen.findByText(/Custom scene trace-node/)).toBeTruthy();
+  });
+
+  test("renders a custom StoryScroller choice panel slot", async () => {
+    const { container } = render(
+      <StoryScroller
+        story={story}
+        renderChoicePanel={(props) => (
+          <button type="button" onClick={() => props.choose("trace")}>
+            Custom panel {props.prompt}
+          </button>
+        )}
+      />,
+    );
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+
+    expect(viewport).toBeTruthy();
+    setScrollerGeometry(viewport!, 1);
+    scrollScrollerViewport(viewport!, 100);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Custom panel What should the operator do first?" }),
+    );
+    expect(
+      await screen.findByText("The signal comes from a cove nobody has charted in decades."),
+    ).toBeTruthy();
+  });
+
+  test("renders StoryScrollTimeline directly without a story document", async () => {
+    const { container } = render(
+      <StoryScrollTimeline
+        ariaLabel="Direct scroll timeline"
+        scenes={[
+          { id: "one", title: "One", render: ({ value }) => <div>One {Math.round(value)}</div> },
+          { id: "two", title: "Two", render: ({ value }) => <div>Two {Math.round(value)}</div> },
+        ]}
+      />,
+    );
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+
+    expect(viewport).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Direct scroll timeline" })).toBeTruthy();
+    expect(screen.getByText("One 0")).toBeTruthy();
+
+    setScrollerGeometry(viewport!, 2);
+    scrollScrollerViewport(viewport!, 200);
+    expect(await screen.findByText("Two 100")).toBeTruthy();
+  });
+
+  test("renders custom StoryContent block renderers", () => {
+    render(
+      <StoryContent
+        content={[
+          { type: "paragraph", text: "Built in paragraph." },
+          { type: "chart", title: "Revenue" } as never,
+        ]}
+        renderers={{
+          chart: ({ block }) => <figure>Custom block {(block as { title: string }).title}</figure>,
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Built in paragraph.")).toBeTruthy();
+    expect(screen.getByText("Custom block Revenue")).toBeTruthy();
   });
 
   test("passes a normalized 0-100 scroll value to custom StoryScroller scenes", async () => {

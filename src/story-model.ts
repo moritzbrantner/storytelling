@@ -169,7 +169,17 @@ export type StoryRendererRegistry<TData extends StoryNodeData = StoryNodeData> =
   three?: Record<string, StoryThreeSceneComponent<TData>>;
 };
 
+export type StoryContentRenderer = (props: {
+  block: StoryContentBlock;
+  index: number;
+  content: StoryContentBlock[];
+}) => ReactNode;
+
+export type StoryContentRendererRegistry = Record<string, StoryContentRenderer>;
+
 export type StoryContentRendererProps = {
   content?: StoryContentBlock[];
+  renderBlock?: StoryContentRenderer;
+  renderers?: StoryContentRendererRegistry;
   emptyContent?: ReactNode;
 };

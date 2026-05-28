@@ -1,17 +1,28 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
-import { Button, cn } from "@moritzbrantner/ui";
+import { cn } from "@moritzbrantner/ui";
 
-import { resolveStoryPath } from "./story-path";
+import {
+  StoryActionBar,
+  StoryChoiceList,
+  StoryChoicePanel,
+  StoryControls,
+  StoryPathTrail,
+  type StoryActionBarProps,
+  type StoryChoiceListProps,
+  type StoryChoicePanelProps,
+  type StoryChoicePanelRenderProps,
+  type StoryControlsProps,
+  type StoryPathTrailProps,
+} from "./story-choice";
 import { StoryProgress } from "./story-progress";
 import { StoryStageFrame } from "./story-stage-frame";
-import { defineStory, getStoryChoices, getStoryNode, isStoryEnding } from "./story-validation";
+import { useStoryRuntime } from "./story-runtime";
 import type {
-  ResolvedStoryPath,
   StoryChoice,
   StoryDocument,
   StoryHistoryEntry,
@@ -21,73 +32,41 @@ import type {
 } from "./story-model";
 import type { StoryPathState } from "./story-state";
 
+export type StoryPlayerLayout = "split" | "stacked" | "stage-only";
+
 export type StoryPlayerProps<TData extends StoryNodeData = StoryNodeData> = {
   story: StoryDocument<TData>;
   registry?: StoryRendererRegistry<TData>;
   initialChoiceIds?: string[];
   defaultChoiceIds?: string[];
   choiceIds?: string[];
+  layout?: StoryPlayerLayout;
   className?: string;
   ariaLabel?: string;
+  renderStage?: (props: StoryRenderProps<TData>) => ReactNode;
+  renderHeader?: (props: StoryRenderProps<TData>) => ReactNode;
+  renderControls?: (props: StoryRenderProps<TData>) => ReactNode;
+  renderActions?: (props: StoryRenderProps<TData>) => ReactNode;
+  renderProgress?: (props: StoryRenderProps<TData>) => ReactNode;
+  renderTrail?: (props: StoryRenderProps<TData>) => ReactNode;
   onChoice?: (choice: StoryChoice, history: StoryHistoryEntry<TData>[]) => void;
   onPathChange?: (history: StoryHistoryEntry<TData>[]) => void;
   onChoiceIdsChange?: (choiceIds: string[], state: StoryPathState<TData>) => void;
 };
 
-function resolveInitialHistory<TData extends StoryNodeData>(
-  story: StoryDocument<TData>,
-  initialChoiceIds: string[],
-) {
-  return resolveStoryPath(story, {
-    choiceIds: initialChoiceIds,
-    autoAdvanceLinearNodes: initialChoiceIds.length > 0,
-  }).history;
-}
-
-function resolveControlledHistory<TData extends StoryNodeData>(
-  story: StoryDocument<TData>,
-  choiceIds: string[],
-) {
-  return resolveStoryPath(story, {
-    choiceIds,
-    autoAdvanceLinearNodes: false,
-  }).history;
-}
-
-function getHistoryChoiceIds<TData extends StoryNodeData>(history: StoryHistoryEntry<TData>[]) {
-  return history.flatMap((entry) => (entry.choiceId ? [entry.choiceId] : []));
-}
-
-function buildPathFromHistory<TData extends StoryNodeData>(
-  story: StoryDocument<TData>,
-  history: StoryHistoryEntry<TData>[],
-): ResolvedStoryPath<TData> {
-  const nodes = history.map((entry) => getStoryNode(story, entry.nodeId));
-  const currentNode = nodes[nodes.length - 1] ?? getStoryNode(story, story.openingNodeId);
-
-  return {
-    nodes,
-    history,
-    currentNode,
-    completed: isStoryEnding(story, currentNode),
-  };
-}
-
-function buildStoryPathStateFromHistory<TData extends StoryNodeData>(
-  story: StoryDocument<TData>,
-  history: StoryHistoryEntry<TData>[],
-  choiceIds: string[],
-): StoryPathState<TData> {
-  const path = buildPathFromHistory(story, history);
-
-  return {
-    choiceIds,
-    path,
-    history,
-    currentNode: path.currentNode,
-    completed: path.completed,
-  };
-}
+export {
+  StoryActionBar,
+  StoryChoiceList,
+  StoryChoicePanel,
+  StoryControls,
+  StoryPathTrail,
+  type StoryActionBarProps,
+  type StoryChoiceListProps,
+  type StoryChoicePanelProps,
+  type StoryChoicePanelRenderProps,
+  type StoryControlsProps,
+  type StoryPathTrailProps,
+};
 
 export function StoryPlayer<TData extends StoryNodeData = StoryNodeData>({
   story: input,
@@ -95,122 +74,105 @@ export function StoryPlayer<TData extends StoryNodeData = StoryNodeData>({
   initialChoiceIds = [],
   defaultChoiceIds,
   choiceIds,
+  layout = "split",
   className,
   ariaLabel,
+  renderStage,
+  renderHeader,
+  renderControls,
+  renderActions,
+  renderProgress,
+  renderTrail,
   onChoice,
   onPathChange,
   onChoiceIdsChange,
 }: StoryPlayerProps<TData>) {
-  const story = useMemo(() => defineStory(input), [input]);
-  const resolvedDefaultChoiceIds = defaultChoiceIds ?? initialChoiceIds;
-  const defaultChoiceKey = resolvedDefaultChoiceIds.join("|");
-  const controlledChoiceKey = choiceIds?.join("|") ?? "";
-  const isChoiceIdsControlled = choiceIds !== undefined;
-  const [history, setHistory] = useState<StoryHistoryEntry<TData>[]>(() =>
-    isChoiceIdsControlled
-      ? resolveControlledHistory(story, choiceIds ?? [])
-      : resolveInitialHistory(story, resolvedDefaultChoiceIds),
-  );
+  const runtime = useStoryRuntime(input, {
+    initialChoiceIds,
+    defaultChoiceIds,
+    choiceIds,
+    autoAdvanceLinearNodes:
+      choiceIds === undefined ? (defaultChoiceIds ?? initialChoiceIds).length > 0 : false,
+    onChoice,
+    onPathChange,
+    onChoiceIdsChange,
+  });
+  const { story, renderProps, labels } = runtime;
   const headingRef = useRef<HTMLHeadingElement | null>(null);
   const reducedMotion = useReducedMotion();
-  const path = useMemo(() => buildPathFromHistory(story, history), [history, story]);
-  const currentNode = path.currentNode;
-  const choices = getStoryChoices(story, currentNode);
-  const ending = isStoryEnding(story, currentNode);
-  const canGoBack = history.length > 1;
-  const progress = history.length / Math.max(story.nodes.length, 1);
-
-  useEffect(() => {
-    if (isChoiceIdsControlled) {
-      setHistory(resolveControlledHistory(story, choiceIds ?? []));
-      return;
-    }
-
-    setHistory(resolveInitialHistory(story, resolvedDefaultChoiceIds));
-  }, [controlledChoiceKey, defaultChoiceKey, isChoiceIdsControlled, story]);
-
-  useEffect(() => {
-    onPathChange?.(history);
-  }, [history, onPathChange]);
+  const currentNode = renderProps.node;
+  const prompt =
+    currentNode.prompt ?? (renderProps.isEnding ? labels.endingPrompt : labels.choosePrompt);
 
   useEffect(() => {
     headingRef.current?.focus({ preventScroll: true });
   }, [currentNode.id]);
 
-  const choose = (choiceId: string) => {
-    const choice = choices.find((entry) => entry.id === choiceId && !entry.disabled);
-    if (!choice) return;
-
-    const nextNode = getStoryNode(story, choice.target);
-    const nextHistory = [
-      ...history,
-      {
-        nodeId: nextNode.id,
-        choiceId: choice.id,
-        data: nextNode.data,
-      },
-    ];
-    const nextChoiceIds = getHistoryChoiceIds(nextHistory);
-
-    if (!isChoiceIdsControlled) {
-      setHistory(nextHistory);
-    }
-
-    onChoice?.(choice, nextHistory);
-    onChoiceIdsChange?.(
-      nextChoiceIds,
-      buildStoryPathStateFromHistory(story, nextHistory, nextChoiceIds),
-    );
-  };
-
-  const goBack = () => {
-    if (!canGoBack) return;
-
-    const nextHistory = history.slice(0, -1);
-    const nextChoiceIds = getHistoryChoiceIds(nextHistory);
-
-    if (!isChoiceIdsControlled) {
-      setHistory(nextHistory);
-    }
-
-    onChoiceIdsChange?.(
-      nextChoiceIds,
-      buildStoryPathStateFromHistory(story, nextHistory, nextChoiceIds),
-    );
-  };
-
-  const restart = () => {
-    const openingNode = getStoryNode(story, story.openingNodeId);
-    const nextHistory = [{ nodeId: openingNode.id, data: openingNode.data }];
-
-    if (!isChoiceIdsControlled) {
-      setHistory(nextHistory);
-    }
-
-    onChoiceIdsChange?.([], buildStoryPathStateFromHistory(story, nextHistory, []));
-  };
-
   const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
-    if ((event.key === "Escape" || event.key === "Backspace") && canGoBack) {
+    if ((event.key === "Escape" || event.key === "Backspace") && renderProps.canGoBack) {
       event.preventDefault();
-      goBack();
+      renderProps.goBack();
     }
   };
 
-  const renderProps: StoryRenderProps<TData> = {
-    story,
-    node: currentNode,
-    history,
-    path,
-    currentIndex: history.length - 1,
-    progress,
-    isEnding: ending,
-    canGoBack,
-    choices,
-    choose,
-    goBack,
-    restart,
-  };
+  const stage = renderStage ? (
+    renderStage(renderProps)
+  ) : (
+    <StoryStageFrame {...renderProps} registry={registry} />
+  );
+  const header = renderHeader ? (
+    renderHeader(renderProps)
+  ) : (
+    <div>
+      {currentNode.eyebrow ? (
+        <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
+          {currentNode.eyebrow}
+        </p>
+      ) : null}
+      <h2
+        ref={headingRef}
+        tabIndex={-1}
+        className="mt-2 text-2xl font-semibold tracking-tight outline-none"
+      >
+        {currentNode.title}
+      </h2>
+      {story.subtitle ? (
+        <p className="mt-2 text-sm text-muted-foreground">{story.subtitle}</p>
+      ) : null}
+    </div>
+  );
+  const controls = renderControls ? (
+    renderControls(renderProps)
+  ) : (
+    <StoryControls
+      choices={renderProps.choices}
+      onChoose={renderProps.choose}
+      isEnding={renderProps.isEnding}
+      prompt={prompt}
+      completedLabel={labels.completedBranch}
+    />
+  );
+  const actions = renderActions ? (
+    renderActions(renderProps)
+  ) : (
+    <StoryActionBar
+      canGoBack={renderProps.canGoBack}
+      goBack={renderProps.goBack}
+      restart={renderProps.restart}
+      backLabel={labels.back}
+      restartLabel={labels.restart}
+    />
+  );
+  const progress = renderProgress ? (
+    renderProgress(renderProps)
+  ) : (
+    <StoryProgress value={renderProps.progress} />
+  );
+  const trail = renderTrail ? (
+    renderTrail(renderProps)
+  ) : (
+    <StoryPathTrail story={story} history={renderProps.history} />
+  );
 
   return (
     <section
@@ -219,7 +181,13 @@ export function StoryPlayer<TData extends StoryNodeData = StoryNodeData>({
       className={cn("overflow-hidden rounded-lg border bg-card", className)}
       onKeyDown={handleKeyDown}
     >
-      <div className="grid gap-0 lg:grid-cols-[1.1fr_0.9fr]">
+      <div
+        className={cn(
+          "grid gap-0",
+          layout === "split" ? "lg:grid-cols-[1.1fr_0.9fr]" : "",
+          layout === "stage-only" ? "block" : "",
+        )}
+      >
         <div className="p-4 md:p-6">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
@@ -229,140 +197,31 @@ export function StoryPlayer<TData extends StoryNodeData = StoryNodeData>({
               exit={reducedMotion ? undefined : { opacity: 0, y: -8 }}
               transition={{ duration: reducedMotion ? 0 : 0.25, ease: "easeOut" }}
             >
-              <StoryStageFrame {...renderProps} registry={registry} />
+              {stage}
             </motion.div>
           </AnimatePresence>
         </div>
 
-        <aside className="border-t bg-background p-5 lg:border-l lg:border-t-0 md:p-6">
-          <div className="flex h-full flex-col gap-6">
-            <div>
-              {currentNode.eyebrow ? (
-                <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
-                  {currentNode.eyebrow}
-                </p>
-              ) : null}
-              <h2
-                ref={headingRef}
-                tabIndex={-1}
-                className="mt-2 text-2xl font-semibold tracking-tight outline-none"
-              >
-                {currentNode.title}
-              </h2>
-              {story.subtitle ? (
-                <p className="mt-2 text-sm text-muted-foreground">{story.subtitle}</p>
-              ) : null}
-            </div>
+        {layout === "stage-only" ? null : (
+          <aside
+            className={cn(
+              "border-t bg-background p-5 md:p-6",
+              layout === "split" ? "lg:border-l lg:border-t-0" : "",
+            )}
+          >
+            <div className="flex h-full flex-col gap-6">
+              {header}
+              {controls}
 
-            <StoryControls
-              choices={choices}
-              choose={choose}
-              ending={ending}
-              prompt={
-                currentNode.prompt ??
-                (ending
-                  ? (story.labels?.endingPrompt ?? "This branch is complete.")
-                  : (story.labels?.choosePrompt ?? "Choose what happens next."))
-              }
-              completedLabel={
-                story.labels?.completedBranch ??
-                "Restart to explore another branch, or go back to choose a different path."
-              }
-            />
-
-            <div className="mt-auto space-y-5">
-              <div className="flex flex-wrap gap-3">
-                <Button type="button" variant="outline" onClick={goBack} disabled={!canGoBack}>
-                  {story.labels?.back ?? "Go back"}
-                </Button>
-                <Button type="button" variant="secondary" onClick={restart}>
-                  {story.labels?.restart ?? "Restart"}
-                </Button>
+              <div className="mt-auto space-y-5">
+                {actions}
+                {progress}
+                {trail}
               </div>
-              <StoryProgress value={progress} />
-              <StoryPathTrail story={story} history={history} />
             </div>
-          </div>
-        </aside>
+          </aside>
+        )}
       </div>
     </section>
-  );
-}
-
-export type StoryControlsProps = {
-  choices: StoryChoice[];
-  choose: (choiceId: string) => void;
-  ending: boolean;
-  prompt: string;
-  completedLabel: string;
-};
-
-export function StoryControls({
-  choices,
-  choose,
-  ending,
-  prompt,
-  completedLabel,
-}: StoryControlsProps) {
-  return (
-    <div className="space-y-4">
-      <p className="text-sm font-medium">{prompt}</p>
-      {choices.length > 0 ? (
-        <div className="grid gap-3">
-          {choices.map((choice) => (
-            <Button
-              key={choice.id}
-              type="button"
-              variant="outline"
-              className="h-auto justify-start whitespace-normal px-4 py-3 text-left"
-              onClick={() => choose(choice.id)}
-              disabled={choice.disabled}
-            >
-              <span className="grid gap-1">
-                <span>{choice.label}</span>
-                {choice.description ? (
-                  <span className="text-sm font-normal text-muted-foreground">
-                    {choice.description}
-                  </span>
-                ) : null}
-              </span>
-            </Button>
-          ))}
-        </div>
-      ) : ending ? (
-        <p className="text-sm text-muted-foreground">{completedLabel}</p>
-      ) : null}
-    </div>
-  );
-}
-
-export type StoryPathTrailProps<TData extends StoryNodeData = StoryNodeData> = {
-  story: StoryDocument<TData>;
-  history: StoryHistoryEntry<TData>[];
-};
-
-export function StoryPathTrail<TData extends StoryNodeData = StoryNodeData>({
-  story,
-  history,
-}: StoryPathTrailProps<TData>) {
-  return (
-    <ol className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-      {history.map((entry, index) => {
-        const node = getStoryNode(story, entry.nodeId);
-
-        return (
-          <li
-            key={`${entry.nodeId}-${index}`}
-            className={cn(
-              "rounded-md border px-2.5 py-1",
-              index === history.length - 1 ? "border-foreground text-foreground" : "border-border",
-            )}
-            aria-current={index === history.length - 1 ? "step" : undefined}
-          >
-            {node.title}
-          </li>
-        );
-      })}
-    </ol>
   );
 }

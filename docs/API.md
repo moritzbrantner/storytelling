@@ -20,9 +20,19 @@ This reference tracks the package exports that are intended for consumers.
 - `serializeStoryPath(value)` and `parseStoryPath(input)` convert choice ids to and from URL query strings.
 - `createStoryPathState(story, options)` builds a reusable resolved path state object.
 - `useStoryPathState(story, options)` provides controlled or uncontrolled headless React path state for custom authoring UIs.
-- `StoryPlayer` renders focused branching playback.
-- `StoryScroller` renders either a story-backed scroll experience or custom scroll scenes, with optional `autoplay` pacing.
-- `StoryContent`, `StoryControls`, `StoryProgress`, `StoryMinimap`, and `StoryStageFrame` expose composable UI pieces.
+- `useStoryRuntime(story, options)` provides reusable player-grade state, labels, actions, and `StoryRenderProps`.
+- `createStoryRenderProps(...)`, `buildPathFromHistory(...)`,
+  `getHistoryChoiceIds(...)`, and `createStoryPathStateFromHistory(...)`
+  expose shared runtime helpers for custom adapters.
+- `StoryPlayer` renders focused branching playback and accepts render slots for
+  stage, header, controls, actions, progress, and trail.
+- `StoryScroller` renders either a story-backed scroll experience or custom
+  scroll scenes, with optional `autoplay` pacing and story-backed render slots.
+- `StoryScrollTimeline` renders generic scroll scenes without requiring a story
+  document.
+- `StoryContent`, `StoryChoiceList`, `StoryChoicePanel`, `StoryControls`,
+  `StoryActionBar`, `StoryProgress`, `StoryMinimap`, and `StoryStageFrame`
+  expose composable UI pieces.
 - `createStoryRendererRegistry(...)`, `getStoryRendererKey(...)`, and `getStoryStageProps(...)` connect serializable stage descriptors to renderer components.
 
 ### Validation Modes
@@ -49,6 +59,24 @@ This reference tracks the package exports that are intended for consumers.
   `onStopAtChange`, and returns `stopAt` plus `setStopAt`.
 - With `autoAdvanceLinearNodes`, `goBack()` moves to the previous generated
   linear node by setting `stopAt`.
+- `useStoryRuntime` builds on `useStoryPathState` and returns `story`, `state`,
+  `renderProps`, default labels, normalized progress, and navigation actions for
+  custom player layouts.
+
+### Composable React UI
+
+- `StoryPlayer` accepts `layout: "split" | "stacked" | "stage-only"`.
+- `StoryPlayer` render slots receive full `StoryRenderProps`:
+  `renderStage`, `renderHeader`, `renderControls`, `renderActions`,
+  `renderProgress`, and `renderTrail`.
+- `StoryControls` now prefers `onChoose` and `isEnding`; `choose` and `ending`
+  remain as compatibility aliases.
+- `StoryChoiceList` renders choice buttons, `StoryChoicePanel` renders the
+  scroller overlay, `StoryActionBar` renders back/restart controls, and
+  `StoryPathTrail` renders the visited path.
+- `StoryContent` accepts `renderers` and `renderBlock`. Built-in content blocks
+  still render by default, and custom block types can be rendered by adding a
+  keyed renderer.
 
 ### Story Patches
 
@@ -69,6 +97,17 @@ This reference tracks the package exports that are intended for consumers.
 - Tapping Arrow Up or Arrow Down for less than `300ms` scrolls by `10` scene units on release; holding past that threshold scrolls smoothly at `20` scene units per second.
 - Arrow Right and Arrow Left jump to the next or previous scene.
 - Autoscroll is disabled when the user prefers reduced motion.
+
+### `StoryScrollTimeline`
+
+- `StoryScrollTimeline` is the generic scroll scene player used by
+  `StoryScroller`.
+- `buildScrollTimeline(scenes, transition, reducedMotion?)` returns timeline
+  entries with start/body/end units.
+- `getScrollTransitionStyles(transition, progress)` returns active and preview
+  styles for custom scroll renderers.
+- `useStoryScrollTimeline({ scenes, transition, reducedMotion })` returns the
+  computed timeline, total units, and reduced-motion state.
 
 ### `StoryScroller` Transitions
 
@@ -93,6 +132,9 @@ This reference tracks the package exports that are intended for consumers.
 - Story-backed scrollers allow branch re-selection by default when a user
   scrolls back to an answered branch scene. Set `allowBranchReselection={false}`
   to keep those branch choices locked after a path has been selected.
+- Story-backed scrollers accept `renderScene`, `renderChoicePanel`, and
+  `renderMinimap` slots. `renderScene` receives `StoryRenderProps` plus the
+  active scroll scene render props.
 
 ## `./media`
 

@@ -11,7 +11,7 @@ Three-friendly rendering helpers.
 - `compileStory(story)` / `enumerateStoryPaths(story, options)`
 - `analyzeStory(story, options)` / `applyStoryPatch(story, patch, options)`
 - `serializeStoryPath(...)` / `parseStoryPath(...)`
-- `StoryPlayer`, `StoryControls`, `StoryScroller`, `StoryProgress`, and `StoryMinimap`
+- `useStoryRuntime(...)`, `StoryPlayer`, `StoryControls`, `StoryScroller`, `StoryScrollTimeline`, `StoryProgress`, and `StoryMinimap`
 - `createStoryRendererRegistry(...)`, `getStoryRendererKey(...)`, and `getStoryStageProps(...)`
 - `@moritzbrantner/storytelling/media` for media-oriented stage helpers
 - `@moritzbrantner/storytelling/workflow` for workflow-editor document conversion
@@ -311,6 +311,67 @@ controls step backward through auto-advanced linear nodes.
 Story-backed scrollers let users pick again by default when they scroll back to
 an answered branch scene. Pass `allowBranchReselection={false}` to lock the
 selected path instead.
+
+### Composable UI
+
+Use `useStoryRuntime()` when the default `StoryPlayer` layout is too opinionated
+but you still want the same path state, labels, actions, and `StoryRenderProps`.
+
+```tsx
+import { StoryStageFrame, useStoryRuntime } from "@moritzbrantner/storytelling";
+
+function CustomPlayer({ story }) {
+  const runtime = useStoryRuntime(story);
+
+  return (
+    <main>
+      <StoryStageFrame {...runtime.renderProps} />
+      {runtime.choices.map((choice) => (
+        <button key={choice.id} type="button" onClick={() => runtime.choose(choice.id)}>
+          {choice.label}
+        </button>
+      ))}
+    </main>
+  );
+}
+```
+
+`StoryPlayer` also accepts slots for targeted customization without replacing
+the whole component:
+
+```tsx
+<StoryPlayer
+  story={story}
+  layout="stacked"
+  renderControls={(props) => <CustomChoices choices={props.choices} onChoose={props.choose} />}
+/>
+```
+
+`StoryContent` can render custom serializable blocks by type.
+
+```tsx
+<StoryContent
+  content={node.content}
+  renderers={{
+    chart: ({ block }) => <Chart data={(block as { data: number[] }).data} />,
+  }}
+/>
+```
+
+Use `StoryScrollTimeline` directly for scroll-driven scenes that do not need a
+story document.
+
+```tsx
+<StoryScrollTimeline
+  scenes={[
+    {
+      id: "intro",
+      title: "Intro",
+      render: ({ progress }) => <IntroScene progress={progress} />,
+    },
+  ]}
+/>
+```
 
 ## Example website
 
