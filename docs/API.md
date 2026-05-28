@@ -4,10 +4,10 @@ This reference tracks the package exports that are intended for consumers.
 
 ## Root Export
 
-- `defineStory(story)` validates and returns a serializable `StoryDocument`.
-- `validateStory(story)` and `assertStoryDocument(story)` throw `StoryValidationError` when invalid.
-- `validateStoryDocument(story)` returns `StoryValidationIssue[]` without throwing.
-- `resolveStoryPath(story, options)` resolves the active node path for selected choice ids.
+- `defineStory(story, options?)` validates and returns a serializable `StoryDocument`.
+- `validateStory(story, options?)` and `assertStoryDocument(story, options?)` throw `StoryValidationError` when invalid.
+- `validateStoryDocument(story, options?)` returns `StoryValidationIssue[]` without throwing.
+- `resolveStoryPath(story, options)` resolves the active node path for selected choice ids and reports consumed, unconsumed, and invalid choice ids.
 - `buildStoryTimeline(story, options)` converts a resolved path into frame ranges.
 - `compileStory(story)` returns node and edge lookups for authoring tools.
 - `getStoryBranches(compiledStory)` returns nodes with multiple enabled outgoing choices.
@@ -24,6 +24,41 @@ This reference tracks the package exports that are intended for consumers.
 - `StoryScroller` renders either a story-backed scroll experience or custom scroll scenes, with optional `autoplay` pacing.
 - `StoryContent`, `StoryControls`, `StoryProgress`, `StoryMinimap`, and `StoryStageFrame` expose composable UI pieces.
 - `createStoryRendererRegistry(...)`, `getStoryRendererKey(...)`, and `getStoryStageProps(...)` connect serializable stage descriptors to renderer components.
+
+### Validation Modes
+
+- Validation defaults to `mode: "compat"` for existing documents.
+- Pass `{ mode: "strict" }` to `defineStory`, `validateStory`,
+  `assertStoryDocument`, or `validateStoryDocument` to reject blank strings,
+  invalid ids, nodes that declare both `next` and `choices`, invalid content
+  blocks, and invalid numeric durations.
+- Strict ids must match `/^[A-Za-z0-9][A-Za-z0-9._:-]*$/`.
+- Strict numeric constraints are `durationInFrames >= 1`,
+  `transition.durationInFrames >= 0`, and `scrollUnits > 0`.
+- `analyzeStory(story)` reports strict-only validation problems as warnings.
+  Use `analyzeStory(story, { validationMode: "strict" })` to report them as
+  errors.
+
+### Path State
+
+- `ResolvedStoryPath` includes `consumedChoiceIds`, `unconsumedChoiceIds`, and
+  `stoppedReason`.
+- `stoppedReason` is one of `ending`, `awaiting-choice`, `invalid-choice`,
+  `stop-at`, or `max-steps`.
+- `useStoryPathState` accepts `stopAt`, `defaultStopAt`, and
+  `onStopAtChange`, and returns `stopAt` plus `setStopAt`.
+- With `autoAdvanceLinearNodes`, `goBack()` moves to the previous generated
+  linear node by setting `stopAt`.
+
+### Story Patches
+
+- `applyStoryPatch` throws for missing nodes or choices by default. Pass
+  `{ onMissing: "ignore" }` for legacy no-op behavior.
+- Use `{ type: "rename-node", nodeId, nextNodeId }` to change a node id. This
+  updates `openingNodeId`, `next`, and choice targets.
+- `update-node` rejects `fields.id`; callers must use `rename-node`.
+- Removing the opening node requires `nextOpeningNodeId` unless no nodes remain.
+- `validate: true` honors `validationMode`.
 
 ### `StoryScroller` Autoscroll
 
@@ -53,19 +88,24 @@ This reference tracks the package exports that are intended for consumers.
 - `blur` accepts `maxBlur`.
 - Existing `{ type: "none" }` and `{ type: "fade", scrollUnits }` values remain compatible.
 - Animated transition previews are disabled when the user prefers reduced motion.
+- Custom `StoryScrollScene` ids and titles are validated in development.
+- Numeric choice hotkeys are scoped to the focused scroller region.
 
 ## `./media`
 
 - `StorySubtitleFile`, `StoryAudioFile`, and `StoryVideoFile` render media-focused story stages.
 - `createSubtitleStoryScene(...)`, `createAudioStoryScene(...)`, and `createVideoStoryScene(...)` create registry-ready web stage components.
 - `parseSubtitleText(...)` and `formatSubtitleTime(...)` expose subtitle parsing utilities.
+- Subtitle parsing skips cues with invalid or non-increasing time ranges.
 
 ## `./workflow`
 
 - `storyToWorkflowDocument(story, options)` converts story nodes and edges into a workflow-editor compatible document.
 - `workflowDocumentToStory(document, options)` converts that document shape back into a `StoryDocument`.
 - `createStoryWorkflowNodeTemplates()` returns a minimal story-node template for workflow-editor palettes.
-- `storyToWorkflowDocument` accepts `positions`, `direction`, and `includeDiagnostics` layout options for editor roundtrips.
+- `storyToWorkflowDocument` accepts `positions`, `direction`, `includeDiagnostics`, and `allowInvalid` layout options for editor roundtrips.
+- Use `{ allowInvalid: true, includeDiagnostics: true }` to build workflow
+  documents from draft stories that do not pass graph validation.
 
 ## `./timeline`
 
@@ -73,12 +113,17 @@ This reference tracks the package exports that are intended for consumers.
 - `applyTimelineTimingsToStory(story, document, options)` writes edited item durations back to matching story nodes.
 - `createStoryTimelineExtension()` returns a lightweight extension descriptor for story scene items.
 - `storyToTimelineEditorDocument` accepts `includeBranchMarkers` to add branch and ending markers alongside scene markers.
+- Timeline `fps` must be finite and greater than `0`.
+- When multiple timeline items target the same node, the last matching item
+  determines that node's duration.
 
 ## `./remotion`
 
 - `getStoryCompositionProps(story, options)` creates Remotion composition metadata from a story path.
 - `StoryRemotionComposition` renders frame-synced scenes.
 - `StoryRemotionSceneFrame`, `StoryRemotionContent`, `StoryRemotionProgress`, and `StoryRemotionTransition` expose default Remotion building blocks.
+- Remotion `fps` must be finite and greater than `0`; scene progress is clamped
+  to `0..1`.
 
 ## `./three`
 

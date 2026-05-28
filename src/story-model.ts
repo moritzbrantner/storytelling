@@ -100,6 +100,9 @@ export type ResolvedStoryPath<TData extends StoryNodeData = StoryNodeData> = {
   currentNode: StoryNode<TData>;
   completed: boolean;
   stoppedAt?: string;
+  consumedChoiceIds?: string[];
+  unconsumedChoiceIds?: string[];
+  stoppedReason?: "ending" | "awaiting-choice" | "invalid-choice" | "stop-at" | "max-steps";
 };
 
 export type StoryTimelineScene<TData extends StoryNodeData = StoryNodeData> = {

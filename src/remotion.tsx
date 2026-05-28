@@ -40,13 +40,29 @@ export type StoryCompositionOptions = {
   height?: number;
 };
 
+function resolveRemotionFps(fps: number | undefined) {
+  if (fps === undefined) {
+    return undefined;
+  }
+
+  if (!Number.isFinite(fps) || fps <= 0) {
+    throw new Error("Story Remotion fps must be finite and greater than 0.");
+  }
+
+  return fps;
+}
+
+function clampProgress(value: number) {
+  return Math.min(Math.max(value, 0), 1);
+}
+
 export function getStoryCompositionProps<TData extends StoryNodeData>(
   story: StoryDocument<TData>,
   options: StoryCompositionOptions = {},
 ) {
   const timeline = buildStoryTimeline(story, {
     choiceIds: options.choiceIds,
-    fps: options.fps,
+    fps: resolveRemotionFps(options.fps),
   });
   const id =
     options.id ??
@@ -225,6 +241,11 @@ export function StoryRemotionTransition({
   children: ReactNode;
 }) {
   const transitionFrames = Math.min(transitionInFrames, Math.floor(durationInFrames / 2));
+
+  if (transitionFrames <= 0) {
+    return <AbsoluteFill>{children}</AbsoluteFill>;
+  }
+
   const opacity = interpolate(
     frame,
     [0, transitionFrames, durationInFrames - transitionFrames, durationInFrames],
@@ -314,7 +335,7 @@ export function StoryRemotionComposition<TData extends StoryNodeData = StoryNode
 }: StoryRemotionCompositionProps<TData>) {
   const story = validateStory(input);
   const absoluteFrame = useCurrentFrame();
-  const timeline = buildStoryTimeline(story, { choiceIds, fps: layout?.fps });
+  const timeline = buildStoryTimeline(story, { choiceIds, fps: resolveRemotionFps(layout?.fps) });
 
   return (
     <AbsoluteFill>
@@ -353,7 +374,7 @@ export function StoryRemotionComposition<TData extends StoryNodeData = StoryNode
           absoluteFrame,
           durationInFrames: scene.durationInFrames,
           fps: timeline.fps,
-          sceneProgress: frame / Math.max(scene.durationInFrames, 1),
+          sceneProgress: clampProgress(frame / Math.max(scene.durationInFrames, 1)),
           timelineScene: scene,
         };
 

@@ -75,6 +75,13 @@ import { validateStoryDocument } from "@moritzbrantner/storytelling";
 const issues = validateStoryDocument(story);
 ```
 
+Validation defaults to compatibility mode for existing documents. Pass
+`{ mode: "strict" }` to `defineStory()`, `validateStory()`,
+`assertStoryDocument()`, or `validateStoryDocument()` when an editor or release
+process should reject blank strings, invalid ids, nodes with both `next` and
+`choices`, invalid content blocks, and unsafe numeric durations. `analyzeStory()`
+reports those strict-only issues as authoring warnings by default.
+
 Use `compileStory()` and `enumerateStoryPaths()` when an authoring UI needs graph
 metadata, branch lists, endings, or all selectable routes through a document.
 
@@ -83,7 +90,10 @@ metadata, branch lists, endings, or all selectable routes through a document.
 Use `analyzeStory()` when an editor needs validation errors, authoring warnings,
 reachability, and metrics without throwing on draft documents. Use
 `applyStoryPatch()` for immutable story edits while an editor keeps temporary
-draft state.
+draft state. Patch operations throw for missing nodes or choices by default; pass
+`{ onMissing: "ignore" }` for legacy no-op behavior. Use `rename-node` to change
+a node id so opening-node, `next`, and choice-target references are updated
+together.
 
 ```ts
 import { analyzeStory, applyStoryPatch } from "@moritzbrantner/storytelling";
@@ -93,6 +103,12 @@ const draft = applyStoryPatch(story, {
   type: "add-choice",
   nodeId: "wake",
   choice: { id: "wait", label: "Wait", target: "ending" },
+});
+
+const renamed = applyStoryPatch(story, {
+  type: "rename-node",
+  nodeId: "ending",
+  nextNodeId: "finale",
 });
 ```
 
@@ -286,7 +302,11 @@ const [running, setRunning] = useState(true);
 Both `StoryPlayer` and story-backed `StoryScroller` support controlled choice
 state with `choiceIds`, `defaultChoiceIds`, and `onChoiceIdsChange`. Use
 `serializeStoryPath()` and `parseStoryPath()` to put the current path in a URL or
-share token.
+share token. `resolveStoryPath()` also reports `consumedChoiceIds`,
+`unconsumedChoiceIds`, and `stoppedReason` so editors can distinguish endings,
+awaiting choices, invalid choices, `stopAt`, and max-step limits. The headless
+`useStoryPathState()` hook accepts `stopAt`/`defaultStopAt`, which lets custom
+controls step backward through auto-advanced linear nodes.
 
 ## Example website
 
@@ -371,6 +391,12 @@ import { storyToWorkflowDocument } from "@moritzbrantner/storytelling/workflow";
 const workflowDocument = storyToWorkflowDocument(story);
 const timelineDocument = storyToTimelineEditorDocument(story, { choiceIds: ["answer"] });
 ```
+
+Use `storyToWorkflowDocument(story, { allowInvalid: true, includeDiagnostics: true })`
+when a workflow editor needs to display a draft story that does not yet pass
+validation. Timeline and Remotion adapters require finite positive `fps` values;
+when timeline timing data contains multiple items for one node, the last item
+wins.
 
 ## Adapter decision
 

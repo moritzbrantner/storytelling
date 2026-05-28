@@ -513,13 +513,13 @@ describe("@moritzbrantner/storytelling", () => {
     expect(stopped.stoppedAt).toBe("answer-node");
     expect(stopped.nodes.map((node) => node.id)).toEqual(["wake", "answer-node"]);
 
-    expect(() =>
-      resolveStoryPath(story, {
-        choiceIds: ["answer"],
-        autoAdvanceLinearNodes: true,
-        maxSteps: 1,
-      }),
-    ).toThrow("exceeded 1 steps");
+    const maxSteps = resolveStoryPath(story, {
+      choiceIds: ["answer"],
+      autoAdvanceLinearNodes: true,
+      maxSteps: 1,
+    });
+    expect(maxSteps.stoppedReason).toBe("max-steps");
+    expect(maxSteps.completed).toBe(false);
   });
 
   test("builds deterministic timelines with starts, ends, transitions, and total duration", () => {
@@ -733,6 +733,7 @@ describe("@moritzbrantner/storytelling", () => {
       screen.getByText("What should the operator do first?").closest(".absolute"),
     ).toBeTruthy();
 
+    screen.getByRole("region", { name: "Signal in the fog" }).focus();
     fireEvent.keyDown(window, { key: "2" });
 
     expect(

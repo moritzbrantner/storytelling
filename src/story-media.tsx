@@ -100,7 +100,10 @@ export function parseSubtitleText(
   input: string,
   format: StorySubtitleFileProps["format"] = "auto",
 ) {
-  const normalized = input.replace(/\r\n?/g, "\n").trim();
+  const normalized = input
+    .replace(/^\uFEFF/, "")
+    .replace(/\r\n?/g, "\n")
+    .trim();
 
   if (!normalized) {
     return [] as StorySubtitleCue[];
@@ -129,7 +132,8 @@ export function parseSubtitleText(
       resolvedFormat === "vtt" &&
       (lines[0]?.startsWith("NOTE") ||
         lines[0]?.startsWith("STYLE") ||
-        lines[0]?.startsWith("REGION"))
+        lines[0]?.startsWith("REGION") ||
+        lines[0]?.startsWith("X-TIMESTAMP-MAP"))
     ) {
       continue;
     }
@@ -151,7 +155,11 @@ export function parseSubtitleText(
     const startTimeInSeconds = parseSubtitleTimestamp(rawStart ?? "");
     const endTimeInSeconds = parseSubtitleTimestamp(rawEnd ?? "");
 
-    if (startTimeInSeconds === null || endTimeInSeconds === null) {
+    if (
+      startTimeInSeconds === null ||
+      endTimeInSeconds === null ||
+      endTimeInSeconds <= startTimeInSeconds
+    ) {
       continue;
     }
 

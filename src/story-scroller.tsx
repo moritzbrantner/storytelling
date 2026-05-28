@@ -30,6 +30,8 @@ import type {
 } from "./story-model";
 import type { StoryPathState } from "./story-state";
 
+const isDevelopment = process.env.NODE_ENV !== "production";
+
 export type StoryScrollSceneRenderProps<TData = unknown> = {
   value: number;
   progress: number;
@@ -186,6 +188,33 @@ const DEFAULT_SCROLL_TRANSITION_DIRECTION: StoryScrollDirection = "up";
 const DEFAULT_SCROLL_TRANSITION_FROM_SCALE = 0.92;
 const DEFAULT_SCROLL_TRANSITION_TO_SCALE = 1.06;
 const DEFAULT_SCROLL_TRANSITION_MAX_BLUR = 16;
+const MIN_SCROLL_TRANSITION_SCALE = 0.1;
+const MAX_SCROLL_TRANSITION_SCALE = 4;
+const MAX_SCROLL_TRANSITION_BLUR = 64;
+
+function validateStoryScrollScenes<TSceneData>(scenes: StoryScrollScene<TSceneData>[]) {
+  if (!isDevelopment) return;
+
+  const sceneIds = new Set<string>();
+
+  for (const [index, scene] of scenes.entries()) {
+    const scenePath = `scenes.${index}`;
+
+    if (scene.id.trim().length === 0) {
+      throw new Error(`StoryScroller ${scenePath}.id must not be blank.`);
+    }
+
+    if (sceneIds.has(scene.id)) {
+      throw new Error(`StoryScroller scene ids must be unique. Duplicate id "${scene.id}" found.`);
+    }
+
+    sceneIds.add(scene.id);
+
+    if (scene.title.trim().length === 0) {
+      throw new Error(`StoryScroller ${scenePath}.title must not be blank.`);
+    }
+  }
+}
 
 function getPrefersReducedMotion() {
   return (
@@ -382,11 +411,11 @@ function getScrollTransitionStyles(
       const fromScale =
         transition.fromScale === undefined || !Number.isFinite(transition.fromScale)
           ? DEFAULT_SCROLL_TRANSITION_FROM_SCALE
-          : transition.fromScale;
+          : clamp(transition.fromScale, MIN_SCROLL_TRANSITION_SCALE, MAX_SCROLL_TRANSITION_SCALE);
       const toScale =
         transition.toScale === undefined || !Number.isFinite(transition.toScale)
           ? DEFAULT_SCROLL_TRANSITION_TO_SCALE
-          : transition.toScale;
+          : clamp(transition.toScale, MIN_SCROLL_TRANSITION_SCALE, MAX_SCROLL_TRANSITION_SCALE);
       const activeScale = 1 + (toScale - 1) * normalizedProgress;
       const previewScale = fromScale + (1 - fromScale) * normalizedProgress;
 
@@ -409,7 +438,7 @@ function getScrollTransitionStyles(
       const maxBlur =
         transition.maxBlur === undefined || !Number.isFinite(transition.maxBlur)
           ? DEFAULT_SCROLL_TRANSITION_MAX_BLUR
-          : Math.max(transition.maxBlur, 0);
+          : clamp(transition.maxBlur, 0, MAX_SCROLL_TRANSITION_BLUR);
 
       return {
         activeStyle: {
@@ -571,6 +600,7 @@ function StoryScrollTimeline<TSceneData = unknown>({
   const keyboardScrollHoldStartedRef = useRef(false);
   const keyboardScrollHoldKeyRef = useRef<"ArrowDown" | "ArrowUp" | undefined>(undefined);
   const handledScrollTargetVersionRef = useRef<number | undefined>(undefined);
+  const lastActiveIndexRef = useRef<number | undefined>(undefined);
   const reducedMotion = useReducedMotion();
   const scrollValue = useMotionValue(0);
   const scrollProgress = useMotionValue(0);
@@ -582,6 +612,7 @@ function StoryScrollTimeline<TSceneData = unknown>({
     unit: 0,
   });
   const sceneCount = scenes.length;
+  validateStoryScrollScenes(scenes);
   const resolvedScrollInputScale = resolveScrollInputScale(scrollInputScale);
   const resolvedAutoplay = resolveStoryScrollAutoplay(autoplay);
   const reducedMotionEnabled = Boolean(reducedMotion) || getPrefersReducedMotion();
@@ -793,6 +824,11 @@ function StoryScrollTimeline<TSceneData = unknown>({
   ]);
 
   useEffect(() => {
+    if (lastActiveIndexRef.current === activeIndex) {
+      return;
+    }
+
+    lastActiveIndexRef.current = activeIndex;
     onActiveIndexChange?.(activeIndex);
   }, [activeIndex, onActiveIndexChange]);
 
@@ -873,6 +909,7 @@ function StoryScrollTimeline<TSceneData = unknown>({
       onKeyDown={handleKeyDown}
       onKeyUp={handleKeyUp}
       onBlur={() => stopKeyboardScrollHold()}
+      data-story-scroller-root
     >
       <div
         ref={scrollRef}
@@ -1243,6 +1280,7 @@ function StoryChoicePanel({
   restart,
   progress,
 }: StoryChoicePanelProps) {
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const revealProgress = clamp(
     (progress - STORY_BRANCH_REVEAL_START) / (STORY_BRANCH_REVEAL_END - STORY_BRANCH_REVEAL_START),
     0,
@@ -1256,6 +1294,17 @@ function StoryChoicePanel({
     }
 
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      const scrollerRoot = panelRef.current?.closest("[data-story-scroller-root]");
+      const activeElement = document.activeElement;
+
+      if (
+        !scrollerRoot ||
+        !(activeElement instanceof HTMLElement) ||
+        !scrollerRoot.contains(activeElement)
+      ) {
+        return;
+      }
+
       const target = event.target;
 
       if (
@@ -1294,7 +1343,10 @@ function StoryChoicePanel({
       }}
       aria-hidden={!isReady}
     >
-      <div className="pointer-events-auto rounded-lg border border-white/20 bg-background/92 p-4 shadow-[0_18px_48px_rgba(0,0,0,0.24)] backdrop-blur-md">
+      <div
+        ref={panelRef}
+        className="pointer-events-auto rounded-lg border border-white/20 bg-background/92 p-4 shadow-[0_18px_48px_rgba(0,0,0,0.24)] backdrop-blur-md"
+      >
         <p className="text-sm font-medium">{prompt}</p>
         {choices.length > 0 ? (
           <div className="mt-4 grid gap-3 md:grid-cols-[repeat(auto-fit,minmax(13rem,1fr))]">

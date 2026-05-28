@@ -69,19 +69,31 @@ export type ApplyTimelineTimingsOptions = {
 
 const DEFAULT_STORY_TIMELINE_FPS = 30;
 
+function resolveTimelineFps(fps: number | undefined) {
+  const resolvedFps = fps ?? DEFAULT_STORY_TIMELINE_FPS;
+
+  if (!Number.isFinite(resolvedFps) || resolvedFps <= 0) {
+    throw new Error("Story timeline fps must be finite and greater than 0.");
+  }
+
+  return resolvedFps;
+}
+
 function framesToMs(frames: number, fps: number) {
   return (frames / fps) * 1000;
 }
 
 function msToFrames(ms: number, fps: number) {
-  return Math.max(1, Math.round((ms / 1000) * fps));
+  const safeMs = Number.isFinite(ms) && ms > 0 ? ms : 1;
+
+  return Math.max(1, Math.round((safeMs / 1000) * fps));
 }
 
 export function storyToTimelineEditorDocument<TData extends StoryNodeData>(
   story: StoryDocument<TData>,
   options: StoryToTimelineDocumentOptions = {},
 ): StoryTimelineDocument<TData> {
-  const fps = options.fps ?? DEFAULT_STORY_TIMELINE_FPS;
+  const fps = resolveTimelineFps(options.fps);
   const timeline = buildStoryTimeline(story, {
     choiceIds: options.choiceIds,
     fps,
@@ -167,7 +179,7 @@ export function applyTimelineTimingsToStory<TData extends StoryNodeData>(
   document: StoryTimelineDocument<TData>,
   options: ApplyTimelineTimingsOptions = {},
 ): StoryDocument<TData> {
-  const fps = options.fps ?? DEFAULT_STORY_TIMELINE_FPS;
+  const fps = resolveTimelineFps(options.fps);
   const durationByNodeId = new Map<string, number>();
 
   for (const track of document.tracks) {

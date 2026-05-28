@@ -9,7 +9,9 @@ import {
   createStoryNodeLookup,
   getStoryChoices,
   validateStoryDocument,
+  type StoryValidationIssue,
   type StoryValidationIssueCode,
+  type StoryValidationMode,
 } from "./story-validation";
 
 export type StoryAuthoringSeverity = "info" | "warning" | "error";
@@ -52,6 +54,7 @@ export type AnalyzeStoryOptions = {
   maxPaths?: number;
   wordsPerMinute?: number;
   requireChoiceDescriptions?: boolean;
+  validationMode?: StoryValidationMode;
 };
 
 export type StoryAuthoringReport<TData extends StoryNodeData = StoryNodeData> = {
@@ -67,6 +70,22 @@ export type StoryAuthoringReport<TData extends StoryNodeData = StoryNodeData> = 
 
 const DEFAULT_MAX_PATHS = 1000;
 const DEFAULT_WORDS_PER_MINUTE = 220;
+
+function getIssueKey(issue: Pick<StoryValidationIssue, "code" | "path" | "nodeId" | "choiceId">) {
+  return [issue.code, issue.path, issue.nodeId ?? "", issue.choiceId ?? ""].join("\0");
+}
+
+function mapValidationIssue(issue: StoryValidationIssue, severity: StoryAuthoringSeverity) {
+  return {
+    code: issue.code,
+    severity,
+    message: issue.message,
+    path: issue.path,
+    nodeId: issue.nodeId,
+    choiceId: issue.choiceId,
+    target: issue.target,
+  } satisfies StoryAuthoringIssue;
+}
 
 function getChoiceTarget(choice: StoryChoice) {
   return choice.target;
@@ -182,16 +201,20 @@ export function analyzeStory<TData extends StoryNodeData>(
 ): StoryAuthoringReport<TData> {
   const maxPaths = options.maxPaths ?? DEFAULT_MAX_PATHS;
   const wordsPerMinute = options.wordsPerMinute ?? DEFAULT_WORDS_PER_MINUTE;
-  const validationIssues = validateStoryDocument(story);
-  const issues: StoryAuthoringIssue[] = validationIssues.map((issue) => ({
-    code: issue.code,
-    severity: "error",
-    message: issue.message,
-    path: issue.path,
-    nodeId: issue.nodeId,
-    choiceId: issue.choiceId,
-    target: issue.target,
-  }));
+  const validationMode = options.validationMode ?? "compat";
+  const validationIssues = validateStoryDocument(story, { mode: validationMode });
+  const issues: StoryAuthoringIssue[] = validationIssues.map((issue) =>
+    mapValidationIssue(issue, "error"),
+  );
+
+  if (!options.validationMode) {
+    const validationIssueKeys = new Set(validationIssues.map(getIssueKey));
+    const strictWarnings = validateStoryDocument(story, { mode: "strict" }).filter(
+      (issue) => !validationIssueKeys.has(getIssueKey(issue)),
+    );
+
+    issues.push(...strictWarnings.map((issue) => mapValidationIssue(issue, "warning")));
+  }
   const reachability = getStoryReachability(story);
   let branches: StoryNode<TData>[] = [];
   let endings: StoryNode<TData>[] = [];

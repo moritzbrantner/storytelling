@@ -36,6 +36,7 @@ export function resolveStoryPath<TData extends StoryNodeData>(
   const nodes: StoryNode<TData>[] = [];
   const history: StoryHistoryEntry<TData>[] = [];
   const choiceIds = options.choiceIds ?? [];
+  const consumedChoiceIds: string[] = [];
   const autoAdvanceLinearNodes = options.autoAdvanceLinearNodes ?? false;
   const maxSteps = options.maxSteps ?? story.nodes.length * 2;
   let currentNode = nodeLookup.get(story.openingNodeId)!;
@@ -52,6 +53,9 @@ export function resolveStoryPath<TData extends StoryNodeData>(
         currentNode,
         completed: true,
         stoppedAt: options.stopAt,
+        consumedChoiceIds,
+        unconsumedChoiceIds: choiceIds.slice(choiceIndex),
+        stoppedReason: "stop-at",
       };
     }
 
@@ -62,12 +66,29 @@ export function resolveStoryPath<TData extends StoryNodeData>(
         history,
         currentNode,
         completed: true,
+        consumedChoiceIds,
+        unconsumedChoiceIds: choiceIds.slice(choiceIndex),
+        stoppedReason: choiceIndex < choiceIds.length ? "invalid-choice" : "ending",
       };
     }
 
-    let selectedChoice = choiceIds[choiceIndex]
-      ? choices.find((choice) => choice.id === choiceIds[choiceIndex] && !choice.disabled)
-      : undefined;
+    const requestedChoiceId = choiceIds[choiceIndex];
+    let selectedChoice =
+      requestedChoiceId !== undefined
+        ? choices.find((choice) => choice.id === requestedChoiceId && !choice.disabled)
+        : undefined;
+
+    if (requestedChoiceId !== undefined && !selectedChoice) {
+      return {
+        nodes,
+        history,
+        currentNode,
+        completed: false,
+        consumedChoiceIds,
+        unconsumedChoiceIds: choiceIds.slice(choiceIndex),
+        stoppedReason: "invalid-choice",
+      };
+    }
 
     if (!selectedChoice && autoAdvanceLinearNodes && !currentNode.choices?.length) {
       selectedChoice = choices.find((choice) => !choice.disabled);
@@ -79,10 +100,14 @@ export function resolveStoryPath<TData extends StoryNodeData>(
         history,
         currentNode,
         completed: false,
+        consumedChoiceIds,
+        unconsumedChoiceIds: choiceIds.slice(choiceIndex),
+        stoppedReason: "awaiting-choice",
       };
     }
 
-    if (choiceIds[choiceIndex] === selectedChoice.id) {
+    if (requestedChoiceId === selectedChoice.id) {
+      consumedChoiceIds.push(selectedChoice.id);
       choiceIndex += 1;
     }
 
@@ -93,6 +118,9 @@ export function resolveStoryPath<TData extends StoryNodeData>(
         history,
         currentNode,
         completed: false,
+        consumedChoiceIds,
+        unconsumedChoiceIds: choiceIds.slice(choiceIndex),
+        stoppedReason: "invalid-choice",
       };
     }
 
@@ -105,7 +133,15 @@ export function resolveStoryPath<TData extends StoryNodeData>(
     });
   }
 
-  throw new Error(`Story "${story.id}" exceeded ${maxSteps} steps while resolving a path.`);
+  return {
+    nodes,
+    history,
+    currentNode,
+    completed: false,
+    consumedChoiceIds,
+    unconsumedChoiceIds: choiceIds.slice(choiceIndex),
+    stoppedReason: "max-steps",
+  };
 }
 
 export function buildStoryTimeline<TData extends StoryNodeData>(

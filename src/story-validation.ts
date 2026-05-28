@@ -4,19 +4,39 @@ const isDevelopment = process.env.NODE_ENV !== "production";
 
 export type StoryValidationIssueCode =
   | "empty-story-id"
+  | "blank-story-id"
   | "empty-story-title"
+  | "blank-story-title"
   | "empty-node-list"
   | "empty-opening-node-id"
   | "missing-opening-node"
   | "empty-node-id"
+  | "blank-node-id"
+  | "invalid-node-id"
   | "duplicate-node-id"
   | "empty-node-title"
+  | "blank-node-title"
   | "empty-choice-id"
+  | "blank-choice-id"
+  | "invalid-choice-id"
   | "duplicate-choice-id"
   | "empty-choice-label"
+  | "blank-choice-label"
+  | "blank-choice-target"
+  | "node-has-next-and-choices"
+  | "invalid-node-duration"
+  | "invalid-node-scroll-units"
+  | "invalid-transition-duration"
+  | "invalid-content-block"
   | "missing-choice-target"
   | "missing-next-target"
   | "story-cycle";
+
+export type StoryValidationMode = "compat" | "strict";
+
+export type StoryValidationOptions = {
+  mode?: StoryValidationMode;
+};
 
 export type StoryValidationIssue = {
   code: StoryValidationIssueCode;
@@ -48,6 +68,48 @@ function addIssue(
   issue: Omit<StoryValidationIssue, "storyId"> & { storyId?: string },
 ) {
   issues.push(issue);
+}
+
+const STRICT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
+
+function isStrictMode(options: StoryValidationOptions | undefined) {
+  return options?.mode === "strict";
+}
+
+function isBlankString(value: string) {
+  return value.length > 0 && value.trim().length === 0;
+}
+
+function isStrictId(value: string) {
+  return STRICT_ID_PATTERN.test(value);
+}
+
+function isValidFrameDuration(value: number | undefined, min: number) {
+  return value === undefined || (Number.isFinite(value) && Number.isInteger(value) && value >= min);
+}
+
+function isValidContentBlock(block: unknown) {
+  if (!block || typeof block !== "object") {
+    return false;
+  }
+
+  const record = block as Record<string, unknown>;
+
+  switch (record.type) {
+    case "paragraph":
+    case "heading":
+    case "quote":
+      return typeof record.text === "string";
+    case "list":
+      return Array.isArray(record.items) && record.items.every((item) => typeof item === "string");
+    case "image":
+      return typeof record.src === "string" && typeof record.alt === "string";
+    case "audio":
+    case "video":
+      return typeof record.src === "string";
+    default:
+      return false;
+  }
 }
 
 export function createStoryNodeLookup<TData extends StoryNodeData>(story: StoryDocument<TData>) {
@@ -95,9 +157,13 @@ export function isStoryEnding<TData extends StoryNodeData>(
   return getStoryChoices(story, node).length === 0;
 }
 
-export function validateStoryDocument<TData extends StoryNodeData>(story: StoryDocument<TData>) {
+export function validateStoryDocument<TData extends StoryNodeData>(
+  story: StoryDocument<TData>,
+  options: StoryValidationOptions = {},
+) {
   const issues: StoryValidationIssue[] = [];
   const storyId = getStoryId(story);
+  const strict = isStrictMode(options);
 
   if (story.id.length === 0) {
     addIssue(issues, {
@@ -105,12 +171,26 @@ export function validateStoryDocument<TData extends StoryNodeData>(story: StoryD
       message: "Story id must be non-empty.",
       path: "id",
     });
+  } else if (strict && isBlankString(story.id)) {
+    addIssue(issues, {
+      code: "blank-story-id",
+      message: "Story id must not be blank.",
+      path: "id",
+      storyId,
+    });
   }
 
   if (story.title.length === 0) {
     addIssue(issues, {
       code: "empty-story-title",
       message: `Story "${storyId}" must have a title.`,
+      path: "title",
+      storyId,
+    });
+  } else if (strict && isBlankString(story.title)) {
+    addIssue(issues, {
+      code: "blank-story-title",
+      message: `Story "${storyId}" title must not be blank.`,
       path: "title",
       storyId,
     });
@@ -146,6 +226,22 @@ export function validateStoryDocument<TData extends StoryNodeData>(story: StoryD
         path: `${nodePath}.id`,
         storyId,
       });
+    } else if (strict && isBlankString(node.id)) {
+      addIssue(issues, {
+        code: "blank-node-id",
+        message: "Story node ids must not be blank.",
+        path: `${nodePath}.id`,
+        storyId,
+        nodeId: node.id,
+      });
+    } else if (strict && !isStrictId(node.id)) {
+      addIssue(issues, {
+        code: "invalid-node-id",
+        message: `Story node id "${node.id}" must match ${STRICT_ID_PATTERN}.`,
+        path: `${nodePath}.id`,
+        storyId,
+        nodeId: node.id,
+      });
     } else if (nodeIds.has(node.id)) {
       addIssue(issues, {
         code: "duplicate-node-id",
@@ -166,6 +262,72 @@ export function validateStoryDocument<TData extends StoryNodeData>(story: StoryD
         storyId,
         nodeId: node.id,
       });
+    } else if (strict && isBlankString(node.title)) {
+      addIssue(issues, {
+        code: "blank-node-title",
+        message: `Story node "${node.id}" title must not be blank.`,
+        path: `${nodePath}.title`,
+        storyId,
+        nodeId: node.id,
+      });
+    }
+
+    if (strict && node.next && (node.choices?.length ?? 0) > 0) {
+      addIssue(issues, {
+        code: "node-has-next-and-choices",
+        message: `Story node "${node.id}" must not declare both next and choices.`,
+        path: nodePath,
+        storyId,
+        nodeId: node.id,
+      });
+    }
+
+    if (strict && !isValidFrameDuration(node.durationInFrames, 1)) {
+      addIssue(issues, {
+        code: "invalid-node-duration",
+        message: `Story node "${node.id}" durationInFrames must be a finite integer greater than or equal to 1.`,
+        path: `${nodePath}.durationInFrames`,
+        storyId,
+        nodeId: node.id,
+      });
+    }
+
+    if (
+      strict &&
+      node.scrollUnits !== undefined &&
+      (!Number.isFinite(node.scrollUnits) || node.scrollUnits <= 0)
+    ) {
+      addIssue(issues, {
+        code: "invalid-node-scroll-units",
+        message: `Story node "${node.id}" scrollUnits must be finite and greater than 0.`,
+        path: `${nodePath}.scrollUnits`,
+        storyId,
+        nodeId: node.id,
+      });
+    }
+
+    if (strict && !isValidFrameDuration(node.transition?.durationInFrames, 0)) {
+      addIssue(issues, {
+        code: "invalid-transition-duration",
+        message: `Story node "${node.id}" transition durationInFrames must be a finite integer greater than or equal to 0.`,
+        path: `${nodePath}.transition.durationInFrames`,
+        storyId,
+        nodeId: node.id,
+      });
+    }
+
+    if (strict) {
+      for (const [contentIndex, block] of (node.content ?? []).entries()) {
+        if (!isValidContentBlock(block)) {
+          addIssue(issues, {
+            code: "invalid-content-block",
+            message: `Story node "${node.id}" has an invalid content block.`,
+            path: `${nodePath}.content.${contentIndex}`,
+            storyId,
+            nodeId: node.id,
+          });
+        }
+      }
     }
 
     const choiceIds = new Set<string>();
@@ -179,6 +341,24 @@ export function validateStoryDocument<TData extends StoryNodeData>(story: StoryD
           path: `${choicePath}.id`,
           storyId,
           nodeId: node.id,
+        });
+      } else if (strict && isBlankString(choice.id)) {
+        addIssue(issues, {
+          code: "blank-choice-id",
+          message: `Choice ids must not be blank on node "${node.id}".`,
+          path: `${choicePath}.id`,
+          storyId,
+          nodeId: node.id,
+          choiceId: choice.id,
+        });
+      } else if (strict && !isStrictId(choice.id)) {
+        addIssue(issues, {
+          code: "invalid-choice-id",
+          message: `Choice id "${choice.id}" on "${node.id}" must match ${STRICT_ID_PATTERN}.`,
+          path: `${choicePath}.id`,
+          storyId,
+          nodeId: node.id,
+          choiceId: choice.id,
         });
       } else if (choiceIds.has(choice.id)) {
         addIssue(issues, {
@@ -201,6 +381,27 @@ export function validateStoryDocument<TData extends StoryNodeData>(story: StoryD
           storyId,
           nodeId: node.id,
           choiceId: choice.id,
+        });
+      } else if (strict && isBlankString(choice.label)) {
+        addIssue(issues, {
+          code: "blank-choice-label",
+          message: `Choice "${choice.id}" on "${node.id}" label must not be blank.`,
+          path: `${choicePath}.label`,
+          storyId,
+          nodeId: node.id,
+          choiceId: choice.id,
+        });
+      }
+
+      if (strict && isBlankString(choice.target)) {
+        addIssue(issues, {
+          code: "blank-choice-target",
+          message: `Choice "${choice.id}" on "${node.id}" target must not be blank.`,
+          path: `${choicePath}.target`,
+          storyId,
+          nodeId: node.id,
+          choiceId: choice.id,
+          target: choice.target,
         });
       }
     }
@@ -248,8 +449,11 @@ export function validateStoryDocument<TData extends StoryNodeData>(story: StoryD
   return issues;
 }
 
-export function assertStoryDocument<TData extends StoryNodeData>(story: StoryDocument<TData>) {
-  const issues = validateStoryDocument(story);
+export function assertStoryDocument<TData extends StoryNodeData>(
+  story: StoryDocument<TData>,
+  options: StoryValidationOptions = {},
+) {
+  const issues = validateStoryDocument(story, options);
 
   if (issues.length > 0) {
     throw new StoryValidationError(issues);
@@ -258,12 +462,18 @@ export function assertStoryDocument<TData extends StoryNodeData>(story: StoryDoc
   return story;
 }
 
-export function validateStory<TData extends StoryNodeData>(story: StoryDocument<TData>) {
-  return assertStoryDocument(story);
+export function validateStory<TData extends StoryNodeData>(
+  story: StoryDocument<TData>,
+  options: StoryValidationOptions = {},
+) {
+  return assertStoryDocument(story, options);
 }
 
-export function defineStory<TData extends StoryNodeData>(story: StoryDocument<TData>) {
-  return validateStory(story);
+export function defineStory<TData extends StoryNodeData>(
+  story: StoryDocument<TData>,
+  options: StoryValidationOptions = {},
+) {
+  return validateStory(story, options);
 }
 
 function collectStoryGraphCycles<TData extends StoryNodeData>(

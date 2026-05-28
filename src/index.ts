@@ -22,6 +22,8 @@ export {
   StoryValidationError,
   type StoryValidationIssue,
   type StoryValidationIssueCode,
+  type StoryValidationMode,
+  type StoryValidationOptions,
 } from "./story-validation";
 export {
   compileStory,

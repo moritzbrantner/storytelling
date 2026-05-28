@@ -1,5 +1,28 @@
 # @moritzbrantner/storytelling
 
+## Unreleased
+
+### Minor Changes
+
+- Add opt-in strict story validation for blank fields, invalid ids, ambiguous
+  `next` plus `choices` nodes, invalid content blocks, and unsafe numeric
+  durations.
+- Add path-resolution metadata for consumed choice ids, unconsumed choice ids,
+  and stop reasons.
+- Add `stopAt` support to `useStoryPathState`, including backward navigation
+  through auto-advanced linear stories.
+- Add `rename-node` story patches and make patch operations throw for missing
+  nodes or choices by default.
+
+### Patch Changes
+
+- Scope `StoryScroller` numeric hotkeys to the focused scroller and validate
+  custom scene ids/titles in development.
+- Harden Remotion and timeline adapters against invalid `fps`, zero-transition
+  Remotion scenes, and invalid timeline item durations.
+- Add draft-safe workflow conversion with `allowInvalid` and diagnostics.
+- Skip subtitle cues with invalid or non-increasing time ranges.
+
 ## 0.3.1
 
 ### Patch Changes

@@ -64,6 +64,7 @@ export type StoryWorkflowLayoutOptions = {
   positions?: Record<string, StoryWorkflowPosition>;
   direction?: "horizontal" | "vertical";
   includeDiagnostics?: boolean;
+  allowInvalid?: boolean;
 };
 
 export type StoryWorkflowDocumentToStoryOptions<TData extends StoryNodeData = StoryNodeData> = {
@@ -86,33 +87,82 @@ function getWorkflowOutputPort(choice: StoryChoice) {
   };
 }
 
+function getRawStoryChoices<TData extends StoryNodeData>(
+  story: StoryDocument<TData>,
+  node: StoryNode<TData>,
+) {
+  if (node.choices && node.choices.length > 0) {
+    return node.choices;
+  }
+
+  if (!node.next) {
+    return [];
+  }
+
+  return [
+    {
+      id: `${node.id}__continue`,
+      label: story.labels?.continue ?? "Continue",
+      target: node.next,
+    },
+  ];
+}
+
 export function storyToWorkflowDocument<TData extends StoryNodeData>(
   story: StoryDocument<TData>,
   layout: StoryWorkflowLayoutOptions = {},
 ): StoryWorkflowDocument<TData> {
-  const compiledStory = compileStory(story);
+  const compiledStory = layout.allowInvalid ? null : compileStory(story);
   const columnGap = layout.columnGap ?? 320;
   const rowGap = layout.rowGap ?? 180;
   const direction = layout.direction ?? "horizontal";
   const diagnostics = layout.includeDiagnostics ? analyzeStory(story).issues : [];
+  const graphNodes = compiledStory
+    ? compiledStory.nodes.map((entry) => ({
+        node: entry.node,
+        outgoing: entry.outgoing.map((edge) => ({
+          id: edge.id,
+          source: edge.source,
+          targetId: edge.target.id,
+          choice: edge.choice,
+          kind: edge.kind,
+          disabled: edge.disabled,
+        })),
+      }))
+    : story.nodes.map((node) => {
+        const kind =
+          node.choices && node.choices.length > 0 ? ("choice" as const) : ("next" as const);
+
+        return {
+          node,
+          outgoing: getRawStoryChoices(story, node).map((choice) => ({
+            id: `${node.id}:${choice.id}`,
+            source: node,
+            targetId: choice.target,
+            choice,
+            kind,
+            disabled: Boolean(choice.disabled),
+          })),
+        };
+      });
   const depths = new Map<string, number>([[story.openingNodeId, 0]]);
   const queue = [story.openingNodeId];
 
   while (queue.length > 0) {
     const nodeId = queue.shift()!;
     const depth = depths.get(nodeId) ?? 0;
-    const compiledNode = compiledStory.nodes.find((entry) => entry.node.id === nodeId);
+    const graphNode = graphNodes.find((entry) => entry.node.id === nodeId);
 
-    for (const edge of compiledNode?.outgoing ?? []) {
-      if (!depths.has(edge.target.id)) {
-        depths.set(edge.target.id, depth + 1);
-        queue.push(edge.target.id);
+    for (const edge of graphNode?.outgoing ?? []) {
+      if (!depths.has(edge.targetId)) {
+        depths.set(edge.targetId, depth + 1);
+        queue.push(edge.targetId);
       }
     }
   }
 
   const rowIndexes = new Map<number, number>();
-  const nodes = compiledStory.nodes.map((entry) => {
+  const nodes = graphNodes.map((entry) => {
     const depth = depths.get(entry.node.id) ?? 0;
     const row = rowIndexes.get(depth) ?? 0;
     const position = layout.positions?.[entry.node.id] ?? {
@@ -138,7 +188,11 @@ export function storyToWorkflowDocument<TData extends StoryNodeData>(
         opening: entry.node.id === story.openingNodeId,
         terminal: entry.outgoing.length === 0,
         ...(layout.includeDiagnostics
-          ? { diagnostics: diagnostics.filter((issue) => issue.nodeId === entry.node.id) }
+          ? {
+              diagnostics: diagnostics.filter(
+                (issue) => !issue.nodeId || issue.nodeId === entry.node.id,
+              ),
+            }
           : {}),
       },
     };
@@ -146,28 +200,30 @@ export function storyToWorkflowDocument<TData extends StoryNodeData>(
 
   return {
     nodes,
-    edges: compiledStory.edges.map((edge) => ({
-      id: edge.id,
-      sourceNodeId: edge.source.id,
-      sourcePortId: edge.choice.id,
-      targetNodeId: edge.target.id,
-      targetPortId: "in",
-      data: {
-        choiceId: edge.choice.id,
-        choiceLabel: edge.choice.label,
-        disabled: edge.choice.disabled,
-        kind: edge.kind,
-        ...(layout.includeDiagnostics
-          ? {
-              diagnostics: diagnostics.filter(
-                (issue) =>
-                  issue.nodeId === edge.source.id &&
-                  (issue.choiceId === edge.choice.id || issue.target === edge.target.id),
-              ),
-            }
-          : {}),
-      },
-    })),
+    edges: graphNodes
+      .flatMap((entry) => entry.outgoing)
+      .map((edge) => ({
+        id: edge.id,
+        sourceNodeId: edge.source.id,
+        sourcePortId: edge.choice.id,
+        targetNodeId: edge.targetId,
+        targetPortId: "in",
+        data: {
+          choiceId: edge.choice.id,
+          choiceLabel: edge.choice.label,
+          disabled: edge.choice.disabled,
+          kind: edge.kind,
+          ...(layout.includeDiagnostics
+            ? {
+                diagnostics: diagnostics.filter(
+                  (issue) =>
+                    issue.nodeId === edge.source.id &&
+                    (issue.choiceId === edge.choice.id || issue.target === edge.targetId),
+                ),
+              }
+            : {}),
+        },
+      })),
     viewport: { x: 0, y: 0, zoom: 1 },
   };
 }
