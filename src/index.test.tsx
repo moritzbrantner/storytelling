@@ -733,6 +733,55 @@ describe("@moritzbrantner/storytelling", () => {
     ).toBeTruthy();
   });
 
+  test("allows StoryScroller branch reselection by default after scrolling back", async () => {
+    const { container } = render(<StoryScroller story={story} pathChoiceIds={["answer"]} />);
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+
+    expect(viewport).toBeTruthy();
+    setScrollerGeometry(viewport!, 3);
+    scrollScrollerViewport(viewport!, 95);
+
+    const traceChoice = screen.getByRole<HTMLButtonElement>("button", { name: /Trace the source/ });
+    expect(traceChoice.disabled).toBe(false);
+    fireEvent.click(traceChoice);
+
+    expect(
+      await screen.findByText("The signal comes from a cove nobody has charted in decades."),
+    ).toBeTruthy();
+  });
+
+  test("can disable StoryScroller branch reselection after scrolling back", async () => {
+    const onChoiceIdsChange = vi.fn();
+    const { container } = render(
+      <StoryScroller
+        story={story}
+        pathChoiceIds={["answer"]}
+        allowBranchReselection={false}
+        onChoiceIdsChange={onChoiceIdsChange}
+      />,
+    );
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+
+    expect(viewport).toBeTruthy();
+    setScrollerGeometry(viewport!, 3);
+    scrollScrollerViewport(viewport!, 95);
+
+    expect(
+      screen.getByRole<HTMLButtonElement>("button", { name: /Answer immediately/ }).disabled,
+    ).toBe(true);
+    expect(
+      screen.getByRole<HTMLButtonElement>("button", { name: /Trace the source/ }).disabled,
+    ).toBe(true);
+
+    screen.getByRole("region", { name: "Signal in the fog" }).focus();
+    fireEvent.keyDown(window, { key: "2" });
+
+    expect(onChoiceIdsChange).not.toHaveBeenCalled();
+    expect(
+      screen.queryByText("The signal comes from a cove nobody has charted in decades."),
+    ).toBeNull();
+  });
+
   test("renders linear StoryScroller stories from the opening node", async () => {
     render(<StoryScroller story={linearStory} />);
 

@@ -84,6 +84,7 @@ export type StoryScrollerProps<
   pathChoiceIds?: string[];
   defaultChoiceIds?: string[];
   choiceIds?: string[];
+  allowBranchReselection?: boolean;
   className?: string;
   viewportClassName?: string;
   transition?: StoryScrollTransition;
@@ -164,6 +165,23 @@ function buildStoryPathStateFromHistory<TData extends StoryNodeData>(
     currentNode: path.currentNode,
     completed: path.completed,
   };
+}
+
+function getSelectedBranchChoiceId<TData extends StoryNodeData>(
+  story: StoryDocument<TData>,
+  history: StoryHistoryEntry<TData>[],
+  index: number,
+) {
+  const entry = history[index];
+  const nextEntry = history[index + 1];
+  if (!entry || !nextEntry?.choiceId) return undefined;
+
+  const node = getStoryNode(story, entry.nodeId);
+  const explicitChoices = node.choices ?? [];
+
+  return explicitChoices.some((choice) => choice.id === nextEntry.choiceId)
+    ? nextEntry.choiceId
+    : undefined;
 }
 
 function getStoryScrollerPageId(storyId: string, sceneId: string) {
@@ -1037,6 +1055,7 @@ function StoryDocumentScroller<TData extends StoryNodeData = StoryNodeData>({
   pathChoiceIds = [],
   defaultChoiceIds,
   choiceIds,
+  allowBranchReselection = true,
   className,
   viewportClassName,
   transition,
@@ -1080,6 +1099,7 @@ function StoryDocumentScroller<TData extends StoryNodeData = StoryNodeData>({
     (index: number, choiceId: string) => {
       const entry = history[index];
       if (!entry) return;
+      if (!allowBranchReselection && getSelectedBranchChoiceId(story, history, index)) return;
 
       const node = getStoryNode(story, entry.nodeId);
       const choice = getStoryChoices(story, node).find(
@@ -1102,7 +1122,15 @@ function StoryDocumentScroller<TData extends StoryNodeData = StoryNodeData>({
         buildStoryPathStateFromHistory(story, nextHistory, nextChoiceIds),
       );
     },
-    [history, isChoiceIdsControlled, onChoice, onChoiceIdsChange, requestScrollToScene, story],
+    [
+      allowBranchReselection,
+      history,
+      isChoiceIdsControlled,
+      onChoice,
+      onChoiceIdsChange,
+      requestScrollToScene,
+      story,
+    ],
   );
 
   const restart = useCallback(() => {
@@ -1136,6 +1164,9 @@ function StoryDocumentScroller<TData extends StoryNodeData = StoryNodeData>({
             };
             const explicitChoices = node.choices ?? [];
             const ending = isStoryEnding(story, node);
+            const lockedChoiceId = allowBranchReselection
+              ? undefined
+              : getSelectedBranchChoiceId(story, history, index);
             const renderProps: StoryRenderProps<TData> = {
               story,
               node,
@@ -1172,6 +1203,7 @@ function StoryDocumentScroller<TData extends StoryNodeData = StoryNodeData>({
                     restartLabel={story.labels?.restart ?? "Restart"}
                     restart={restart}
                     progress={progress}
+                    lockedChoiceId={lockedChoiceId}
                   />
                 ) : null}
               </div>
@@ -1179,7 +1211,7 @@ function StoryDocumentScroller<TData extends StoryNodeData = StoryNodeData>({
           },
         };
       }),
-    [chooseFrom, history, registry, requestScrollToScene, restart, story],
+    [allowBranchReselection, chooseFrom, history, registry, requestScrollToScene, restart, story],
   );
 
   return (
@@ -1205,6 +1237,7 @@ export function StoryScroller<TData extends StoryNodeData = StoryNodeData, TScen
   pathChoiceIds = [],
   defaultChoiceIds,
   choiceIds,
+  allowBranchReselection,
   className,
   viewportClassName,
   transition,
@@ -1244,6 +1277,7 @@ export function StoryScroller<TData extends StoryNodeData = StoryNodeData, TScen
       pathChoiceIds={pathChoiceIds}
       defaultChoiceIds={defaultChoiceIds}
       choiceIds={choiceIds}
+      allowBranchReselection={allowBranchReselection}
       className={className}
       viewportClassName={viewportClassName}
       transition={transition}
@@ -1268,6 +1302,7 @@ type StoryChoicePanelProps = {
   restartLabel: string;
   restart: () => void;
   progress: number;
+  lockedChoiceId?: string;
 };
 
 function StoryChoicePanel({
@@ -1279,6 +1314,7 @@ function StoryChoicePanel({
   restartLabel,
   restart,
   progress,
+  lockedChoiceId,
 }: StoryChoicePanelProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const revealProgress = clamp(
@@ -1287,9 +1323,10 @@ function StoryChoicePanel({
     1,
   );
   const isReady = revealProgress > 0;
+  const isLocked = lockedChoiceId !== undefined;
 
   useEffect(() => {
-    if (!isReady || choices.length === 0 || typeof window === "undefined") {
+    if (!isReady || isLocked || choices.length === 0 || typeof window === "undefined") {
       return;
     }
 
@@ -1328,7 +1365,7 @@ function StoryChoicePanel({
     window.addEventListener("keydown", handleKeyDown);
 
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [choose, choices, isReady]);
+  }, [choose, choices, isLocked, isReady]);
 
   if (revealProgress <= 0) {
     return null;
@@ -1355,9 +1392,12 @@ function StoryChoicePanel({
                 key={choice.id}
                 type="button"
                 variant="outline"
-                className="h-auto justify-start whitespace-normal px-4 py-3 text-left"
+                className={cn(
+                  "h-auto justify-start whitespace-normal px-4 py-3 text-left",
+                  lockedChoiceId === choice.id ? "border-foreground/40 bg-muted/70" : "",
+                )}
                 onClick={() => choose(choice.id)}
-                disabled={choice.disabled || !isReady}
+                disabled={choice.disabled || isLocked || !isReady}
               >
                 <span className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1">
                   <kbd className="row-span-2 inline-flex size-6 items-center justify-center rounded border bg-muted text-xs font-semibold text-muted-foreground">

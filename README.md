@@ -308,6 +308,10 @@ awaiting choices, invalid choices, `stopAt`, and max-step limits. The headless
 `useStoryPathState()` hook accepts `stopAt`/`defaultStopAt`, which lets custom
 controls step backward through auto-advanced linear nodes.
 
+Story-backed scrollers let users pick again by default when they scroll back to
+an answered branch scene. Pass `allowBranchReselection={false}` to lock the
+selected path instead.
+
 ## Example website
 
 Run the local example app from the repository root:

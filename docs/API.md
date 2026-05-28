@@ -90,6 +90,9 @@ This reference tracks the package exports that are intended for consumers.
 - Animated transition previews are disabled when the user prefers reduced motion.
 - Custom `StoryScrollScene` ids and titles are validated in development.
 - Numeric choice hotkeys are scoped to the focused scroller region.
+- Story-backed scrollers allow branch re-selection by default when a user
+  scrolls back to an answered branch scene. Set `allowBranchReselection={false}`
+  to keep those branch choices locked after a path has been selected.
 
 ## `./media`
 
