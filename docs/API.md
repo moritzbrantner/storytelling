@@ -35,10 +35,16 @@ This reference tracks the package exports that are intended for consumers.
 
 ### `StoryScroller` Transitions
 
+- `scrollUnits` on a custom `StoryScrollScene` or serializable `StoryNode` sets
+  that scene body's timeline length. The default is `100`; invalid, non-finite,
+  and `<= 0` values fall back to `100`.
 - `transition` sets the default scene handoff for the whole scroller.
 - `transitionToNext` on a scene overrides the global transition for that scene boundary.
 - Supported transition types are `none`, `fade`, `slide`, `push`, `wipe`, `zoom`, and `blur`.
-- Animated transitions use `scrollUnits` from `0` to `100` as normalized scene-local units.
+- Animated transitions use `scrollUnits` as timeline units added after the
+  outgoing scene body. A `20` unit transition after a default scene runs from
+  `100` to `120`, holding the outgoing scene at its final frame until the next
+  scene starts.
 - `scrollUnits: 0` is treated as a direct `none` transition.
 - `slide`, `push`, and `wipe` accept `direction: "up" | "down" | "left" | "right"`.
 - `zoom` accepts `fromScale` and `toScale`.

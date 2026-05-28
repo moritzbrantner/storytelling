@@ -67,6 +67,7 @@ export type StoryScrollScene<TData = unknown> = {
   menuLabel?: string;
   className?: string;
   data?: TData;
+  scrollUnits?: number;
   transitionToNext?: StoryScrollTransition;
   render: (props: StoryScrollSceneRenderProps<TData>) => ReactNode;
 };
@@ -97,6 +98,7 @@ export type StoryScrollerProps<
 type ScrollState = {
   activeIndex: number;
   value: number;
+  unit: number;
 };
 
 type ScrollTarget = {
@@ -170,8 +172,10 @@ const clamp = (value: number, min: number, max: number) => Math.min(Math.max(val
 
 const DEFAULT_SCROLL_TRANSITION: StoryScrollTransition = { type: "none" };
 const DEFAULT_SCROLL_INPUT_SCALE = 1;
+const DEFAULT_SCENE_SCROLL_UNITS = 100;
 const DEFAULT_AUTOPLAY_UNITS_PER_SECOND = 20;
 const AUTOPLAY_INTERVAL_MS = 1000 / 60;
+const SCROLL_UNIT_PRECISION = 1_000_000;
 const STORY_BRANCH_REVEAL_START = 0.9;
 const STORY_BRANCH_REVEAL_END = 1;
 const DEFAULT_SCROLL_TRANSITION_DIRECTION: StoryScrollDirection = "up";
@@ -209,6 +213,58 @@ function resolveScrollTransition(
   }
 
   return { ...transition, scrollUnits };
+}
+
+function resolveSceneScrollUnits(value: number | undefined) {
+  if (value === undefined || !Number.isFinite(value) || value <= 0) {
+    return DEFAULT_SCENE_SCROLL_UNITS;
+  }
+
+  return value;
+}
+
+type StoryScrollTimelineEntry<TSceneData = unknown> = {
+  scene: StoryScrollScene<TSceneData>;
+  sceneIndex: number;
+  startUnit: number;
+  bodyEndUnit: number;
+  endUnit: number;
+  scrollUnits: number;
+  transition: StoryScrollTransition;
+};
+
+function buildScrollTimeline<TSceneData>(
+  scenes: StoryScrollScene<TSceneData>[],
+  transition: StoryScrollTransition | undefined,
+  reducedMotion: boolean,
+): StoryScrollTimelineEntry<TSceneData>[] {
+  let cursor = 0;
+
+  return scenes.map((scene, sceneIndex) => {
+    const scrollUnits = resolveSceneScrollUnits(scene.scrollUnits);
+    const startUnit = cursor;
+    const bodyEndUnit = startUnit + scrollUnits;
+    const resolvedTransition = resolveScrollTransition(
+      scene.transitionToNext,
+      transition,
+      reducedMotion,
+    );
+    const hasNextScene = sceneIndex < scenes.length - 1;
+    const transitionUnits =
+      hasNextScene && resolvedTransition.type !== "none" ? resolvedTransition.scrollUnits : 0;
+    const entry: StoryScrollTimelineEntry<TSceneData> = {
+      scene,
+      sceneIndex,
+      startUnit,
+      bodyEndUnit,
+      endUnit: bodyEndUnit + transitionUnits,
+      scrollUnits,
+      transition: hasNextScene ? resolvedTransition : DEFAULT_SCROLL_TRANSITION,
+    };
+
+    cursor = entry.endUnit;
+    return entry;
+  });
 }
 
 type StoryScrollTransitionStyles = {
@@ -375,26 +431,75 @@ function getScrollTransitionStyles(
   }
 }
 
-function getNextScrollState(element: HTMLElement, sceneCount: number): ScrollState {
-  if (sceneCount <= 0) {
-    return { activeIndex: 0, value: 0 };
-  }
+function getTotalScrollUnits<TSceneData>(timeline: StoryScrollTimelineEntry<TSceneData>[]) {
+  return timeline[timeline.length - 1]?.endUnit ?? 0;
+}
 
+function getTimelineEntryForIndex<TSceneData>(
+  timeline: StoryScrollTimelineEntry<TSceneData>[],
+  index: number,
+) {
+  return timeline[clamp(index, 0, Math.max(timeline.length - 1, 0))];
+}
+
+function getScrollTopForUnit(element: HTMLElement, unit: number, totalUnits: number) {
   const maxScroll = Math.max(element.scrollHeight - element.clientHeight, 0);
-  if (maxScroll === 0) {
-    return { activeIndex: 0, value: 0 };
+
+  if (maxScroll === 0 || totalUnits <= 0) {
+    return 0;
   }
 
-  const segmentSize = maxScroll / sceneCount;
-  const rawSceneProgress = clamp(element.scrollTop / segmentSize, 0, sceneCount);
-  const activeIndex = clamp(Math.floor(rawSceneProgress), 0, sceneCount - 1);
-  const value = clamp((rawSceneProgress - activeIndex) * 100, 0, 100);
+  return (clamp(unit, 0, totalUnits) / totalUnits) * maxScroll;
+}
 
-  return { activeIndex, value };
+function getNextScrollState<TSceneData>(
+  element: HTMLElement,
+  timeline: StoryScrollTimelineEntry<TSceneData>[],
+): ScrollState {
+  if (timeline.length === 0) {
+    return { activeIndex: 0, value: 0, unit: 0 };
+  }
+
+  const totalUnits = getTotalScrollUnits(timeline);
+  const maxScroll = Math.max(element.scrollHeight - element.clientHeight, 0);
+  const rawUnit =
+    maxScroll === 0 || totalUnits <= 0
+      ? 0
+      : clamp((element.scrollTop / maxScroll) * totalUnits, 0, totalUnits);
+  const unit = Math.round(rawUnit * SCROLL_UNIT_PRECISION) / SCROLL_UNIT_PRECISION;
+
+  for (const entry of timeline) {
+    const isLastEntry = entry.sceneIndex === timeline.length - 1;
+    const hasTransitionRange = entry.endUnit > entry.bodyEndUnit;
+    const isSceneBody =
+      unit < entry.bodyEndUnit ||
+      (unit === entry.bodyEndUnit && (hasTransitionRange || isLastEntry));
+
+    if (isSceneBody) {
+      const value =
+        unit >= entry.bodyEndUnit
+          ? 100
+          : clamp(((unit - entry.startUnit) / entry.scrollUnits) * 100, 0, 100);
+
+      return { activeIndex: entry.sceneIndex, value, unit };
+    }
+
+    if (unit < entry.endUnit) {
+      return { activeIndex: entry.sceneIndex, value: 100, unit };
+    }
+  }
+
+  const lastEntry = timeline[timeline.length - 1]!;
+
+  return { activeIndex: lastEntry.sceneIndex, value: 100, unit: totalUnits };
 }
 
 function shouldUpdateScrollState(current: ScrollState, next: ScrollState) {
-  return current.activeIndex !== next.activeIndex || Math.abs(current.value - next.value) >= 0.1;
+  return (
+    current.activeIndex !== next.activeIndex ||
+    Math.abs(current.value - next.value) >= 0.1 ||
+    Math.abs(current.unit - next.unit) >= 0.1
+  );
 }
 
 function resolveScrollInputScale(scale: number | undefined) {
@@ -462,25 +567,28 @@ function StoryScrollTimeline<TSceneData = unknown>({
   const scrollProgress = useMotionValue(0);
   const previewScrollValue = useMotionValue(0);
   const previewScrollProgress = useMotionValue(0);
-  const [scrollState, setScrollState] = useState<ScrollState>({ activeIndex: 0, value: 0 });
+  const [scrollState, setScrollState] = useState<ScrollState>({
+    activeIndex: 0,
+    value: 0,
+    unit: 0,
+  });
   const sceneCount = scenes.length;
   const resolvedScrollInputScale = resolveScrollInputScale(scrollInputScale);
   const resolvedAutoplay = resolveStoryScrollAutoplay(autoplay);
-  const activeIndex = clamp(scrollState.activeIndex, 0, Math.max(sceneCount - 1, 0));
-  const activeScene = scenes[activeIndex];
-  const nextScene = scenes[activeIndex + 1];
-  const activeTransition = resolveScrollTransition(
-    activeScene?.transitionToNext,
-    transition,
-    Boolean(reducedMotion) || getPrefersReducedMotion(),
+  const reducedMotionEnabled = Boolean(reducedMotion) || getPrefersReducedMotion();
+  const timeline = useMemo(
+    () => buildScrollTimeline(scenes, transition, reducedMotionEnabled),
+    [reducedMotionEnabled, scenes, transition],
   );
+  const totalUnits = getTotalScrollUnits(timeline);
+  const activeIndex = clamp(scrollState.activeIndex, 0, Math.max(sceneCount - 1, 0));
+  const activeEntry = getTimelineEntryForIndex(timeline, activeIndex);
+  const activeScene = activeEntry?.scene;
+  const nextScene = scenes[activeIndex + 1];
+  const activeTransition = activeEntry?.transition ?? DEFAULT_SCROLL_TRANSITION;
   const transitionProgress =
-    activeTransition.type !== "none" && nextScene
-      ? clamp(
-          (scrollState.value - (100 - activeTransition.scrollUnits)) / activeTransition.scrollUnits,
-          0,
-          1,
-        )
+    activeEntry && activeTransition.type !== "none" && nextScene
+      ? clamp((scrollState.unit - activeEntry.bodyEndUnit) / activeTransition.scrollUnits, 0, 1)
       : 0;
   const shouldRenderTransitionPreview =
     activeTransition.type !== "none" && Boolean(nextScene) && transitionProgress > 0;
@@ -490,14 +598,14 @@ function StoryScrollTimeline<TSceneData = unknown>({
     const element = scrollRef.current;
     if (!element) return;
 
-    const nextState = getNextScrollState(element, sceneCount);
+    const nextState = getNextScrollState(element, timeline);
 
     scrollValue.set(nextState.value);
     scrollProgress.set(nextState.value / 100);
     setScrollState((current) =>
       shouldUpdateScrollState(current, nextState) ? nextState : current,
     );
-  }, [sceneCount, scrollProgress, scrollValue]);
+  }, [scrollProgress, scrollValue, timeline]);
 
   const setScrollTop = useCallback(
     (top: number) => {
@@ -525,17 +633,16 @@ function StoryScrollTimeline<TSceneData = unknown>({
     (index: number) => {
       const element = scrollRef.current;
       const nextIndex = clamp(index, 0, Math.max(sceneCount - 1, 0));
+      const targetEntry = getTimelineEntryForIndex(timeline, nextIndex);
+      const targetUnit = targetEntry?.startUnit ?? 0;
 
-      setScrollState({ activeIndex: nextIndex, value: 0 });
+      setScrollState({ activeIndex: nextIndex, value: 0, unit: targetUnit });
       scrollValue.set(0);
       scrollProgress.set(0);
 
       if (!element) return;
 
-      const maxScroll = Math.max(element.scrollHeight - element.clientHeight, 0);
-      const segmentSize = sceneCount > 0 ? maxScroll / sceneCount : 0;
-
-      const top = segmentSize * nextIndex;
+      const top = getScrollTopForUnit(element, targetUnit, totalUnits);
 
       if (typeof element.scrollTo === "function") {
         element.scrollTo({
@@ -547,7 +654,7 @@ function StoryScrollTimeline<TSceneData = unknown>({
 
       element.scrollTop = top;
     },
-    [reducedMotion, sceneCount, scrollProgress, scrollValue],
+    [reducedMotion, sceneCount, scrollProgress, scrollValue, timeline, totalUnits],
   );
 
   useEffect(() => {
@@ -560,11 +667,12 @@ function StoryScrollTimeline<TSceneData = unknown>({
       const nextState = {
         activeIndex: clamp(current.activeIndex, 0, Math.max(sceneCount - 1, 0)),
         value: current.activeIndex >= sceneCount ? 0 : current.value,
+        unit: clamp(current.unit, 0, totalUnits),
       };
 
       return shouldUpdateScrollState(current, nextState) ? nextState : current;
     });
-  }, [sceneCount]);
+  }, [sceneCount, totalUnits]);
 
   useEffect(() => {
     if (!scrollTarget) return;
@@ -586,9 +694,11 @@ function StoryScrollTimeline<TSceneData = unknown>({
       const maxScroll = Math.max(element.scrollHeight - element.clientHeight, 0);
       if (maxScroll === 0 || element.scrollTop >= maxScroll) return;
 
-      const sceneScrollSize = maxScroll / sceneCount;
       const secondsPerTick = AUTOPLAY_INTERVAL_MS / 1000;
-      const delta = (sceneScrollSize * resolvedAutoplay.unitsPerSecond * secondsPerTick) / 100;
+      const delta =
+        totalUnits > 0
+          ? (maxScroll * resolvedAutoplay.unitsPerSecond * secondsPerTick) / totalUnits
+          : 0;
 
       setScrollTop(element.scrollTop + delta);
     }, AUTOPLAY_INTERVAL_MS);
@@ -600,6 +710,7 @@ function StoryScrollTimeline<TSceneData = unknown>({
     resolvedAutoplay.unitsPerSecond,
     sceneCount,
     setScrollTop,
+    totalUnits,
   ]);
 
   useEffect(() => {
@@ -620,26 +731,29 @@ function StoryScrollTimeline<TSceneData = unknown>({
   const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     const element = scrollRef.current;
     const maxScroll = element ? Math.max(element.scrollHeight - element.clientHeight, 0) : 0;
-    const sceneScrollSize = sceneCount > 0 ? maxScroll / sceneCount : 0;
+    const activeSpanUnits = activeEntry
+      ? Math.max(activeEntry.endUnit - activeEntry.startUnit, activeEntry.scrollUnits)
+      : 0;
+    const activeScrollSize = totalUnits > 0 ? (maxScroll * activeSpanUnits) / totalUnits : 0;
 
     switch (event.key) {
       case "ArrowDown":
       case "ArrowRight":
         event.preventDefault();
-        if (sceneScrollSize === 0) {
+        if (activeScrollSize === 0) {
           scrollToScene(activeIndex + 1);
           return;
         }
-        scrollByInputDelta(sceneScrollSize * resolvedScrollInputScale);
+        scrollByInputDelta(activeScrollSize * resolvedScrollInputScale);
         return;
       case "ArrowUp":
       case "ArrowLeft":
         event.preventDefault();
-        if (sceneScrollSize === 0) {
+        if (activeScrollSize === 0) {
           scrollToScene(activeIndex - 1);
           return;
         }
-        scrollByInputDelta(-sceneScrollSize * resolvedScrollInputScale);
+        scrollByInputDelta(-activeScrollSize * resolvedScrollInputScale);
         return;
       case "Home":
         event.preventDefault();
@@ -676,13 +790,13 @@ function StoryScrollTimeline<TSceneData = unknown>({
         onWheel={handleWheel}
         data-story-scroller-viewport
       >
-        <div className="relative" style={{ height: `${Math.max(sceneCount + 1, 2) * 100}%` }}>
-          {scenes.map((scene, index) => (
+        <div className="relative" style={{ height: `${Math.max(totalUnits / 100 + 1, 2) * 100}%` }}>
+          {timeline.map((entry) => (
             <span
-              key={scene.id}
-              id={scene.id}
+              key={entry.scene.id}
+              id={entry.scene.id}
               className="absolute size-px"
-              style={{ top: `${(index / Math.max(sceneCount + 1, 1)) * 100}%` }}
+              style={{ top: `${(entry.startUnit / Math.max(totalUnits + 100, 1)) * 100}%` }}
               aria-hidden="true"
               data-story-scroller-marker
             />
@@ -880,6 +994,7 @@ function StoryDocumentScroller<TData extends StoryNodeData = StoryNodeData>({
           id: getStoryScrollerPageId(story.id, node.id),
           title: node.title,
           eyebrow: node.eyebrow,
+          scrollUnits: node.scrollUnits,
           render: ({ progress }) => {
             const nodeHistory = history.slice(0, index + 1);
             const nodePath: ResolvedStoryPath<TData> = {

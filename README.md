@@ -171,6 +171,7 @@ export function StoryExperience() {
         {
           id: "opening",
           title: "Opening",
+          scrollUnits: 200,
           transitionToNext: { type: "none" },
           render: ({ value, scrollProgress }) => (
             <OpeningMotionScene value={value} scrollProgress={scrollProgress} />
@@ -185,8 +186,16 @@ export function StoryExperience() {
 `StoryScroller` changes scenes directly by default. Add
 `transition={{ type: "fade", scrollUnits: 20 }}` or another scroll-driven
 transition to animate between every scene. Use `transitionToNext` on an
-individual scene to override that boundary. Scroll transition units are
-normalized scene-local units from `0` to `100`, not pixels, frames, or seconds.
+individual scene to override that boundary. Each scene body takes `100`
+scroll units by default; set `scrollUnits` on a scene or story node to make
+that scene shorter or longer. For example, `scrollUnits: 200` makes a scene
+take twice as much scroll distance, while `scrollUnits: 50` makes it take half
+as much.
+
+Transition units are timeline scroll units added between scene bodies, not
+pixels, frames, or seconds. A scene with the default `100` body units and a
+`20` unit slide transition holds its final frame at `100`, transitions from
+`100` to `120`, and starts the next scene at `120`.
 
 Supported scroller transitions are:
 

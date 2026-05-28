@@ -160,6 +160,14 @@ function setScrollerGeometry(viewport: HTMLElement, sceneCount: number) {
   Object.defineProperty(viewport, "clientHeight", { configurable: true, value: 100 });
 }
 
+function setScrollerTimelineGeometry(viewport: HTMLElement, scrollUnits: number) {
+  Object.defineProperty(viewport, "scrollHeight", {
+    configurable: true,
+    value: scrollUnits + 100,
+  });
+  Object.defineProperty(viewport, "clientHeight", { configurable: true, value: 100 });
+}
+
 function scrollScrollerViewport(viewport: HTMLElement, scrollTop: number) {
   viewport.scrollTop = scrollTop;
   fireEvent.scroll(viewport);
@@ -201,7 +209,7 @@ function renderTransitionScroller(transition: StoryScrollTransition) {
   const viewport = rendered.container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
 
   expect(viewport).toBeTruthy();
-  setScrollerGeometry(viewport!, 2);
+  setScrollerTimelineGeometry(viewport!, 220);
 
   return { ...rendered, viewport: viewport! };
 }
@@ -787,6 +795,130 @@ describe("@moritzbrantner/storytelling", () => {
     expect(await screen.findByText("Beta 0")).toBeTruthy();
   });
 
+  test("supports slower custom StoryScroller scenes with longer scroll units", async () => {
+    const { container } = render(
+      <StoryScroller
+        ariaLabel="Slow scene units"
+        scenes={[
+          {
+            id: "alpha",
+            title: "Alpha",
+            scrollUnits: 200,
+            render: renderScrollTransitionLabel("Alpha"),
+          },
+          {
+            id: "beta",
+            title: "Beta",
+            render: renderScrollTransitionLabel("Beta"),
+          },
+        ]}
+      />,
+    );
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+
+    expect(viewport).toBeTruthy();
+    setScrollerTimelineGeometry(viewport!, 300);
+
+    scrollScrollerViewport(viewport!, 100);
+    expect(await screen.findByText("Alpha active 50")).toBeTruthy();
+
+    scrollScrollerViewport(viewport!, 200);
+    expect(await screen.findByText("Beta active 0")).toBeTruthy();
+  });
+
+  test("supports faster custom StoryScroller scenes with shorter scroll units", async () => {
+    const { container } = render(
+      <StoryScroller
+        ariaLabel="Fast scene units"
+        scenes={[
+          {
+            id: "alpha",
+            title: "Alpha",
+            scrollUnits: 50,
+            render: renderScrollTransitionLabel("Alpha"),
+          },
+          {
+            id: "beta",
+            title: "Beta",
+            render: renderScrollTransitionLabel("Beta"),
+          },
+        ]}
+      />,
+    );
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+
+    expect(viewport).toBeTruthy();
+    setScrollerTimelineGeometry(viewport!, 150);
+
+    scrollScrollerViewport(viewport!, 25);
+    expect(await screen.findByText("Alpha active 50")).toBeTruthy();
+
+    scrollScrollerViewport(viewport!, 50);
+    expect(await screen.findByText("Beta active 0")).toBeTruthy();
+  });
+
+  test("runs transitions after custom scene scroll units", async () => {
+    const { container } = render(
+      <StoryScroller
+        ariaLabel="Long scene transition units"
+        transition={{ type: "slide", scrollUnits: 20, direction: "up" }}
+        scenes={[
+          {
+            id: "alpha",
+            title: "Alpha",
+            scrollUnits: 200,
+            render: renderScrollTransitionLabel("Alpha"),
+          },
+          {
+            id: "beta",
+            title: "Beta",
+            render: renderScrollTransitionLabel("Beta"),
+          },
+        ]}
+      />,
+    );
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+
+    expect(viewport).toBeTruthy();
+    setScrollerTimelineGeometry(viewport!, 320);
+
+    scrollScrollerViewport(viewport!, 200);
+    expect(await screen.findByText("Alpha active 100")).toBeTruthy();
+    expect(screen.queryByText(/Beta/)).toBeNull();
+
+    scrollScrollerViewport(viewport!, 210);
+    expect(await screen.findByText("Alpha active 100")).toBeTruthy();
+    expect(screen.getByText("Beta preview 0")).toBeTruthy();
+    expect(getScrollerPage(container, 1, false)?.style.transform).toBe("translateY(50%)");
+
+    scrollScrollerViewport(viewport!, 220);
+    expect(await screen.findByText("Beta active 0")).toBeTruthy();
+  });
+
+  test("uses StoryNode scroll units for story-backed StoryScroller scenes", async () => {
+    const onSceneProgressChange = vi.fn();
+    const storyWithScrollUnits: StoryDocument<FixtureData> = {
+      ...linearStory,
+      nodes: linearStory.nodes.map((node) =>
+        node.id === "draft" ? Object.assign({}, node, { scrollUnits: 200 }) : node,
+      ),
+    };
+    const { container } = render(
+      <StoryScroller story={storyWithScrollUnits} onSceneProgressChange={onSceneProgressChange} />,
+    );
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+
+    expect(viewport).toBeTruthy();
+    setScrollerTimelineGeometry(viewport!, 400);
+
+    scrollScrollerViewport(viewport!, 100);
+    expect(await screen.findByText("Draft the morning brief.")).toBeTruthy();
+    expect(onSceneProgressChange).toHaveBeenLastCalledWith(50);
+
+    scrollScrollerViewport(viewport!, 200);
+    expect(await screen.findByText("Review the copy for sequence and clarity.")).toBeTruthy();
+  });
+
   test("scales StoryScroller wheel input", async () => {
     const { container } = render(
       <StoryScroller
@@ -851,6 +983,20 @@ describe("@moritzbrantner/storytelling", () => {
     expect(viewport!.scrollTop).toBe(100);
   });
 
+  test("advances StoryScroller arrow-key input through boundary transitions", async () => {
+    const { viewport } = renderTransitionScroller({
+      type: "slide",
+      scrollUnits: 20,
+      direction: "up",
+    });
+    const region = screen.getByRole("region", { name: "Transition scenes" });
+
+    fireEvent.keyDown(region, { key: "ArrowDown" });
+
+    expect(await screen.findByText("Beta active 0")).toBeTruthy();
+    expect(viewport.scrollTop).toBe(120);
+  });
+
   test("autoplays StoryScroller at the configured scene pace", async () => {
     vi.useFakeTimers();
 
@@ -891,6 +1037,50 @@ describe("@moritzbrantner/storytelling", () => {
 
     expect(viewport!.scrollTop).toBeGreaterThan(95);
     expect(viewport!.scrollTop).toBeLessThan(105);
+    expect(screen.getByText(/Beta active \d+/)).toBeTruthy();
+  });
+
+  test("autoplays StoryScroller through custom scene scroll units", async () => {
+    vi.useFakeTimers();
+
+    const { container } = render(
+      <StoryScroller
+        ariaLabel="Autoplay custom units"
+        autoplay={{ unitsPerSecond: 100 }}
+        scenes={[
+          {
+            id: "alpha",
+            title: "Alpha",
+            scrollUnits: 200,
+            render: renderScrollTransitionLabel("Alpha"),
+          },
+          {
+            id: "beta",
+            title: "Beta",
+            render: renderScrollTransitionLabel("Beta"),
+          },
+        ]}
+      />,
+    );
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+
+    expect(viewport).toBeTruthy();
+    setScrollerTimelineGeometry(viewport!, 300);
+
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+
+    expect(viewport!.scrollTop).toBeGreaterThan(95);
+    expect(viewport!.scrollTop).toBeLessThan(105);
+    expect(screen.getByText(/Alpha active 5\d/)).toBeTruthy();
+
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+
+    expect(viewport!.scrollTop).toBeGreaterThan(195);
+    expect(viewport!.scrollTop).toBeLessThan(215);
     expect(screen.getByText(/Beta active \d+/)).toBeTruthy();
   });
 
@@ -973,17 +1163,21 @@ describe("@moritzbrantner/storytelling", () => {
   test("crossfades StoryScroller scenes during the configured global transition window", async () => {
     const { container, viewport } = renderTransitionScroller({ type: "fade", scrollUnits: 20 });
 
-    scrollScrollerViewport(viewport, 79);
-    expect(await screen.findByText("Alpha active 79")).toBeTruthy();
+    scrollScrollerViewport(viewport, 99);
+    expect(await screen.findByText("Alpha active 99")).toBeTruthy();
     expect(screen.queryByText(/Beta/)).toBeNull();
 
-    scrollScrollerViewport(viewport, 90);
-    expect(await screen.findByText("Alpha active 90")).toBeTruthy();
+    scrollScrollerViewport(viewport, 100);
+    expect(await screen.findByText("Alpha active 100")).toBeTruthy();
+    expect(screen.queryByText(/Beta/)).toBeNull();
+
+    scrollScrollerViewport(viewport, 110);
+    expect(await screen.findByText("Alpha active 100")).toBeTruthy();
     expect(screen.getByText("Beta preview 0")).toBeTruthy();
     expect(getScrollerPage(container, 0, true)?.style.opacity).toBe("0.5");
     expect(getScrollerPage(container, 1, false)?.style.opacity).toBe("0.5");
 
-    scrollScrollerViewport(viewport, 100);
+    scrollScrollerViewport(viewport, 120);
     expect(await screen.findByText("Beta active 0")).toBeTruthy();
     expect(screen.queryByText(/Alpha/)).toBeNull();
   });
@@ -995,17 +1189,21 @@ describe("@moritzbrantner/storytelling", () => {
       direction: "up",
     });
 
-    scrollScrollerViewport(viewport, 79);
-    expect(await screen.findByText("Alpha active 79")).toBeTruthy();
+    scrollScrollerViewport(viewport, 99);
+    expect(await screen.findByText("Alpha active 99")).toBeTruthy();
     expect(screen.queryByText(/Beta/)).toBeNull();
 
-    scrollScrollerViewport(viewport, 90);
-    expect(await screen.findByText("Alpha active 90")).toBeTruthy();
+    scrollScrollerViewport(viewport, 100);
+    expect(await screen.findByText("Alpha active 100")).toBeTruthy();
+    expect(screen.queryByText(/Beta/)).toBeNull();
+
+    scrollScrollerViewport(viewport, 110);
+    expect(await screen.findByText("Alpha active 100")).toBeTruthy();
     expect(screen.getByText("Beta preview 0")).toBeTruthy();
     expect(getScrollerPage(container, 0, true)?.style.transform).toBe("");
     expect(getScrollerPage(container, 1, false)?.style.transform).toBe("translateY(50%)");
 
-    scrollScrollerViewport(viewport, 100);
+    scrollScrollerViewport(viewport, 120);
     expect(await screen.findByText("Beta active 0")).toBeTruthy();
     expect(screen.queryByText(/Alpha/)).toBeNull();
   });
@@ -1017,13 +1215,17 @@ describe("@moritzbrantner/storytelling", () => {
       direction: "left",
     });
 
-    scrollScrollerViewport(viewport, 90);
-    expect(await screen.findByText("Alpha active 90")).toBeTruthy();
+    scrollScrollerViewport(viewport, 100);
+    expect(await screen.findByText("Alpha active 100")).toBeTruthy();
+    expect(screen.queryByText(/Beta/)).toBeNull();
+
+    scrollScrollerViewport(viewport, 110);
+    expect(await screen.findByText("Alpha active 100")).toBeTruthy();
     expect(screen.getByText("Beta preview 0")).toBeTruthy();
     expect(getScrollerPage(container, 0, true)?.style.transform).toBe("translateX(-50%)");
     expect(getScrollerPage(container, 1, false)?.style.transform).toBe("translateX(50%)");
 
-    scrollScrollerViewport(viewport, 100);
+    scrollScrollerViewport(viewport, 120);
     expect(await screen.findByText("Beta active 0")).toBeTruthy();
     expect(screen.queryByText(/Alpha/)).toBeNull();
   });
@@ -1035,8 +1237,12 @@ describe("@moritzbrantner/storytelling", () => {
       direction: "right",
     });
 
-    scrollScrollerViewport(viewport, 90);
-    expect(await screen.findByText("Alpha active 90")).toBeTruthy();
+    scrollScrollerViewport(viewport, 100);
+    expect(await screen.findByText("Alpha active 100")).toBeTruthy();
+    expect(screen.queryByText(/Beta/)).toBeNull();
+
+    scrollScrollerViewport(viewport, 110);
+    expect(await screen.findByText("Alpha active 100")).toBeTruthy();
     expect(screen.getByText("Beta preview 0")).toBeTruthy();
     expect(getScrollerPage(container, 1, false)?.style.clipPath).toBe("inset(0 50% 0 0)");
   });
@@ -1044,8 +1250,12 @@ describe("@moritzbrantner/storytelling", () => {
   test("zooms StoryScroller scene previews during the configured transition window", async () => {
     const { container, viewport } = renderTransitionScroller({ type: "zoom", scrollUnits: 20 });
 
-    scrollScrollerViewport(viewport, 90);
-    expect(await screen.findByText("Alpha active 90")).toBeTruthy();
+    scrollScrollerViewport(viewport, 100);
+    expect(await screen.findByText("Alpha active 100")).toBeTruthy();
+    expect(screen.queryByText(/Beta/)).toBeNull();
+
+    scrollScrollerViewport(viewport, 110);
+    expect(await screen.findByText("Alpha active 100")).toBeTruthy();
     expect(screen.getByText("Beta preview 0")).toBeTruthy();
     expect(getScrollerPage(container, 0, true)?.style.transform).toBe("scale(1.03)");
     expect(getScrollerPage(container, 1, false)?.style.transform).toBe("scale(0.96)");
@@ -1054,8 +1264,12 @@ describe("@moritzbrantner/storytelling", () => {
   test("blurs StoryScroller scene previews during the configured transition window", async () => {
     const { container, viewport } = renderTransitionScroller({ type: "blur", scrollUnits: 20 });
 
-    scrollScrollerViewport(viewport, 90);
-    expect(await screen.findByText("Alpha active 90")).toBeTruthy();
+    scrollScrollerViewport(viewport, 100);
+    expect(await screen.findByText("Alpha active 100")).toBeTruthy();
+    expect(screen.queryByText(/Beta/)).toBeNull();
+
+    scrollScrollerViewport(viewport, 110);
+    expect(await screen.findByText("Alpha active 100")).toBeTruthy();
     expect(screen.getByText("Beta preview 0")).toBeTruthy();
     expect(getScrollerPage(container, 0, true)?.style.filter).toBe("blur(8px)");
     expect(getScrollerPage(container, 1, false)?.style.filter).toBe("blur(8px)");

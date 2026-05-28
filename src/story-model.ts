@@ -72,6 +72,7 @@ export type StoryNode<TData extends StoryNodeData = StoryNodeData> = {
   next?: string;
   choices?: StoryChoice[];
   durationInFrames?: number;
+  scrollUnits?: number;
   transition?: StoryTransition;
   stage?: StoryStageDescriptor;
 };
