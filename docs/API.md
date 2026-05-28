@@ -127,6 +127,12 @@ This reference tracks the package exports that are intended for consumers.
 - `StoryRemotionSceneFrame`, `StoryRemotionContent`, `StoryRemotionProgress`, and `StoryRemotionTransition` expose default Remotion building blocks.
 - Remotion `fps` must be finite and greater than `0`; scene progress is clamped
   to `0..1`.
+- `getStoryCompositionProps()` returns props that can be spread into Remotion's
+  `<Composition>` together with `component={StoryRemotionComposition}`.
+- Keep `defaultProps` JSON-serializable. `story`, `choiceIds`, and `layout` are
+  safe; custom renderer `registry` objects contain functions and must be
+  imported inside the Remotion bundle instead of being passed through
+  `defaultProps` or renderer `inputProps`.
 
 ## `./three`
 

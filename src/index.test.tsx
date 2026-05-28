@@ -1689,6 +1689,35 @@ describe("@moritzbrantner/storytelling", () => {
     expect(composition.defaultProps.choiceIds).toEqual(["answer"]);
   });
 
+  test("keeps Remotion composition registration props serializable", async () => {
+    const { isValidElement } = await import("react");
+    const { Composition } = await import("remotion");
+    const { StoryRemotionComposition, getStoryCompositionProps } = await import("./remotion");
+    const composition = getStoryCompositionProps(story, {
+      id: "signal-video",
+      choiceIds: ["answer"],
+      fps: 30,
+      width: 1920,
+      height: 1080,
+    });
+    const registry = createStoryRendererRegistry<FixtureData>({
+      remotion: {
+        custom: () => <div>Custom Remotion scene</div>,
+      },
+    });
+
+    const element = <Composition {...composition} component={StoryRemotionComposition} />;
+
+    expect(isValidElement(element)).toBe(true);
+    expect(composition.defaultProps).toEqual({
+      story,
+      choiceIds: ["answer"],
+      layout: { fps: 30, width: 1920, height: 1080 },
+    });
+    expect("registry" in composition.defaultProps).toBe(false);
+    expect(registry.remotion?.custom).toEqual(expect.any(Function));
+  });
+
   test("passes Remotion frame, progress, history, and node data into custom renderers", async () => {
     vi.doMock("remotion", () => ({
       AbsoluteFill: ({ children }: { children?: ReactNode }) => <div>{children}</div>,

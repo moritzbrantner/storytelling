@@ -344,15 +344,41 @@ const registry = createStoryRendererRegistry({
 ## Remotion
 
 The Remotion entrypoint stays behind a subpath so base React consumers do not
-need to load Remotion code.
+need to load Remotion code. A Remotion project should own its root registration
+and spread the serializable metadata returned by `getStoryCompositionProps()`
+into `<Composition>`.
 
 ```tsx
-import { StoryRemotionComposition } from "@moritzbrantner/storytelling/remotion";
+import { Composition, registerRoot } from "remotion";
+import {
+  StoryRemotionComposition,
+  getStoryCompositionProps,
+} from "@moritzbrantner/storytelling/remotion";
 
-export function VideoStory() {
-  return <StoryRemotionComposition story={story} choiceIds={["answer"]} />;
+import { story } from "./story";
+
+const composition = getStoryCompositionProps(story, {
+  id: "story-video",
+  choiceIds: ["answer"],
+  fps: 30,
+  width: 1920,
+  height: 1080,
+});
+
+function RemotionRoot() {
+  return <Composition {...composition} component={StoryRemotionComposition} />;
 }
+
+registerRoot(RemotionRoot);
 ```
+
+Only pass JSON-serializable story data, choice ids, and layout values through
+Remotion `defaultProps` or render `inputProps`. Do not put a custom renderer
+`registry` in `defaultProps`: registries contain React components/functions, and
+Remotion does not preserve functions or classes during rendering. Import custom
+registries inside the Remotion bundle and pass them from the component layer.
+See [example/remotion](example/remotion) for a minimal root, composition module,
+and optional renderer script.
 
 ## Three
 
