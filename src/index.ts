@@ -41,6 +41,27 @@ export {
   type CreateStoryPathStateOptions,
   type StoryPathState,
 } from "./story-state";
+export {
+  analyzeStory,
+  getStoryReachability,
+  type AnalyzeStoryOptions,
+  type StoryAuthoringIssue,
+  type StoryAuthoringIssueCode,
+  type StoryAuthoringMetrics,
+  type StoryAuthoringReport,
+  type StoryAuthoringSeverity,
+} from "./story-authoring";
+export {
+  applyStoryPatch,
+  createStoryNode,
+  type ApplyStoryPatchOptions,
+  type StoryPatch,
+} from "./story-edit";
+export {
+  useStoryPathState,
+  type UseStoryPathStateOptions,
+  type UseStoryPathStateResult,
+} from "./use-story-path-state";
 export { defaultStoryTheme, type StoryTheme } from "./story-theme";
 export { StoryContent, type StoryContentProps } from "./story-content";
 export {

@@ -1,10 +1,12 @@
 import type { StoryChoice, StoryDocument, StoryNode, StoryNodeData } from "./story-model";
+import { analyzeStory, type StoryAuthoringIssue } from "./story-authoring";
 import { compileStory } from "./story-graph";
 
 export type StoryWorkflowNodeData<TData extends StoryNodeData = StoryNodeData> = {
   storyNode: StoryNode<TData>;
   opening: boolean;
   terminal: boolean;
+  diagnostics?: StoryAuthoringIssue[];
 };
 
 export type StoryWorkflowEdgeData = {
@@ -12,6 +14,7 @@ export type StoryWorkflowEdgeData = {
   choiceLabel: string;
   disabled?: boolean;
   kind: "choice" | "next";
+  diagnostics?: StoryAuthoringIssue[];
 };
 
 export type StoryWorkflowPort = {
@@ -53,9 +56,14 @@ export type StoryWorkflowNodeTemplate = Omit<StoryWorkflowNode, "x" | "y" | "dat
   data?: Partial<StoryWorkflowNodeData>;
 };
 
+export type StoryWorkflowPosition = { x: number; y: number };
+
 export type StoryWorkflowLayoutOptions = {
   columnGap?: number;
   rowGap?: number;
+  positions?: Record<string, StoryWorkflowPosition>;
+  direction?: "horizontal" | "vertical";
+  includeDiagnostics?: boolean;
 };
 
 export type StoryWorkflowDocumentToStoryOptions<TData extends StoryNodeData = StoryNodeData> = {
@@ -85,6 +93,8 @@ export function storyToWorkflowDocument<TData extends StoryNodeData>(
   const compiledStory = compileStory(story);
   const columnGap = layout.columnGap ?? 320;
   const rowGap = layout.rowGap ?? 180;
+  const direction = layout.direction ?? "horizontal";
+  const diagnostics = layout.includeDiagnostics ? analyzeStory(story).issues : [];
   const depths = new Map<string, number>([[story.openingNodeId, 0]]);
   const queue = [story.openingNodeId];
 
@@ -105,6 +115,11 @@ export function storyToWorkflowDocument<TData extends StoryNodeData>(
   const nodes = compiledStory.nodes.map((entry) => {
     const depth = depths.get(entry.node.id) ?? 0;
     const row = rowIndexes.get(depth) ?? 0;
+    const position = layout.positions?.[entry.node.id] ?? {
+      x: direction === "horizontal" ? depth * columnGap : row * columnGap,
+      y: direction === "horizontal" ? row * rowGap : depth * rowGap,
+    };
+
     rowIndexes.set(depth, row + 1);
 
     return {
@@ -114,14 +129,17 @@ export function storyToWorkflowDocument<TData extends StoryNodeData>(
       kind: "story.node" as const,
       category: "Story",
       categoryPath: ["Story"],
-      x: depth * columnGap,
-      y: row * rowGap,
+      x: position.x,
+      y: position.y,
       inputs: [{ id: "in", label: "In", type: STORY_PORT_TYPE }],
       outputs: entry.outgoing.map((edge) => getWorkflowOutputPort(edge.choice)),
       data: {
         storyNode: entry.node,
         opening: entry.node.id === story.openingNodeId,
         terminal: entry.outgoing.length === 0,
+        ...(layout.includeDiagnostics
+          ? { diagnostics: diagnostics.filter((issue) => issue.nodeId === entry.node.id) }
+          : {}),
       },
     };
   });
@@ -139,6 +157,15 @@ export function storyToWorkflowDocument<TData extends StoryNodeData>(
         choiceLabel: edge.choice.label,
         disabled: edge.choice.disabled,
         kind: edge.kind,
+        ...(layout.includeDiagnostics
+          ? {
+              diagnostics: diagnostics.filter(
+                (issue) =>
+                  issue.nodeId === edge.source.id &&
+                  (issue.choiceId === edge.choice.id || issue.target === edge.target.id),
+              ),
+            }
+          : {}),
       },
     })),
     viewport: { x: 0, y: 0, zoom: 1 },

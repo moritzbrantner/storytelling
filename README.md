@@ -9,6 +9,7 @@ Three-friendly rendering helpers.
 - `validateStoryDocument(story)` / `assertStoryDocument(story)`
 - `resolveStoryPath(story, options)` / `buildStoryTimeline(story, options)`
 - `compileStory(story)` / `enumerateStoryPaths(story, options)`
+- `analyzeStory(story, options)` / `applyStoryPatch(story, patch, options)`
 - `serializeStoryPath(...)` / `parseStoryPath(...)`
 - `StoryPlayer`, `StoryControls`, `StoryScroller`, `StoryProgress`, and `StoryMinimap`
 - `createStoryRendererRegistry(...)`, `getStoryRendererKey(...)`, and `getStoryStageProps(...)`
@@ -76,6 +77,24 @@ const issues = validateStoryDocument(story);
 
 Use `compileStory()` and `enumerateStoryPaths()` when an authoring UI needs graph
 metadata, branch lists, endings, or all selectable routes through a document.
+
+### Authoring toolkit
+
+Use `analyzeStory()` when an editor needs validation errors, authoring warnings,
+reachability, and metrics without throwing on draft documents. Use
+`applyStoryPatch()` for immutable story edits while an editor keeps temporary
+draft state.
+
+```ts
+import { analyzeStory, applyStoryPatch } from "@moritzbrantner/storytelling";
+
+const report = analyzeStory(story);
+const draft = applyStoryPatch(story, {
+  type: "add-choice",
+  nodeId: "wake",
+  choice: { id: "wait", label: "Wait", target: "ending" },
+});
+```
 
 ### Linear stories
 

@@ -7,10 +7,13 @@ import {
   StoryPlayer,
   StoryScroller,
   StoryStageFrame,
+  analyzeStory,
+  applyStoryPatch,
   assertStoryDocument,
   buildStoryTimeline,
   compileStory,
   createStoryRendererRegistry,
+  createStoryNode,
   defineStory,
   enumerateStoryPaths,
   getStoryBranches,
@@ -18,9 +21,11 @@ import {
   parseStoryPath,
   resolveStoryPath,
   serializeStoryPath,
+  useStoryPathState,
   validateStory,
   validateStoryDocument,
   type StoryDocument,
+  type StoryPathState,
   type StoryRenderProps,
   type StoryScrollSceneRenderProps,
 } from ".";
@@ -295,6 +300,144 @@ describe("@moritzbrantner/storytelling", () => {
     ]);
   });
 
+  test("analyzes story authoring diagnostics and metrics", () => {
+    const authoringStory: StoryDocument<FixtureData> = {
+      id: "authoring",
+      title: "Authoring",
+      openingNodeId: "start",
+      nodes: [
+        {
+          id: "start",
+          title: "Start",
+          content: [{ type: "paragraph", text: "Start with a short line." }],
+          choices: [
+            { id: "left", label: "Left", target: "left" },
+            { id: "right", label: "Right", target: "right" },
+            { id: "third", label: "Third", target: "third" },
+          ],
+        },
+        {
+          id: "left",
+          title: "Left",
+          content: [{ type: "image", src: "/left.png", alt: "Left", caption: "A caption" }],
+        },
+        {
+          id: "right",
+          title: "Right",
+          choices: [{ id: "locked", label: "Locked", target: "third", disabled: true }],
+        },
+        {
+          id: "third",
+          title: "Third",
+          content: [{ type: "paragraph", text: "Third ending." }],
+        },
+        {
+          id: "unused",
+          title: "Unused",
+        },
+      ],
+    };
+    const report = analyzeStory(authoringStory, {
+      maxPaths: 2,
+      requireChoiceDescriptions: true,
+    });
+
+    expect(report.valid).toBe(true);
+    expect(report.unreachableNodeIds).toEqual(["unused"]);
+    expect(report.metrics).toMatchObject({
+      nodeCount: 5,
+      edgeCount: 4,
+      branchCount: 1,
+      endingCount: 3,
+      reachableNodeCount: 4,
+      unreachableNodeCount: 1,
+      pathCount: 2,
+      maxDepth: 2,
+      minDepth: 2,
+      contentBlockCount: 3,
+      mediaBlockCount: 1,
+    });
+    expect(report.metrics.estimatedReadingMinutes).toBeGreaterThan(0);
+    expect(report.issues.map((issue) => issue.code)).toEqual(
+      expect.arrayContaining([
+        "unreachable-node",
+        "empty-content",
+        "missing-choice-description",
+        "disabled-only-branch",
+        "path-limit-reached",
+      ]),
+    );
+    expect(analyzeStory(authoringStory).issues.map((issue) => issue.code)).not.toContain(
+      "missing-choice-description",
+    );
+  });
+
+  test("returns validation issues from story analysis without throwing", () => {
+    const report = analyzeStory({
+      id: "broken-authoring",
+      title: "",
+      openingNodeId: "missing",
+      nodes: [{ id: "start", title: "Start" }],
+    });
+
+    expect(report.valid).toBe(false);
+    expect(report.issues.map((issue) => issue.code)).toEqual(
+      expect.arrayContaining(["empty-story-title", "missing-opening-node"]),
+    );
+    expect(report.metrics.nodeCount).toBe(1);
+  });
+
+  test("applies immutable story patches and can validate patched output", () => {
+    const originalNodeCount = story.nodes.length;
+    const draftNode = createStoryNode<FixtureData>({
+      id: "draft-node",
+      title: "Draft node",
+      content: [{ type: "paragraph", text: "Draft text." }],
+      data: { tone: "draft" },
+    });
+    const patched = applyStoryPatch(story, [
+      { type: "add-node", node: draftNode, index: 1 },
+      {
+        type: "add-choice",
+        nodeId: "answer-node",
+        choice: { id: "draft", label: "Draft", target: "draft-node" },
+      },
+      { type: "set-next", nodeId: "draft-node", target: "pilot-ending" },
+      {
+        type: "update-choice",
+        nodeId: "answer-node",
+        choiceId: "draft",
+        fields: { description: "Draft route" },
+      },
+    ]);
+
+    expect(story.nodes).toHaveLength(originalNodeCount);
+    expect(patched.nodes).toHaveLength(originalNodeCount + 1);
+    expect(patched.nodes.find((node) => node.id === "answer-node")?.next).toBeUndefined();
+    expect(patched.nodes.find((node) => node.id === "answer-node")?.choices?.[0]).toMatchObject({
+      id: "draft",
+      description: "Draft route",
+    });
+    expect(patched.nodes.find((node) => node.id === "draft-node")?.choices).toBeUndefined();
+
+    const removed = applyStoryPatch(patched, { type: "remove-node", nodeId: "draft-node" });
+
+    expect(removed.nodes.find((node) => node.id === "draft-node")).toBeUndefined();
+    expect(removed.nodes.find((node) => node.id === "answer-node")?.choices).toBeUndefined();
+
+    const nextOnly = applyStoryPatch(story, {
+      type: "set-next",
+      nodeId: "wake",
+      target: "trace-node",
+    });
+
+    expect(nextOnly.nodes.find((node) => node.id === "wake")?.choices).toBeUndefined();
+    expect(nextOnly.nodes.find((node) => node.id === "wake")?.next).toBe("trace-node");
+    expect(() =>
+      applyStoryPatch(story, { type: "set-opening-node", nodeId: "missing" }, { validate: true }),
+    ).toThrow("references missing opening node");
+  });
+
   test("serializes and parses story path choice ids", () => {
     const serialized = serializeStoryPath(["answer", "trace/with spaces"]);
 
@@ -420,6 +563,84 @@ describe("@moritzbrantner/storytelling", () => {
     expect(
       await screen.findByText("The signal comes from a cove nobody has charted in decades."),
     ).toBeTruthy();
+  });
+
+  test("provides headless story path state for custom editor controls", async () => {
+    function PathStateProbe({
+      choiceIds,
+      defaultChoiceIds,
+      onChoiceIdsChange,
+    }: {
+      choiceIds?: string[];
+      defaultChoiceIds?: string[];
+      onChoiceIdsChange?: (choiceIds: string[], state: StoryPathState<FixtureData>) => void;
+    }) {
+      const state = useStoryPathState(story, {
+        choiceIds,
+        defaultChoiceIds,
+        onChoiceIdsChange,
+      });
+
+      return (
+        <div>
+          <p>Node {state.currentNode.id}</p>
+          <p>Choice ids {state.choiceIds.join(",") || "none"}</p>
+          <button type="button" onClick={() => state.choose("trace")}>
+            Choose trace
+          </button>
+          <button type="button" onClick={() => state.choose("locked")}>
+            Choose locked
+          </button>
+          <button type="button" onClick={state.goBack}>
+            Go back
+          </button>
+          <button type="button" onClick={state.restart}>
+            Restart
+          </button>
+          <button type="button" onClick={() => state.setChoiceIds(["answer"])}>
+            Set answer
+          </button>
+        </div>
+      );
+    }
+
+    const onChoiceIdsChange = vi.fn();
+    const { unmount } = render(<PathStateProbe defaultChoiceIds={["trace"]} />);
+
+    expect(screen.getByText("Node trace-node")).toBeTruthy();
+    expect(screen.getByText("Choice ids trace")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Go back" }));
+    expect(await screen.findByText("Node wake")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Choose locked" }));
+    expect(await screen.findByText("Choice ids none")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Set answer" }));
+    expect(await screen.findByText("Node answer-node")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Restart" }));
+    expect(await screen.findByText("Node wake")).toBeTruthy();
+
+    unmount();
+    const controlled = render(
+      <PathStateProbe choiceIds={[]} onChoiceIdsChange={onChoiceIdsChange} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Choose trace" }));
+
+    expect(onChoiceIdsChange).toHaveBeenCalledWith(
+      ["trace"],
+      expect.objectContaining({
+        choiceIds: ["trace"],
+        currentNode: expect.objectContaining({ id: "trace-node" }),
+      }),
+    );
+    expect(screen.getByText("Node wake")).toBeTruthy();
+
+    controlled.rerender(
+      <PathStateProbe choiceIds={["trace"]} onChoiceIdsChange={onChoiceIdsChange} />,
+    );
+    expect(await screen.findByText("Node trace-node")).toBeTruthy();
   });
 
   test("renders StoryScroller story branches as scene-progress pages", async () => {
@@ -932,6 +1153,43 @@ describe("@moritzbrantner/storytelling", () => {
       "answer-node",
       "pilot-ending",
     ]);
+
+    const positionedWorkflowDocument = storyToWorkflowDocument(story, {
+      positions: { wake: { x: 11, y: 22 } },
+    });
+    const verticalWorkflowDocument = storyToWorkflowDocument(story, { direction: "vertical" });
+    const workflowWithDiagnostics = storyToWorkflowDocument(
+      {
+        ...story,
+        nodes: [...story.nodes, { id: "unused", title: "Unused" }],
+      },
+      { includeDiagnostics: true },
+    );
+    const branchTimelineDocument = storyToTimelineEditorDocument(story, {
+      choiceIds: ["answer"],
+      includeBranchMarkers: true,
+    });
+    const defaultTimelineDocument = storyToTimelineEditorDocument(story, { choiceIds: ["answer"] });
+
+    expect(positionedWorkflowDocument.nodes.find((node) => node.id === "wake")).toMatchObject({
+      x: 11,
+      y: 22,
+    });
+    expect(verticalWorkflowDocument.nodes.find((node) => node.id === "answer-node")).toMatchObject({
+      x: 0,
+      y: 180,
+    });
+    expect(
+      workflowWithDiagnostics.nodes
+        .find((node) => node.id === "unused")
+        ?.data.diagnostics?.map((issue) => issue.code),
+    ).toEqual(expect.arrayContaining(["unreachable-node", "empty-content"]));
+    expect(branchTimelineDocument.markers?.map((marker) => marker.label)).toEqual(
+      expect.arrayContaining(["Branch: Wake the observatory", "Ending: The city hears the pilot"]),
+    );
+    expect(defaultTimelineDocument.markers?.map((marker) => marker.label)).not.toContain(
+      "Branch: Wake the observatory",
+    );
     expect(
       applyTimelineTimingsToStory(story, {
         tracks: [

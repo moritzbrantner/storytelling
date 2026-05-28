@@ -1,4 +1,5 @@
 import type { StoryDocument, StoryNode, StoryNodeData } from "./story-model";
+import { compileStory, getStoryBranches, getStoryEndings } from "./story-graph";
 import { buildStoryTimeline } from "./story-path";
 
 export type StoryTimelineTrackData = {
@@ -59,6 +60,7 @@ export type StoryToTimelineDocumentOptions = {
   fps?: number;
   trackId?: string;
   trackLabel?: string;
+  includeBranchMarkers?: boolean;
 };
 
 export type ApplyTimelineTimingsOptions = {
@@ -85,15 +87,55 @@ export function storyToTimelineEditorDocument<TData extends StoryNodeData>(
     fps,
   });
   const trackId = options.trackId ?? "story-scenes";
+  const branchNodeIds = new Set<string>();
+  const endingNodeIds = new Set<string>();
+
+  if (options.includeBranchMarkers) {
+    const compiledStory = compileStory(story);
+
+    for (const node of getStoryBranches(compiledStory)) {
+      branchNodeIds.add(node.id);
+    }
+
+    for (const node of getStoryEndings(compiledStory)) {
+      endingNodeIds.add(node.id);
+    }
+  }
+
+  const sceneMarkers = timeline.scenes.map((scene) => ({
+    id: `story-marker-${scene.node.id}`,
+    timeMs: framesToMs(scene.startFrame, timeline.fps),
+    label: scene.node.title,
+  }));
+  const branchMarkers = options.includeBranchMarkers
+    ? timeline.scenes.flatMap((scene) => {
+        const markers: StoryTimelineMarker[] = [];
+        const timeMs = framesToMs(scene.startFrame, timeline.fps);
+
+        if (branchNodeIds.has(scene.node.id)) {
+          markers.push({
+            id: `story-branch-marker-${scene.node.id}`,
+            timeMs,
+            label: `Branch: ${scene.node.title}`,
+          });
+        }
+
+        if (endingNodeIds.has(scene.node.id)) {
+          markers.push({
+            id: `story-ending-marker-${scene.node.id}`,
+            timeMs,
+            label: `Ending: ${scene.node.title}`,
+          });
+        }
+
+        return markers;
+      })
+    : [];
 
   return {
     durationMs: framesToMs(timeline.totalFrames, timeline.fps),
     currentTimeMs: 0,
-    markers: timeline.scenes.map((scene) => ({
-      id: `story-marker-${scene.node.id}`,
-      timeMs: framesToMs(scene.startFrame, timeline.fps),
-      label: scene.node.title,
-    })),
+    markers: [...sceneMarkers, ...branchMarkers],
     tracks: [
       {
         id: trackId,

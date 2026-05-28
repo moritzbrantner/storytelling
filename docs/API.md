@@ -13,8 +13,13 @@ This reference tracks the package exports that are intended for consumers.
 - `getStoryBranches(compiledStory)` returns nodes with multiple enabled outgoing choices.
 - `getStoryEndings(compiledStory)` returns terminal nodes.
 - `enumerateStoryPaths(story, options)` returns every selectable path through an acyclic story.
+- `analyzeStory(story, options)` returns validation errors, authoring warnings, graph reachability, and story metrics for editor UIs.
+- `getStoryReachability(story)` returns reachable and unreachable node ids without requiring a full report.
+- `applyStoryPatch(story, patch, options)` applies immutable story-edit operations for editor drafts.
+- `createStoryNode(input)` creates a serializable story node object from required id/title fields plus optional node fields.
 - `serializeStoryPath(value)` and `parseStoryPath(input)` convert choice ids to and from URL query strings.
 - `createStoryPathState(story, options)` builds a reusable resolved path state object.
+- `useStoryPathState(story, options)` provides controlled or uncontrolled headless React path state for custom authoring UIs.
 - `StoryPlayer` renders focused branching playback.
 - `StoryScroller` renders either a story-backed scroll experience or custom scroll scenes, with optional `autoplay` pacing.
 - `StoryContent`, `StoryControls`, `StoryProgress`, `StoryMinimap`, and `StoryStageFrame` expose composable UI pieces.
@@ -39,12 +44,14 @@ This reference tracks the package exports that are intended for consumers.
 - `storyToWorkflowDocument(story, options)` converts story nodes and edges into a workflow-editor compatible document.
 - `workflowDocumentToStory(document, options)` converts that document shape back into a `StoryDocument`.
 - `createStoryWorkflowNodeTemplates()` returns a minimal story-node template for workflow-editor palettes.
+- `storyToWorkflowDocument` accepts `positions`, `direction`, and `includeDiagnostics` layout options for editor roundtrips.
 
 ## `./timeline`
 
 - `storyToTimelineEditorDocument(story, options)` converts a story path into timeline-editor compatible scene items.
 - `applyTimelineTimingsToStory(story, document, options)` writes edited item durations back to matching story nodes.
 - `createStoryTimelineExtension()` returns a lightweight extension descriptor for story scene items.
+- `storyToTimelineEditorDocument` accepts `includeBranchMarkers` to add branch and ending markers alongside scene markers.
 
 ## `./remotion`
 
