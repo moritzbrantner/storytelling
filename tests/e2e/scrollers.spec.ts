@@ -29,6 +29,16 @@ async function expectActiveScene(page: Page, label: RegExp) {
   await expect(activeScrollerPage(page)).toHaveAttribute("aria-label", label);
 }
 
+function storyStateSummary(page: Page) {
+  return page.getByLabel("Story state").locator("pre").first();
+}
+
+async function waitForScrollStateToSettle(page: Page) {
+  await scrollerViewport(page).evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  );
+}
+
 async function focusScroller(region: Locator) {
   await region.focus();
   await expect(region).toBeFocused();
@@ -151,7 +161,9 @@ test.describe("StoryScroller example app", () => {
     await focusScroller(region);
 
     await region.press("ArrowRight");
+    await waitForScrollStateToSettle(page);
     await expectActiveScene(page, /2\. Field shifts/);
+    await expect(storyStateSummary(page)).toHaveText("Field shifts\nProgress 0%\nScene 2 of 4");
 
     await region.press("End");
     await expectActiveScene(page, /4\. Archive lands/);

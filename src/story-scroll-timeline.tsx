@@ -103,6 +103,7 @@ const DEFAULT_SCROLL_TRANSITION_MAX_BLUR = 16;
 const MIN_SCROLL_TRANSITION_SCALE = 0.1;
 const MAX_SCROLL_TRANSITION_SCALE = 4;
 const MAX_SCROLL_TRANSITION_BLUR = 64;
+const SCROLL_UNIT_SNAP_EPSILON = 0.000001;
 
 function validateStoryScrollScenes<TSceneData>(scenes: StoryScrollScene<TSceneData>[]) {
   if (!isDevelopment) return;
@@ -397,9 +398,34 @@ function getScrollTopForUnit(element: HTMLElement, unit: number, totalUnits: num
   return (clamp(unit, 0, totalUnits) / totalUnits) * maxScroll;
 }
 
+function getScrollUnitSnapTolerance(totalUnits: number, maxScroll: number) {
+  if (maxScroll <= 0 || totalUnits <= 0) {
+    return 0;
+  }
+
+  return totalUnits / maxScroll + SCROLL_UNIT_SNAP_EPSILON;
+}
+
+function snapUnitToTargetSceneStart(
+  unit: number,
+  targetUnit: number | undefined,
+  tolerance: number,
+) {
+  if (targetUnit === undefined || tolerance <= 0) {
+    return unit;
+  }
+
+  if (Math.abs(unit - targetUnit) <= tolerance) {
+    return targetUnit;
+  }
+
+  return unit;
+}
+
 function getNextScrollState<TSceneData>(
   element: HTMLElement,
   timeline: StoryScrollTimelineEntry<TSceneData>[],
+  targetStartUnit?: number,
 ): ScrollState {
   if (timeline.length === 0) {
     return { activeIndex: 0, value: 0, unit: 0 };
@@ -411,7 +437,12 @@ function getNextScrollState<TSceneData>(
     maxScroll === 0 || totalUnits <= 0
       ? 0
       : clamp((element.scrollTop / maxScroll) * totalUnits, 0, totalUnits);
-  const unit = Math.round(rawUnit * SCROLL_UNIT_PRECISION) / SCROLL_UNIT_PRECISION;
+  const roundedUnit = Math.round(rawUnit * SCROLL_UNIT_PRECISION) / SCROLL_UNIT_PRECISION;
+  const unit = snapUnitToTargetSceneStart(
+    roundedUnit,
+    targetStartUnit,
+    getScrollUnitSnapTolerance(totalUnits, maxScroll),
+  );
 
   for (const entry of timeline) {
     const isLastEntry = entry.sceneIndex === timeline.length - 1;
@@ -545,6 +576,7 @@ export function StoryScrollTimeline<TSceneData = unknown>({
   const keyboardScrollHoldKeyRef = useRef<"ArrowDown" | "ArrowUp" | undefined>(undefined);
   const handledScrollTargetVersionRef = useRef<number | undefined>(undefined);
   const lastActiveIndexRef = useRef<number | undefined>(undefined);
+  const targetSceneStartUnitRef = useRef<number | undefined>(undefined);
   const scrollValue = useMotionValue(0);
   const scrollProgress = useMotionValue(0);
   const previewScrollValue = useMotionValue(0);
@@ -583,7 +615,17 @@ export function StoryScrollTimeline<TSceneData = unknown>({
     const element = scrollRef.current;
     if (!element) return;
 
-    const nextState = getNextScrollState(element, timeline);
+    const nextState = getNextScrollState(element, timeline, targetSceneStartUnitRef.current);
+    const targetStartUnit = targetSceneStartUnitRef.current;
+
+    if (targetStartUnit !== undefined) {
+      const maxScroll = Math.max(element.scrollHeight - element.clientHeight, 0);
+      const targetTolerance = getScrollUnitSnapTolerance(getTotalScrollUnits(timeline), maxScroll);
+
+      if (Math.abs(nextState.unit - targetStartUnit) > targetTolerance) {
+        targetSceneStartUnitRef.current = undefined;
+      }
+    }
 
     scrollValue.set(nextState.value);
     scrollProgress.set(nextState.value / 100);
@@ -693,6 +735,7 @@ export function StoryScrollTimeline<TSceneData = unknown>({
       const targetEntry = getTimelineEntryForIndex(timeline, nextIndex);
       const targetUnit = targetEntry?.startUnit ?? 0;
 
+      targetSceneStartUnitRef.current = targetUnit;
       setScrollState({ activeIndex: nextIndex, value: 0, unit: targetUnit });
       scrollValue.set(0);
       scrollProgress.set(0);
