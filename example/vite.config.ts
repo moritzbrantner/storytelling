@@ -8,6 +8,12 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
+      "@moritzbrantner/storytelling/core": fileURLToPath(
+        new URL("../src/core.ts", import.meta.url),
+      ),
+      "@moritzbrantner/storytelling/schema": fileURLToPath(
+        new URL("../src/schema.ts", import.meta.url),
+      ),
       "@moritzbrantner/storytelling": fileURLToPath(new URL("../src/index.ts", import.meta.url)),
     },
   },

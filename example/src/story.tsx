@@ -2,6 +2,7 @@ import {
   StoryContent,
   createStoryRendererRegistry,
   defineStory,
+  type StoryDocument,
   type StoryScrollScene,
   type StoryScrollSceneRenderProps,
   type StoryRenderProps,
@@ -416,6 +417,83 @@ export const linearStory = defineStory<SignalStoryData>({
     },
   ],
 });
+
+export const authoringDraftStory: StoryDocument<SignalStoryData> = {
+  id: "observatory-draft",
+  title: " ",
+  subtitle: "An intentionally rough authoring draft",
+  openingNodeId: "wake",
+  labels: {
+    choosePrompt: "Choose the next move.",
+    completedBranch: "This branch is complete.",
+    continue: "Continue",
+  },
+  nodes: [
+    {
+      id: "wake",
+      title: "Wake the observatory",
+      prompt: "Route the signal.",
+      choices: [
+        {
+          id: "trace",
+          label: "Trace the source",
+          description: " ",
+          target: "harbor",
+        },
+      ],
+      data: {
+        channel: "Draft",
+        imageAlt: "A rough draft radio desk",
+        imageSrc:
+          "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1400&q=80",
+        intensity: 34,
+        location: "Draft room",
+        metricLabel: "Completeness",
+        metricValue: "34%",
+        tone: "cyan",
+      },
+    },
+    {
+      id: "harbor",
+      title: "Harbor draft",
+      content: [{ type: "paragraph", text: "The coordinates point toward an old inlet." }],
+      data: {
+        channel: "Bearing",
+        imageAlt: "A draft map on a desk",
+        imageSrc:
+          "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&w=1400&q=80",
+        intensity: 58,
+        location: "Map desk",
+        metricLabel: "Route confidence",
+        metricValue: "58%",
+        tone: "green",
+      },
+    },
+    {
+      id: "locked",
+      title: "Locked branch",
+      choices: [
+        {
+          id: "disabled",
+          label: "Disabled route",
+          target: "harbor",
+          disabled: true,
+        },
+      ],
+      data: {
+        channel: "Disabled",
+        imageAlt: "A locked notebook on a work table",
+        imageSrc:
+          "https://images.unsplash.com/photo-1495020689067-958852a7765e?auto=format&fit=crop&w=1400&q=80",
+        intensity: 12,
+        location: "Draft archive",
+        metricLabel: "Ready",
+        metricValue: "No",
+        tone: "rose",
+      },
+    },
+  ],
+};
 
 export const storyRegistry = createStoryRendererRegistry<SignalStoryData>({
   web: {

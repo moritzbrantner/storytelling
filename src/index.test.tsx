@@ -301,6 +301,39 @@ describe("@moritzbrantner/storytelling", () => {
   test("exports a story document JSON schema aligned with content block variants", () => {
     expect(matchesJsonSchema(story, storyDocumentJsonSchema)).toBe(true);
     expect(matchesJsonSchema({ id: "missing" }, storyDocumentJsonSchema)).toBe(false);
+    expect(
+      matchesJsonSchema(
+        {
+          id: "empty-nodes",
+          title: "Empty nodes",
+          openingNodeId: "start",
+          nodes: [],
+        },
+        storyDocumentJsonSchema,
+      ),
+    ).toBe(false);
+    expect(
+      matchesJsonSchema(
+        {
+          id: "bad-duration",
+          title: "Bad duration",
+          openingNodeId: "start",
+          nodes: [{ id: "start", title: "Start", durationInFrames: 0 }],
+        },
+        storyDocumentJsonSchema,
+      ),
+    ).toBe(false);
+    expect(
+      matchesJsonSchema(
+        {
+          id: "bad-content",
+          title: "Bad content",
+          openingNodeId: "start",
+          nodes: [{ id: "start", title: "Start", content: [{ type: "unknown" }] }],
+        },
+        storyDocumentJsonSchema,
+      ),
+    ).toBe(false);
 
     const contentVariants: StoryContentBlock[] = [
       { type: "paragraph", text: "Paragraph." },
@@ -615,6 +648,24 @@ describe("@moritzbrantner/storytelling", () => {
     }).issues.find((issue) => issue.code === "missing-choice-description");
 
     expect(missingDescription?.fixes).toBeUndefined();
+
+    const suggestedPatches = report.issues.flatMap(
+      (issue) => issue.fixes?.flatMap((fix) => fix.patch) ?? [],
+    );
+    const fixedDraft = applyStoryPatch(draft, suggestedPatches, { onMissing: "ignore" });
+    const fixedReport = analyzeStory(fixedDraft);
+
+    expect(fixedReport.issues.map((issue) => issue.code)).not.toEqual(
+      expect.arrayContaining([
+        "blank-story-title",
+        "blank-node-title",
+        "blank-choice-description",
+        "empty-content",
+        "unreachable-node",
+        "disabled-only-branch",
+      ]),
+    );
+    expect(fixedReport.metrics.unreachableNodeCount).toBe(0);
   });
 
   test("applies immutable story patches and can validate patched output", () => {

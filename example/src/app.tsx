@@ -12,8 +12,11 @@ import {
   type StoryScrollScene,
   type StoryScrollTransition,
 } from "@moritzbrantner/storytelling";
+import { analyzeStory, applyStoryPatch } from "@moritzbrantner/storytelling/core";
+import { storyDocumentJsonSchema } from "@moritzbrantner/storytelling/schema";
 
 import {
+  authoringDraftStory,
   autoscrollLabScenes,
   linearStory,
   motionLabScenes,
@@ -37,7 +40,7 @@ import {
 } from "@moritzbrantner/ui";
 
 type ExampleMode = "player" | "scroller";
-type ExampleStoryId = "branching" | "linear" | "motion" | "autoscroll";
+type ExampleStoryId = "branching" | "linear" | "motion" | "autoscroll" | "authoring";
 
 type PathPreset = {
   id: string;
@@ -80,6 +83,7 @@ const exampleCatalog: ExampleCatalog = {
     { id: "linear", label: "Linear" },
     { id: "motion", label: "Motion" },
     { id: "autoscroll", label: "Autoscroll" },
+    { id: "authoring", label: "Authoring" },
   ],
   stories: [
     {
@@ -179,6 +183,7 @@ const storyOptionsFallback: { id: ExampleStoryId; label: string }[] = [
   { id: "linear", label: "Linear" },
   { id: "motion", label: "Motion" },
   { id: "autoscroll", label: "Autoscroll" },
+  { id: "authoring", label: "Authoring" },
 ];
 
 function getStoryScrollerPageId(storyId: string, nodeId: string) {
@@ -241,6 +246,103 @@ function StateSummary({ summary }: { summary: string }) {
   return <pre className="m-0 whitespace-pre-wrap text-sm leading-7 text-[#2d3835]">{summary}</pre>;
 }
 
+function getFixPatches(report: ReturnType<typeof analyzeStory<SignalStoryData>>) {
+  return report.issues.flatMap((issue) => issue.fixes?.flatMap((fix) => fix.patch) ?? []);
+}
+
+function AuthoringWorkbench() {
+  const [fixesApplied, setFixesApplied] = useState(false);
+  const report = useMemo(() => analyzeStory(authoringDraftStory, { includeFixes: true }), []);
+  const suggestedPatches = useMemo(() => getFixPatches(report), [report]);
+  const patchedStory = useMemo(
+    () =>
+      fixesApplied
+        ? applyStoryPatch(authoringDraftStory, suggestedPatches, { onMissing: "ignore" })
+        : authoringDraftStory,
+    [fixesApplied, suggestedPatches],
+  );
+  const patchedReport = useMemo(
+    () => analyzeStory(patchedStory, { includeFixes: true }),
+    [patchedStory],
+  );
+  const schemaProperties = Object.keys(
+    (storyDocumentJsonSchema.properties ?? {}) as Record<string, unknown>,
+  );
+  const fixableIssues = report.issues.filter((issue) => (issue.fixes?.length ?? 0) > 0);
+
+  return (
+    <section className="authoring-workbench" aria-label="Authoring workbench">
+      <div className="authoring-workbench-main">
+        <div>
+          <Badge variant="outline" className="mb-3 border-white/25 bg-white/10 text-white">
+            Core export
+          </Badge>
+          <h2>Authoring draft review</h2>
+          <p>
+            This view imports analysis and patch helpers from the server-safe core entrypoint, then
+            applies deterministic fixes to a draft story.
+          </p>
+        </div>
+
+        <div className="authoring-scoreboard" aria-label="Authoring metrics">
+          <div>
+            <span>Issues</span>
+            <strong>{patchedReport.issues.length}</strong>
+          </div>
+          <div>
+            <span>Fixes</span>
+            <strong>{fixableIssues.length}</strong>
+          </div>
+          <div>
+            <span>Reachable</span>
+            <strong>
+              {patchedReport.metrics.reachableNodeCount}/{patchedReport.metrics.nodeCount}
+            </strong>
+          </div>
+        </div>
+
+        <Button type="button" className="w-fit" onClick={() => setFixesApplied((value) => !value)}>
+          {fixesApplied ? "Show original draft" : "Apply suggested fixes"}
+        </Button>
+      </div>
+
+      <div className="authoring-panels">
+        <div className="authoring-panel">
+          <span>Diagnostics</span>
+          <ul>
+            {patchedReport.issues.slice(0, 6).map((issue) => (
+              <li key={`${issue.code}-${issue.path}-${issue.nodeId ?? ""}`}>
+                <strong>{issue.code}</strong>
+                <small>{issue.nodeId ?? issue.path}</small>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="authoring-panel">
+          <span>Suggested patches</span>
+          <ul>
+            {fixableIssues.map((issue) => (
+              <li key={`${issue.code}-${issue.path}-${issue.nodeId ?? ""}`}>
+                <strong>{issue.fixes?.[0]?.label}</strong>
+                <small>{issue.code}</small>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="authoring-panel">
+          <span>Schema export</span>
+          <p>
+            `storyDocumentJsonSchema` covers {schemaProperties.length} top-level fields:
+            {` ${schemaProperties.join(", ")}`}.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function ExampleApp() {
   const catalogQuery = useQuery({
     queryKey: ["storytelling-example-catalog"],
@@ -259,6 +361,7 @@ export function ExampleApp() {
   const autoscrollPresets = catalog?.autoscrollPresets ?? [];
   const isMotionStory = storyId === "motion";
   const isAutoscrollStory = storyId === "autoscroll";
+  const isAuthoringStory = storyId === "authoring";
   const isCustomSceneStory = isMotionStory || isAutoscrollStory;
   const activeExample =
     exampleStories.find((example) => example.id === storyId) ?? exampleStories[0]!;
@@ -285,7 +388,8 @@ export function ExampleApp() {
     [activeExample.story],
   );
   const isLinearStory = storyId === "linear";
-  const isScrollerMode = isCustomSceneStory || isLinearStory || mode === "scroller";
+  const isScrollerMode =
+    !isAuthoringStory && (isCustomSceneStory || isLinearStory || mode === "scroller");
   const visibleHistory = isLinearStory
     ? linearScrollPath.history
     : history.length > 0
@@ -294,7 +398,7 @@ export function ExampleApp() {
   const activeMinimapIndex = isScrollerMode
     ? scrollerActiveIndex
     : Math.max(visibleHistory.length - 1, 0);
-  const showBranchControls = !isLinearStory && !isCustomSceneStory;
+  const showBranchControls = !isLinearStory && !isCustomSceneStory && !isAuthoringStory;
   const minimapItems = isCustomSceneStory
     ? customScenes.map((scene) => ({
         id: scene.id,
@@ -519,9 +623,16 @@ Transition ${getTransitionSummary(activeAutoscrollPreset.transition)}`;
           </div>
         </header>
 
-        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]">
+        <div
+          className={cn(
+            "grid items-start gap-4",
+            isAuthoringStory ? "" : "xl:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]",
+          )}
+        >
           <div className="example-component-frame [&>section]:shadow-[0_18px_54px_rgba(23,33,31,0.10)]">
-            {isMotionStory ? (
+            {isAuthoringStory ? (
+              <AuthoringWorkbench />
+            ) : isMotionStory ? (
               <StoryScroller
                 key={`motion-${activeMotionPreset.id}`}
                 scenes={motionLabScenes}
@@ -563,78 +674,80 @@ Transition ${getTransitionSummary(activeAutoscrollPreset.transition)}`;
             )}
           </div>
 
-          <aside className="grid gap-4 lg:grid-cols-2 xl:grid-cols-1" aria-label="Story state">
-            <StoryMinimap
-              items={minimapItems}
-              activeIndex={activeMinimapIndex}
-              onSelect={isScrollerMode ? selectMinimapItem : undefined}
-              collapsible
-              className="border-[#17211f]/15 bg-white/85 shadow-[0_16px_36px_rgba(23,33,31,0.08)] lg:col-span-2 xl:col-span-1"
-            />
+          {!isAuthoringStory ? (
+            <aside className="grid gap-4 lg:grid-cols-2 xl:grid-cols-1" aria-label="Story state">
+              <StoryMinimap
+                items={minimapItems}
+                activeIndex={activeMinimapIndex}
+                onSelect={isScrollerMode ? selectMinimapItem : undefined}
+                collapsible
+                className="border-[#17211f]/15 bg-white/85 shadow-[0_16px_36px_rgba(23,33,31,0.08)] lg:col-span-2 xl:col-span-1"
+              />
 
-            <Card className="border-[#17211f]/15 bg-white/85 shadow-[0_16px_36px_rgba(23,33,31,0.08)]">
-              <CardHeader>
-                <Badge variant="outline" className="w-fit">
-                  {isMotionStory
-                    ? "Motion scene"
-                    : isAutoscrollStory
-                      ? "Autoscroll scene"
-                      : isLinearStory
-                        ? "Scroll sequence"
-                        : mode === "player"
-                          ? "Active path"
-                          : "Start path"}
-                </Badge>
-                <CardTitle className="text-xl">
-                  {isCustomSceneStory
-                    ? (customScenes[activeMinimapIndex]?.title ?? "Scroll scenes")
-                    : isLinearStory
-                      ? "Story cards"
-                      : activePreset.label}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <StateSummary summary={stateSummary} />
-              </CardContent>
-            </Card>
-
-            {showBranchControls ? (
               <Card className="border-[#17211f]/15 bg-white/85 shadow-[0_16px_36px_rgba(23,33,31,0.08)]">
                 <CardHeader>
                   <Badge variant="outline" className="w-fit">
-                    Choice ids
+                    {isMotionStory
+                      ? "Motion scene"
+                      : isAutoscrollStory
+                        ? "Autoscroll scene"
+                        : isLinearStory
+                          ? "Scroll sequence"
+                          : mode === "player"
+                            ? "Active path"
+                            : "Start path"}
                   </Badge>
+                  <CardTitle className="text-xl">
+                    {isCustomSceneStory
+                      ? (customScenes[activeMinimapIndex]?.title ?? "Scroll scenes")
+                      : isLinearStory
+                        ? "Story cards"
+                        : activePreset.label}
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <code
-                    className={cn(
-                      "block overflow-x-auto whitespace-pre-wrap text-sm leading-7 text-[#2d3835]",
-                      activePreset.choiceIds.length === 0 ? "text-muted-foreground" : "",
-                    )}
-                  >
-                    {activePreset.choiceIds.join(" -> ") || "none"}
-                  </code>
+                  <StateSummary summary={stateSummary} />
                 </CardContent>
               </Card>
-            ) : null}
 
-            {isAutoscrollStory && activeAutoscrollPreset ? (
-              <Card className="border-[#17211f]/15 bg-white/85 shadow-[0_16px_36px_rgba(23,33,31,0.08)]">
-                <CardHeader>
-                  <Badge variant="outline" className="w-fit">
-                    Autoplay
-                  </Badge>
-                  <CardTitle className="text-xl">{activeAutoscrollPreset.label}</CardTitle>
-                </CardHeader>
-                <CardContent className="grid gap-3">
-                  <p className="m-0 text-sm leading-6 text-[#2d3835]">
-                    {activeAutoscrollPreset.description}
-                  </p>
-                  <StateSummary summary={autoscrollSummary || "No autoscroll preset"} />
-                </CardContent>
-              </Card>
-            ) : null}
-          </aside>
+              {showBranchControls ? (
+                <Card className="border-[#17211f]/15 bg-white/85 shadow-[0_16px_36px_rgba(23,33,31,0.08)]">
+                  <CardHeader>
+                    <Badge variant="outline" className="w-fit">
+                      Choice ids
+                    </Badge>
+                  </CardHeader>
+                  <CardContent>
+                    <code
+                      className={cn(
+                        "block overflow-x-auto whitespace-pre-wrap text-sm leading-7 text-[#2d3835]",
+                        activePreset.choiceIds.length === 0 ? "text-muted-foreground" : "",
+                      )}
+                    >
+                      {activePreset.choiceIds.join(" -> ") || "none"}
+                    </code>
+                  </CardContent>
+                </Card>
+              ) : null}
+
+              {isAutoscrollStory && activeAutoscrollPreset ? (
+                <Card className="border-[#17211f]/15 bg-white/85 shadow-[0_16px_36px_rgba(23,33,31,0.08)]">
+                  <CardHeader>
+                    <Badge variant="outline" className="w-fit">
+                      Autoplay
+                    </Badge>
+                    <CardTitle className="text-xl">{activeAutoscrollPreset.label}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="grid gap-3">
+                    <p className="m-0 text-sm leading-6 text-[#2d3835]">
+                      {activeAutoscrollPreset.description}
+                    </p>
+                    <StateSummary summary={autoscrollSummary || "No autoscroll preset"} />
+                  </CardContent>
+                </Card>
+              ) : null}
+            </aside>
+          ) : null}
         </div>
       </section>
     </main>

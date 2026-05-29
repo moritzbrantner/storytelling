@@ -405,6 +405,122 @@ select {
   opacity: 1;
 }
 
+.authoring-workbench {
+  display: grid;
+  min-height: clamp(34rem, 70vw, 48rem);
+  gap: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 0.5rem;
+  background:
+    linear-gradient(135deg, rgba(86, 213, 196, 0.22), transparent 34%),
+    linear-gradient(315deg, rgba(239, 139, 114, 0.2), transparent 38%), #101615;
+  padding: clamp(1rem, 3vw, 2rem);
+  color: #fff;
+}
+
+.authoring-workbench-main {
+  display: grid;
+  gap: 1.5rem;
+  align-content: end;
+  min-height: 18rem;
+}
+
+.authoring-workbench h2 {
+  max-width: 10ch;
+  margin: 0;
+  font-size: clamp(3rem, 9vw, 7rem);
+  line-height: 0.88;
+  letter-spacing: 0;
+}
+
+.authoring-workbench-main p {
+  max-width: 44rem;
+  margin: 1.25rem 0 0;
+  color: rgba(255, 255, 255, 0.74);
+  font-size: clamp(1rem, 1.6vw, 1.15rem);
+  line-height: 1.65;
+}
+
+.authoring-scoreboard,
+.authoring-panels {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.authoring-scoreboard {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  max-width: 38rem;
+}
+
+.authoring-scoreboard div,
+.authoring-panel {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 0.5rem;
+  background: rgba(8, 12, 12, 0.48);
+  backdrop-filter: blur(14px);
+}
+
+.authoring-scoreboard div {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.9rem;
+}
+
+.authoring-scoreboard span,
+.authoring-panel > span {
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.authoring-scoreboard strong {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.authoring-panels {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+}
+
+.authoring-panel {
+  min-height: 15rem;
+  padding: 1rem;
+}
+
+.authoring-panel ul {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.authoring-panel li {
+  display: grid;
+  gap: 0.25rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 0.75rem;
+}
+
+.authoring-panel strong {
+  color: #fff;
+  font-size: 0.95rem;
+}
+
+.authoring-panel small,
+.authoring-panel p {
+  color: rgba(255, 255, 255, 0.66);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.authoring-panel p {
+  margin: 1rem 0 0;
+}
+
 @media (max-width: 760px) {
   .demo-stage-content {
     grid-template-columns: 1fr;
@@ -422,6 +538,11 @@ select {
 
   .motion-lab-copy h2 {
     max-width: 8ch;
+  }
+
+  .authoring-scoreboard,
+  .authoring-panels {
+    grid-template-columns: 1fr;
   }
 }
 

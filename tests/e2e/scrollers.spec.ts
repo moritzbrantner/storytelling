@@ -367,4 +367,28 @@ test.describe("StoryScroller example app", () => {
       "Pace 12 units/s\nInput scale 0.5\nTransition 14 units fade",
     );
   });
+
+  test("authoring view reports schema coverage and applies suggested core fixes", async ({
+    page,
+  }) => {
+    await openExample(page);
+    await chooseStoryType(page, "Authoring");
+
+    const workbench = page.getByRole("region", { name: "Authoring workbench" });
+    const diagnosticCodes = workbench.locator(".authoring-panel").first().locator("strong");
+    await expect(workbench).toBeVisible();
+    await expect(workbench.getByRole("heading", { name: "Authoring draft review" })).toBeVisible();
+    await expect(workbench.getByLabel("Authoring metrics")).toContainText("Issues");
+    await expect(diagnosticCodes.filter({ hasText: "blank-story-title" })).toBeVisible();
+    await expect(workbench.getByText('Remove unreachable node "locked"')).toBeVisible();
+    await expect(workbench.getByText(/storyDocumentJsonSchema/)).toBeVisible();
+    await expect(workbench.getByText(/id, title, subtitle, description/)).toBeVisible();
+
+    await page.getByRole("button", { name: "Apply suggested fixes" }).click();
+    await expect(workbench.getByLabel("Authoring metrics")).toContainText("0");
+    await expect(diagnosticCodes.filter({ hasText: "blank-story-title" })).toBeHidden();
+
+    await page.getByRole("button", { name: "Show original draft" }).click();
+    await expect(diagnosticCodes.filter({ hasText: "blank-story-title" })).toBeVisible();
+  });
 });
