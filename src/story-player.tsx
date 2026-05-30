@@ -28,6 +28,23 @@ import type { StoryPathState } from "./story-state";
 
 export type StoryPlayerLayout = "split" | "stacked" | "stage-only";
 
+export type StoryPlayerSlots<TData extends StoryNodeData = StoryNodeData> = {
+  stage?: (props: StoryRenderProps<TData>) => ReactNode;
+  header?: (props: StoryRenderProps<TData>) => ReactNode;
+  controls?: (props: StoryRenderProps<TData>) => ReactNode;
+  actions?: (props: StoryRenderProps<TData>) => ReactNode;
+  progress?: (props: StoryRenderProps<TData>) => ReactNode;
+  trail?: (props: StoryRenderProps<TData>) => ReactNode;
+};
+
+export type StoryPlayerModules = {
+  header?: boolean;
+  controls?: boolean;
+  actions?: boolean;
+  progress?: boolean;
+  trail?: boolean;
+};
+
 export type StoryPlayerProps<TData extends StoryNodeData = StoryNodeData> = {
   story: StoryDocument<TData>;
   registry?: StoryRendererRegistry<TData>;
@@ -43,6 +60,8 @@ export type StoryPlayerProps<TData extends StoryNodeData = StoryNodeData> = {
   renderActions?: (props: StoryRenderProps<TData>) => ReactNode;
   renderProgress?: (props: StoryRenderProps<TData>) => ReactNode;
   renderTrail?: (props: StoryRenderProps<TData>) => ReactNode;
+  slots?: StoryPlayerSlots<TData>;
+  modules?: StoryPlayerModules;
   onChoice?: (choice: StoryChoice, history: StoryHistoryEntry<TData>[]) => void;
   onPathChange?: (history: StoryHistoryEntry<TData>[]) => void;
   onChoiceIdsChange?: (choiceIds: string[], state: StoryPathState<TData>) => void;
@@ -77,6 +96,8 @@ export function StoryPlayer<TData extends StoryNodeData = StoryNodeData>({
   renderActions,
   renderProgress,
   renderTrail,
+  slots,
+  modules,
   onChoice,
   onPathChange,
   onChoiceIdsChange,
@@ -111,11 +132,22 @@ export function StoryPlayer<TData extends StoryNodeData = StoryNodeData>({
 
   const stage = renderStage ? (
     renderStage(renderProps)
+  ) : slots?.stage ? (
+    slots.stage(renderProps)
   ) : (
     <StoryStageFrame {...renderProps} registry={registry} />
   );
-  const header = renderHeader ? (
+  const showHeader = modules?.header !== false;
+  const showControls = modules?.controls !== false;
+  const showActions = modules?.actions !== false;
+  const showProgress = modules?.progress !== false;
+  const showTrail = modules?.trail !== false;
+  const showUtilityModules = showActions || showProgress || showTrail;
+  const showAside = layout !== "stage-only" && (showHeader || showControls || showUtilityModules);
+  const header = !showHeader ? null : renderHeader ? (
     renderHeader(renderProps)
+  ) : slots?.header ? (
+    slots.header(renderProps)
   ) : (
     <div>
       {currentNode.eyebrow ? (
@@ -135,8 +167,10 @@ export function StoryPlayer<TData extends StoryNodeData = StoryNodeData>({
       ) : null}
     </div>
   );
-  const controls = renderControls ? (
+  const controls = !showControls ? null : renderControls ? (
     renderControls(renderProps)
+  ) : slots?.controls ? (
+    slots.controls(renderProps)
   ) : (
     <StoryControls
       choices={renderProps.choices}
@@ -146,8 +180,10 @@ export function StoryPlayer<TData extends StoryNodeData = StoryNodeData>({
       completedLabel={labels.completedBranch}
     />
   );
-  const actions = renderActions ? (
+  const actions = !showActions ? null : renderActions ? (
     renderActions(renderProps)
+  ) : slots?.actions ? (
+    slots.actions(renderProps)
   ) : (
     <StoryActionBar
       canGoBack={renderProps.canGoBack}
@@ -157,13 +193,17 @@ export function StoryPlayer<TData extends StoryNodeData = StoryNodeData>({
       restartLabel={labels.restart}
     />
   );
-  const progress = renderProgress ? (
+  const progress = !showProgress ? null : renderProgress ? (
     renderProgress(renderProps)
+  ) : slots?.progress ? (
+    slots.progress(renderProps)
   ) : (
     <StoryProgress value={renderProps.progress} />
   );
-  const trail = renderTrail ? (
+  const trail = !showTrail ? null : renderTrail ? (
     renderTrail(renderProps)
+  ) : slots?.trail ? (
+    slots.trail(renderProps)
   ) : (
     <StoryPathTrail story={story} history={renderProps.history} />
   );
@@ -196,7 +236,7 @@ export function StoryPlayer<TData extends StoryNodeData = StoryNodeData>({
           </AnimatePresence>
         </div>
 
-        {layout === "stage-only" ? null : (
+        {showAside ? (
           <aside
             className={cn(
               "border-t bg-background p-5 md:p-6",
@@ -207,14 +247,16 @@ export function StoryPlayer<TData extends StoryNodeData = StoryNodeData>({
               {header}
               {controls}
 
-              <div className="mt-auto space-y-5">
-                {actions}
-                {progress}
-                {trail}
-              </div>
+              {showUtilityModules ? (
+                <div className="mt-auto space-y-5">
+                  {actions}
+                  {progress}
+                  {trail}
+                </div>
+              ) : null}
             </div>
           </aside>
-        )}
+        ) : null}
       </div>
     </section>
   );

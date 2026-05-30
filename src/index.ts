@@ -96,13 +96,17 @@ export {
   type StoryChoicePanelRenderProps,
   type StoryControlsProps,
   type StoryPathTrailProps,
+  type StoryPlayerModules,
   type StoryPlayerProps,
+  type StoryPlayerSlots,
 } from "./story-player";
 export { StoryProgress, type StoryProgressProps } from "./story-progress";
 export {
   StoryScroller,
   type StoryScrollerChoicePanelRenderProps,
+  type StoryScrollerMinimapModuleOptions,
   type StoryScrollerMinimapProps,
+  type StoryScrollerModules,
   type StoryScrollAutoplay,
   type StoryScrollAutoplayOptions,
   type StoryScrollDirection,
@@ -110,6 +114,7 @@ export {
   type StoryScrollSceneRenderProps,
   type StoryScrollTransition,
   type StoryScrollerProps,
+  type StoryScrollerSlots,
 } from "./story-scroller";
 export {
   StoryScrollTimeline,

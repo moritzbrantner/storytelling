@@ -21,6 +21,7 @@ import {
   createStoryRenderProps,
   getHistoryChoiceIds,
 } from "./story-runtime";
+import { StoryMinimap } from "./story-minimap";
 import { resolveStoryPath } from "./story-path";
 import { createStoryNodeEntryLookup } from "./story-node-tree";
 import { getStoryChoices, getStoryNode, isStoryEnding, validateStory } from "./story-validation";
@@ -71,6 +72,28 @@ export type StoryScrollerMinimapProps<TData extends StoryNodeData = StoryNodeDat
   history: StoryHistoryEntry<TData>[];
 };
 
+export type StoryScrollerSlots<
+  TData extends StoryNodeData = StoryNodeData,
+  TSceneData = unknown,
+> = {
+  scene?: (props: StoryScrollerSceneRenderProps<TData, TSceneData>) => ReactNode;
+  choicePanel?: (props: StoryScrollerChoicePanelRenderProps<TData>) => ReactNode;
+  minimap?: (props: StoryScrollerMinimapProps<TData>) => ReactNode;
+};
+
+export type StoryScrollerMinimapModuleOptions = {
+  enabled?: boolean;
+  collapsible?: boolean;
+  defaultCollapsed?: boolean;
+  className?: string;
+  ariaLabel?: string;
+};
+
+export type StoryScrollerModules = {
+  choicePanel?: boolean;
+  minimap?: boolean | StoryScrollerMinimapModuleOptions;
+};
+
 export type StoryScrollerProps<
   TData extends StoryNodeData = StoryNodeData,
   TSceneData = unknown,
@@ -88,9 +111,11 @@ export type StoryScrollerProps<
   scrollInputScale?: number;
   autoplay?: StoryScrollAutoplay;
   ariaLabel?: string;
-  renderScene?: (props: StoryScrollerSceneRenderProps<TData, unknown>) => ReactNode;
+  renderScene?: (props: StoryScrollerSceneRenderProps<TData, TSceneData>) => ReactNode;
   renderChoicePanel?: (props: StoryScrollerChoicePanelRenderProps<TData>) => ReactNode;
   renderMinimap?: (props: StoryScrollerMinimapProps<TData>) => ReactNode;
+  slots?: StoryScrollerSlots<TData, TSceneData>;
+  modules?: StoryScrollerModules;
   onChoice?: (choice: StoryChoice, history: StoryHistoryEntry<TData>[]) => void;
   onPathChange?: (history: StoryHistoryEntry<TData>[]) => void;
   onChoiceIdsChange?: (choiceIds: string[], state: StoryPathState<TData>) => void;
@@ -153,6 +178,8 @@ function StoryDocumentScroller<TData extends StoryNodeData = StoryNodeData>({
   renderScene,
   renderChoicePanel,
   renderMinimap,
+  slots,
+  modules,
   onChoice,
   onPathChange,
   onChoiceIdsChange,
@@ -174,6 +201,7 @@ function StoryDocumentScroller<TData extends StoryNodeData = StoryNodeData>({
   const [history, setHistory] = useState<StoryHistoryEntry<TData>[]>(() => initialHistory);
   const [scrollTarget, setScrollTarget] = useState<StoryScrollTarget | undefined>();
   const [activeIndex, setActiveIndex] = useState(0);
+  const choicePanelEnabled = modules?.choicePanel !== false;
 
   useEffect(() => {
     setHistory(initialHistory);
@@ -288,12 +316,16 @@ function StoryDocumentScroller<TData extends StoryNodeData = StoryNodeData>({
               revealProgress,
               isReady: revealProgress > 0,
             };
+            const shouldRenderChoicePanel =
+              choicePanelEnabled && (explicitChoices.length > 0 || ending);
             const defaultScene = (
               <div className="relative h-full min-h-0">
                 <StoryStageFrame {...renderProps} registry={registry} className="h-full min-h-0" />
-                {explicitChoices.length > 0 || ending ? (
+                {shouldRenderChoicePanel ? (
                   renderChoicePanel ? (
                     renderChoicePanel(choicePanelProps)
+                  ) : slots?.choicePanel ? (
+                    slots.choicePanel(choicePanelProps)
                   ) : (
                     <StoryChoicePanel
                       choices={explicitChoices}
@@ -310,14 +342,16 @@ function StoryDocumentScroller<TData extends StoryNodeData = StoryNodeData>({
                 ) : null}
               </div>
             );
+            const sceneSlot = renderScene ?? slots?.scene;
 
-            return renderScene ? renderScene({ ...renderProps, ...scrollProps }) : defaultScene;
+            return sceneSlot ? sceneSlot({ ...renderProps, ...scrollProps }) : defaultScene;
           },
         };
       }),
     [
       allowBranchReselection,
       chooseFrom,
+      choicePanelEnabled,
       history,
       nodeEntryLookup,
       registry,
@@ -325,6 +359,7 @@ function StoryDocumentScroller<TData extends StoryNodeData = StoryNodeData>({
       renderScene,
       requestScrollToScene,
       restart,
+      slots,
       story,
     ],
   );
@@ -337,7 +372,7 @@ function StoryDocumentScroller<TData extends StoryNodeData = StoryNodeData>({
     [onActiveIndexChange],
   );
 
-  const minimap = renderMinimap?.({
+  const minimapProps: StoryScrollerMinimapProps<TData> = {
     story,
     items: scenes.map((scene, index) => {
       const nodeEntry = history[index]?.nodeId
@@ -359,7 +394,24 @@ function StoryDocumentScroller<TData extends StoryNodeData = StoryNodeData>({
     activeIndex,
     scrollToScene: requestScrollToScene,
     history,
-  });
+  };
+  const minimapSlot = renderMinimap ?? slots?.minimap;
+  const minimapOptions = typeof modules?.minimap === "object" ? modules.minimap : undefined;
+  const showDefaultMinimap =
+    modules?.minimap === true || (Boolean(minimapOptions) && minimapOptions?.enabled !== false);
+  const minimap = minimapSlot ? (
+    minimapSlot(minimapProps)
+  ) : showDefaultMinimap ? (
+    <StoryMinimap
+      items={minimapProps.items}
+      activeIndex={minimapProps.activeIndex}
+      onSelect={minimapProps.scrollToScene}
+      collapsible={minimapOptions?.collapsible}
+      defaultCollapsed={minimapOptions?.defaultCollapsed}
+      className={minimapOptions?.className}
+      ariaLabel={minimapOptions?.ariaLabel}
+    />
+  ) : null;
 
   return (
     <>
@@ -397,6 +449,8 @@ export function StoryScroller<TData extends StoryNodeData = StoryNodeData, TScen
   renderScene,
   renderChoicePanel,
   renderMinimap,
+  slots,
+  modules,
   onChoice,
   onPathChange,
   onChoiceIdsChange,
@@ -437,9 +491,11 @@ export function StoryScroller<TData extends StoryNodeData = StoryNodeData, TScen
       scrollInputScale={scrollInputScale}
       autoplay={autoplay}
       ariaLabel={ariaLabel}
-      renderScene={renderScene}
+      renderScene={renderScene as StoryScrollerProps<TData, unknown>["renderScene"]}
       renderChoicePanel={renderChoicePanel}
       renderMinimap={renderMinimap}
+      slots={slots as StoryScrollerProps<TData, unknown>["slots"]}
+      modules={modules}
       onChoice={onChoice}
       onPathChange={onPathChange}
       onChoiceIdsChange={onChoiceIdsChange}

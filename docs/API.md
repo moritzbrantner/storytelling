@@ -49,10 +49,12 @@ labels, defaults, and validation-compatible numeric constraints.
 - `createStoryRenderProps(...)`, `buildPathFromHistory(...)`,
   `getHistoryChoiceIds(...)`, and `createStoryPathStateFromHistory(...)`
   expose shared runtime helpers for custom adapters.
-- `StoryPlayer` renders focused branching playback and accepts render slots for
-  stage, header, controls, actions, progress, and trail.
+- `StoryPlayer` renders focused branching playback. Use grouped `slots` to
+  replace stage, header, controls, actions, progress, and trail modules, and
+  grouped `modules` to disable optional UI pieces.
 - `StoryScroller` renders either a story-backed scroll experience or custom
-  scroll scenes, with optional `autoplay` pacing and story-backed render slots.
+  scroll scenes, with optional `autoplay` pacing, story-backed slots, and an
+  opt-in default minimap module.
 - `StoryScrollTimeline` renders generic scroll scenes without requiring a story
   document.
 - `StoryContent`, `StoryChoiceList`, `StoryChoicePanel`, `StoryControls`,
@@ -102,9 +104,12 @@ labels, defaults, and validation-compatible numeric constraints.
 ### Composable React UI
 
 - `StoryPlayer` accepts `layout: "split" | "stacked" | "stage-only"`.
-- `StoryPlayer` render slots receive full `StoryRenderProps`:
+- Prefer `StoryPlayer` `slots` for new composition work. Existing direct render
+  props remain supported and take precedence over grouped slots:
   `renderStage`, `renderHeader`, `renderControls`, `renderActions`,
   `renderProgress`, and `renderTrail`.
+- `StoryPlayer` `modules` can disable `header`, `controls`, `actions`,
+  `progress`, and `trail`. Disabled modules do not mount their slot renderers.
 - `StoryControls` now prefers `onChoose` and `isEnding`; `choose` and `ending`
   remain as compatibility aliases.
 - `StoryChoiceList` renders choice buttons, `StoryChoicePanel` renders the
@@ -113,6 +118,25 @@ labels, defaults, and validation-compatible numeric constraints.
 - `StoryContent` accepts `renderers` and `renderBlock`. Built-in content blocks
   still render by default, and custom block types can be rendered by adding a
   keyed renderer.
+
+```tsx
+<StoryPlayer
+  story={story}
+  modules={{ controls: false, progress: false, trail: false }}
+  slots={{ actions: (props) => <Toolbar restart={props.restart} /> }}
+/>
+
+<StoryScroller story={story} modules={{ minimap: true }} />
+
+<StoryScroller
+  story={story}
+  slots={{
+    minimap: ({ items, activeIndex, scrollToScene }) => (
+      <CustomMap items={items} activeIndex={activeIndex} onSelect={scrollToScene} />
+    ),
+  }}
+/>
+```
 
 ### Story Patches
 
@@ -188,9 +212,13 @@ labels, defaults, and validation-compatible numeric constraints.
 - Story-backed scrollers allow branch re-selection by default when a user
   scrolls back to an answered branch scene. Set `allowBranchReselection={false}`
   to keep those branch choices locked after a path has been selected.
-- Story-backed scrollers accept `renderScene`, `renderChoicePanel`, and
-  `renderMinimap` slots. `renderScene` receives `StoryRenderProps` plus the
-  active scroll scene render props.
+- Prefer `StoryScroller` `slots` for new composition work. Existing direct
+  render props remain supported and take precedence over grouped slots:
+  `renderScene`, `renderChoicePanel`, and `renderMinimap`. `renderScene`
+  receives `StoryRenderProps` plus the active scroll scene render props.
+- `StoryScroller` `modules.choicePanel=false` disables the default branch
+  overlay. `modules.minimap` is off by default; set it to `true` or an options
+  object to render the built-in `StoryMinimap` for story-backed scrollers.
 - Story-backed scrollers flatten nested `StoryNode.children` into normal scroll
   pages and pass hierarchy metadata to custom minimap items. Custom
   `StoryScrollScene[]` arrays remain flat.

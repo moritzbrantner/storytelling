@@ -1470,25 +1470,11 @@ describe("@moritzbrantner/storytelling", () => {
     ]);
     expect(timeline.scenes.map((scene) => scene.pathIndex)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
     expect(timeline.scenes.map((scene) => scene.startFrame)).toEqual([
-      0,
-      100,
-      200,
-      300,
-      400,
-      500,
-      600,
-      700,
+      0, 100, 200, 300, 400, 500, 600, 700,
     ]);
     expect(timeline.totalFrames).toBe(800);
     expect(timeline.scenes.map((scene) => scene.transitionInFrames)).toEqual([
-      12,
-      12,
-      12,
-      12,
-      12,
-      12,
-      12,
-      12,
+      12, 12, 12, 12, 12, 12, 12, 12,
     ]);
   });
 
@@ -1658,6 +1644,85 @@ describe("@moritzbrantner/storytelling", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Slot choose 3" }));
     expect(await screen.findByText("Slot stage trace-node")).toBeTruthy();
+  });
+
+  test("renders StoryPlayer grouped slots with render props", async () => {
+    render(
+      <StoryPlayer
+        story={story}
+        slots={{
+          stage: (props) => <div>Grouped stage {props.node.id}</div>,
+          header: (props) => <div>Grouped header {props.currentIndex}</div>,
+          controls: (props) => (
+            <button type="button" onClick={() => props.choose("trace")}>
+              Grouped choose {props.choices.length}
+            </button>
+          ),
+          actions: (props) => <div>Grouped actions {String(props.canGoBack)}</div>,
+          progress: (props) => <div>Grouped progress {Math.round(props.progress * 100)}</div>,
+          trail: (props) => <div>Grouped trail {props.history.length}</div>,
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Grouped stage wake")).toBeTruthy();
+    expect(screen.getByText("Grouped header 0")).toBeTruthy();
+    expect(screen.getByText("Grouped choose 3")).toBeTruthy();
+    expect(screen.getByText("Grouped actions false")).toBeTruthy();
+    expect(screen.getByText("Grouped progress 25")).toBeTruthy();
+    expect(screen.getByText("Grouped trail 1")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Grouped choose 3" }));
+    expect(await screen.findByText("Grouped stage trace-node")).toBeTruthy();
+  });
+
+  test("lets StoryPlayer direct render props win over grouped slots", () => {
+    render(
+      <StoryPlayer
+        story={story}
+        renderHeader={() => <div>Direct header</div>}
+        slots={{ header: () => <div>Grouped header</div> }}
+      />,
+    );
+
+    expect(screen.getByText("Direct header")).toBeTruthy();
+    expect(screen.queryByText("Grouped header")).toBeNull();
+  });
+
+  test("disables StoryPlayer modules without mounting their slots", () => {
+    const controlsSlot = vi.fn(() => <div>Disabled controls</div>);
+    const { container } = render(
+      <StoryPlayer
+        story={story}
+        modules={{
+          header: false,
+          controls: false,
+          actions: false,
+          progress: false,
+          trail: false,
+        }}
+        slots={{ controls: controlsSlot }}
+      />,
+    );
+
+    expect(screen.getByText("A low signal reaches the tower.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Trace the source/ })).toBeNull();
+    expect(screen.queryByText("Disabled controls")).toBeNull();
+    expect(controlsSlot).not.toHaveBeenCalled();
+    expect(container.querySelector("aside")).toBeNull();
+  });
+
+  test("keeps StoryPlayer stage-only layout independent from module flags", () => {
+    const { container } = render(
+      <StoryPlayer
+        story={story}
+        layout="stage-only"
+        modules={{ header: true, controls: true, actions: true, progress: true, trail: true }}
+      />,
+    );
+
+    expect(screen.getByText("A low signal reaches the tower.")).toBeTruthy();
+    expect(container.querySelector("aside")).toBeNull();
   });
 
   test("provides headless story path state for custom editor controls", async () => {
@@ -1937,6 +2002,144 @@ describe("@moritzbrantner/storytelling", () => {
     fireEvent.click(screen.getByRole("button", { name: "Custom choose trace" }));
 
     expect(await screen.findByText(/Custom scene trace-node/)).toBeTruthy();
+  });
+
+  test("renders StoryScroller grouped scene and minimap slots", async () => {
+    const { container } = render(
+      <StoryScroller
+        story={nestedStory}
+        slots={{
+          scene: (props) => (
+            <div>
+              Grouped scene {props.node.id} depth {props.nodeEntry?.depth ?? -1}
+            </div>
+          ),
+          minimap: (props) => (
+            <nav aria-label="Grouped minimap">
+              <p>
+                Grouped minimap story {props.story.id} active {props.activeIndex} history{" "}
+                {props.history.length}
+              </p>
+              {props.items.map((item, index) => (
+                <button key={item.id} type="button" onClick={() => props.scrollToScene(index)}>
+                  {item.title} depth {item.depth ?? -1}
+                </button>
+              ))}
+            </nav>
+          ),
+        }}
+      />,
+    );
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+
+    expect(viewport).toBeTruthy();
+    setScrollerGeometry(viewport!, 4);
+    expect(screen.getByText("Grouped scene chapter depth 0")).toBeTruthy();
+    expect(screen.getByText("Grouped minimap story nested-report active 0 history 4")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Scene A depth 1" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Scene A depth 1" }));
+    expect(await screen.findByText("Grouped scene chapter-scene-a depth 1")).toBeTruthy();
+  });
+
+  test("renders a grouped StoryScroller choice panel slot", async () => {
+    const { container } = render(
+      <StoryScroller
+        story={story}
+        slots={{
+          choicePanel: (props) => (
+            <button type="button" onClick={() => props.choose("trace")}>
+              Grouped panel {props.prompt}
+            </button>
+          ),
+        }}
+      />,
+    );
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+
+    expect(viewport).toBeTruthy();
+    setScrollerGeometry(viewport!, 1);
+    scrollScrollerViewport(viewport!, 100);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Grouped panel What should the operator do first?" }),
+    );
+    expect(
+      await screen.findByText("The signal comes from a cove nobody has charted in decades."),
+    ).toBeTruthy();
+  });
+
+  test("lets StoryScroller direct render props win over grouped slots", () => {
+    render(
+      <StoryScroller
+        story={story}
+        renderScene={(props) => <div>Direct scroller scene {props.node.id}</div>}
+        renderMinimap={() => <nav aria-label="Direct scroller minimap">Direct minimap</nav>}
+        slots={{
+          scene: () => <div>Grouped scroller scene</div>,
+          minimap: () => <nav aria-label="Grouped scroller minimap">Grouped minimap</nav>,
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Direct scroller scene wake")).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Direct scroller minimap" })).toBeTruthy();
+    expect(screen.queryByText("Grouped scroller scene")).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Grouped scroller minimap" })).toBeNull();
+  });
+
+  test("disables the default StoryScroller choice panel module", async () => {
+    const choicePanelSlot = vi.fn(() => <button type="button">Disabled panel</button>);
+    const { container } = render(
+      <StoryScroller
+        story={story}
+        modules={{ choicePanel: false }}
+        slots={{ choicePanel: choicePanelSlot }}
+      />,
+    );
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+
+    expect(viewport).toBeTruthy();
+    setScrollerGeometry(viewport!, 1);
+    scrollScrollerViewport(viewport!, 100);
+
+    expect(screen.queryByRole("button", { name: /Answer immediately/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Disabled panel" })).toBeNull();
+    expect(choicePanelSlot).not.toHaveBeenCalled();
+  });
+
+  test("renders the opt-in default StoryScroller minimap and scrolls to scenes", async () => {
+    const { container } = render(<StoryScroller story={linearStory} modules={{ minimap: true }} />);
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+
+    expect(viewport).toBeTruthy();
+    setScrollerGeometry(viewport!, 3);
+    expect(screen.getByRole("navigation", { name: "Story minimap" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Go to scene 2: Review the report" }));
+    expect(await screen.findByText("Review the copy for sequence and clarity.")).toBeTruthy();
+  });
+
+  test("passes options to the default StoryScroller minimap module", () => {
+    render(
+      <StoryScroller
+        story={linearStory}
+        modules={{
+          minimap: {
+            collapsible: true,
+            defaultCollapsed: true,
+            ariaLabel: "Collapsed story map",
+            className: "custom-minimap",
+          },
+        }}
+      />,
+    );
+
+    const minimap = screen.getByRole("navigation", { name: "Collapsed story map" });
+
+    expect(minimap.className).toContain("custom-minimap");
+    expect(screen.getByRole("button", { name: "Show minimap" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Go to scene 2: Review the report" })).toBeNull();
   });
 
   test("renders a custom StoryScroller choice panel slot", async () => {

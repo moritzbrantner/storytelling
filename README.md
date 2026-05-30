@@ -384,14 +384,36 @@ function CustomPlayer({ story }) {
 }
 ```
 
-`StoryPlayer` also accepts slots for targeted customization without replacing
-the whole component:
+`StoryPlayer` also accepts grouped `slots` for targeted customization and
+grouped `modules` for turning optional UI pieces off. The older direct
+`renderControls`/`renderStage` style still works and takes precedence over the
+matching grouped slot.
 
 ```tsx
 <StoryPlayer
   story={story}
   layout="stacked"
-  renderControls={(props) => <CustomChoices choices={props.choices} onChoose={props.choose} />}
+  modules={{ controls: false, progress: false, trail: false }}
+  slots={{
+    actions: (props) => <Toolbar canGoBack={props.canGoBack} restart={props.restart} />,
+  }}
+/>
+```
+
+`StoryScroller` keeps the minimap opt-in. Use the built-in minimap only when the
+story surface needs it, or provide a custom minimap slot with the same
+story-backed metadata.
+
+```tsx
+<StoryScroller story={story} modules={{ minimap: true }} />
+
+<StoryScroller
+  story={story}
+  slots={{
+    minimap: ({ items, activeIndex, scrollToScene }) => (
+      <CustomMap items={items} activeIndex={activeIndex} onSelect={scrollToScene} />
+    ),
+  }}
 />
 ```
 
