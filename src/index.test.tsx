@@ -20,6 +20,7 @@ import {
   enumerateStoryPaths,
   getStoryBranches,
   getStoryEndings,
+  getStoryNodeEntries,
   parseStoryPath,
   resolveStoryPath,
   serializeStoryPath,
@@ -150,6 +151,233 @@ const linearStory = defineStory<FixtureData>({
   ],
 });
 
+const nestedStory = defineStory<FixtureData>({
+  id: "nested-report",
+  title: "Nested report",
+  openingNodeId: "chapter",
+  nodes: [
+    {
+      id: "chapter",
+      title: "Chapter",
+      content: [{ type: "paragraph", text: "Open the chapter." }],
+      next: "ending",
+      data: { tone: "cold" },
+      children: [
+        {
+          id: "chapter-scene-a",
+          title: "Scene A",
+          content: [{ type: "paragraph", text: "First nested scene." }],
+          data: { tone: "warm" },
+        },
+        {
+          id: "chapter-scene-b",
+          title: "Scene B",
+          content: [{ type: "paragraph", text: "Second nested scene." }],
+          data: { tone: "bright" },
+        },
+      ],
+    },
+    {
+      id: "ending",
+      title: "Ending",
+      content: [{ type: "paragraph", text: "Finish the nested story." }],
+      data: { tone: "green" },
+    },
+  ],
+});
+
+const longBranchStory = defineStory<FixtureData>({
+  id: "long-branch-report",
+  title: "Long Relay Report",
+  subtitle: "A long branch-heavy story for graph assertions",
+  openingNodeId: "opening",
+  labels: {
+    choosePrompt: "Select the next move.",
+    completedBranch: "This branch is complete.",
+    continue: "Continue",
+    restart: "Restart",
+    scrollerLabel: "Long Relay Report scroller",
+  },
+  defaults: {
+    durationInFrames: 100,
+    transitionInFrames: 12,
+  },
+  nodes: [
+    {
+      id: "opening",
+      title: "Relay awakens",
+      eyebrow: "Opening",
+      content: [{ type: "paragraph", text: "Three independent streams activate at once." }],
+      prompt: "Where should routing begin?",
+      data: { tone: "cold" },
+      choices: [
+        {
+          id: "answer-pilot",
+          label: "Answer pilot",
+          target: "pilot-check",
+        },
+        {
+          id: "trace-source",
+          label: "Trace source",
+          target: "trace-scan",
+        },
+        {
+          id: "archive-review",
+          label: "Review archive",
+          target: "archive-index",
+        },
+      ],
+    },
+    {
+      id: "pilot-check",
+      title: "Pilot checks in",
+      content: [{ type: "paragraph", text: "A short voice ping is stable, but short-lived." }],
+      next: "pilot-wave",
+      data: { tone: "warm" },
+    },
+    {
+      id: "pilot-wave",
+      title: "Carrier pulse settles",
+      content: [{ type: "paragraph", text: "The first line is clear, then it drifts." }],
+      next: "pilot-decision",
+      data: { tone: "warm" },
+    },
+    {
+      id: "pilot-decision",
+      title: "Relay route choice",
+      content: [{ type: "paragraph", text: "The backup corridor is nearby." }],
+      prompt: "Select route handling.",
+      data: { tone: "warm" },
+      choices: [
+        {
+          id: "stabilize-route",
+          label: "Stabilize",
+          target: "pilot-stabilize",
+        },
+        {
+          id: "confirm-route",
+          label: "Confirm alternate",
+          target: "pilot-confirm",
+        },
+      ],
+    },
+    {
+      id: "pilot-stabilize",
+      title: "Pilot branch stabilizes",
+      content: [{ type: "paragraph", text: "Route holds through the false corridor." }],
+      next: "relay-hub",
+      data: { tone: "warm" },
+    },
+    {
+      id: "pilot-confirm",
+      title: "Pilot branch confirms",
+      content: [{ type: "paragraph", text: "The alternate route is safe enough." }],
+      next: "relay-hub",
+      data: { tone: "warm" },
+    },
+    {
+      id: "trace-scan",
+      title: "Source scan complete",
+      content: [{ type: "paragraph", text: "A hidden inlet appears near a coast." }],
+      next: "trace-grid",
+      data: { tone: "green" },
+    },
+    {
+      id: "trace-grid",
+      title: "Source path split",
+      content: [{ type: "paragraph", text: "Teams can either go local or broadcast." }],
+      prompt: "Choose source handling.",
+      data: { tone: "green" },
+      choices: [
+        {
+          id: "send-team",
+          label: "Send team",
+          target: "trace-team",
+        },
+        {
+          id: "broadcast-fix",
+          label: "Broadcast fix",
+          target: "trace-broadcast",
+        },
+      ],
+    },
+    {
+      id: "trace-team",
+      title: "Local team dispatch",
+      content: [{ type: "paragraph", text: "A team confirms the source and relays it." }],
+      next: "relay-hub",
+      data: { tone: "green" },
+    },
+    {
+      id: "trace-broadcast",
+      title: "Broadcast fix applied",
+      content: [{ type: "paragraph", text: "The source becomes public metadata." }],
+      next: "relay-hub",
+      data: { tone: "green" },
+    },
+    {
+      id: "archive-index",
+      title: "Archive search runs",
+      content: [{ type: "paragraph", text: "A similar route exists in historical logs." }],
+      next: "archive-decoder",
+      data: { tone: "green" },
+    },
+    {
+      id: "archive-decoder",
+      title: "Archive branch split",
+      content: [{ type: "paragraph", text: "Two leads remain: verify or stash." }],
+      prompt: "Choose archive lead.",
+      data: { tone: "green" },
+      choices: [
+        {
+          id: "verify-archive",
+          label: "Verify archive",
+          target: "archive-verify",
+        },
+        {
+          id: "archive-stash",
+          label: "Use stash",
+          target: "archive-stash",
+        },
+      ],
+    },
+    {
+      id: "archive-verify",
+      title: "Archive route verified",
+      content: [{ type: "paragraph", text: "The primary note is still valid." }],
+      next: "relay-hub",
+      data: { tone: "green" },
+    },
+    {
+      id: "archive-stash",
+      title: "Archive stash selected",
+      content: [{ type: "paragraph", text: "A secondary cache remains possible but fuzzy." }],
+      next: "relay-hub",
+      data: { tone: "green" },
+    },
+    {
+      id: "relay-hub",
+      title: "Relay hub merge",
+      content: [{ type: "paragraph", text: "Every branch rejoins for final clearance." }],
+      next: "relay-check",
+      data: { tone: "green" },
+    },
+    {
+      id: "relay-check",
+      title: "Relay check begins",
+      content: [{ type: "paragraph", text: "A final safety check starts." }],
+      next: "network-clearance",
+      data: { tone: "green" },
+    },
+    {
+      id: "network-clearance",
+      title: "Network clearance",
+      content: [{ type: "paragraph", text: "Network clearance is granted." }],
+      data: { tone: "green" },
+    },
+  ],
+});
+
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
@@ -219,9 +447,32 @@ function renderTransitionScroller(transition: StoryScrollTransition) {
   return { ...rendered, viewport: viewport! };
 }
 
-function matchesJsonSchema(value: unknown, schema: Record<string, unknown> | boolean): boolean {
+function matchesJsonSchema(
+  value: unknown,
+  schema: Record<string, unknown> | boolean,
+  rootSchema: Record<string, unknown> | boolean = schema,
+): boolean {
   if (schema === true) return true;
   if (schema === false) return false;
+
+  if (typeof schema.$ref === "string") {
+    const refParts = schema.$ref.startsWith("#/")
+      ? schema.$ref
+          .slice(2)
+          .split("/")
+          .map((part) => part.replaceAll("~1", "/").replaceAll("~0", "~"))
+      : [];
+    let refSchema: unknown = rootSchema;
+
+    for (const part of refParts) {
+      refSchema =
+        refSchema && typeof refSchema === "object"
+          ? (refSchema as Record<string, unknown>)[part]
+          : undefined;
+    }
+
+    return Boolean(refSchema) && matchesJsonSchema(value, refSchema as never, rootSchema);
+  }
 
   if ("const" in schema && value !== schema.const) return false;
 
@@ -231,7 +482,8 @@ function matchesJsonSchema(value: unknown, schema: Record<string, unknown> | boo
 
   if (Array.isArray(schema.oneOf)) {
     return (
-      schema.oneOf.filter((candidate) => matchesJsonSchema(value, candidate as never)).length === 1
+      schema.oneOf.filter((candidate) => matchesJsonSchema(value, candidate as never, rootSchema))
+        .length === 1
     );
   }
 
@@ -253,7 +505,8 @@ function matchesJsonSchema(value: unknown, schema: Record<string, unknown> | boo
       }
 
       return Object.entries(properties).every(
-        ([key, childSchema]) => !(key in record) || matchesJsonSchema(record[key], childSchema),
+        ([key, childSchema]) =>
+          !(key in record) || matchesJsonSchema(record[key], childSchema, rootSchema),
       );
     }
     case "array": {
@@ -261,7 +514,9 @@ function matchesJsonSchema(value: unknown, schema: Record<string, unknown> | boo
       if (typeof schema.minItems === "number" && value.length < schema.minItems) return false;
 
       const itemSchema = schema.items as Record<string, unknown> | undefined;
-      return itemSchema ? value.every((item) => matchesJsonSchema(item, itemSchema)) : true;
+      return itemSchema
+        ? value.every((item) => matchesJsonSchema(item, itemSchema, rootSchema))
+        : true;
     }
     case "string":
       return typeof value === "string";
@@ -367,6 +622,22 @@ describe("@moritzbrantner/storytelling", () => {
         storyDocumentJsonSchema,
       ),
     ).toBe(true);
+    expect(matchesJsonSchema(nestedStory, storyDocumentJsonSchema)).toBe(true);
+    expect(
+      matchesJsonSchema(
+        {
+          ...nestedStory,
+          nodes: [
+            {
+              id: "chapter",
+              title: "Chapter",
+              children: [{ id: "child", title: "Child", content: [{ type: "unknown" }] }],
+            },
+          ],
+        },
+        storyDocumentJsonSchema,
+      ),
+    ).toBe(false);
   });
 
   test("validates stories and rejects invalid graph references", () => {
@@ -482,6 +753,70 @@ describe("@moritzbrantner/storytelling", () => {
     ).toThrow("must have a title");
   });
 
+  test("validates nested story nodes with global ids and nested issue paths", () => {
+    expect(validateStoryDocument(nestedStory)).toEqual([]);
+    expect(validateStoryDocument(nestedStory, { mode: "strict" })).toEqual([]);
+    expect(getStoryNodeEntries(nestedStory).map((entry) => [entry.nodeId, entry.depth])).toEqual([
+      ["chapter", 0],
+      ["chapter-scene-a", 1],
+      ["chapter-scene-b", 1],
+      ["ending", 0],
+    ]);
+
+    const duplicateIssues = validateStoryDocument({
+      ...nestedStory,
+      nodes: [
+        {
+          id: "chapter",
+          title: "Chapter",
+          children: [{ id: "chapter", title: "Duplicate" }],
+        },
+      ],
+    });
+
+    expect(duplicateIssues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "duplicate-node-id",
+          path: "nodes.0.children.0.id",
+        }),
+      ]),
+    );
+
+    const missingIssues = validateStoryDocument({
+      id: "nested-missing",
+      title: "Nested missing",
+      openingNodeId: "chapter",
+      nodes: [
+        {
+          id: "chapter",
+          title: "Chapter",
+          children: [
+            {
+              id: "child",
+              title: "Child",
+              next: "missing",
+              choices: [{ id: "go", label: "Go", target: "also-missing" }],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(missingIssues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "missing-choice-target",
+          path: "nodes.0.children.0.choices.0.target",
+        }),
+        expect.objectContaining({
+          code: "missing-next-target",
+          path: "nodes.0.children.0.next",
+        }),
+      ]),
+    );
+  });
+
   test("compiles story graphs, finds branches and endings, and enumerates paths", () => {
     const compiledStory = compileStory(story);
 
@@ -493,6 +828,30 @@ describe("@moritzbrantner/storytelling", () => {
     expect(enumerateStoryPaths(story).map((path) => path.choiceIds)).toEqual([
       ["answer", "answer-node__continue"],
       ["trace"],
+    ]);
+  });
+
+  test("compiles long branching graph fixtures and enumerates long path combinations", () => {
+    const compiledStory = compileStory(longBranchStory);
+
+    expect(getStoryBranches(compiledStory).map((node) => node.id)).toEqual([
+      "opening",
+      "pilot-decision",
+      "trace-grid",
+      "archive-decoder",
+    ]);
+    expect(getStoryEndings(compiledStory).map((node) => node.id)).toEqual(["network-clearance"]);
+    expect(
+      enumerateStoryPaths(longBranchStory).map((path) =>
+        path.choiceIds.filter((choiceId) => !choiceId.endsWith("__continue")),
+      ),
+    ).toEqual([
+      ["answer-pilot", "stabilize-route"],
+      ["answer-pilot", "confirm-route"],
+      ["trace-source", "send-team"],
+      ["trace-source", "broadcast-fix"],
+      ["archive-review", "verify-archive"],
+      ["archive-review", "archive-stash"],
     ]);
   });
 
@@ -565,6 +924,38 @@ describe("@moritzbrantner/storytelling", () => {
     );
     expect(analyzeStory(authoringStory).issues.map((issue) => issue.code)).not.toContain(
       "missing-choice-description",
+    );
+  });
+
+  test("analyzes nested story authoring metrics and diagnostics", () => {
+    const nestedDraft: StoryDocument<FixtureData> = {
+      ...nestedStory,
+      nodes: [
+        ...nestedStory.nodes,
+        {
+          id: "unused-parent",
+          title: "Unused parent",
+          children: [{ id: "unused-child", title: "Unused child" }],
+        },
+      ],
+    };
+    const report = analyzeStory(nestedDraft);
+
+    expect(report.metrics).toMatchObject({
+      nodeCount: 6,
+      reachableNodeCount: 4,
+      unreachableNodeCount: 2,
+      contentBlockCount: 4,
+    });
+    expect(report.unreachableNodeIds).toEqual(["unused-parent", "unused-child"]);
+    expect(report.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "unreachable-node",
+          nodeId: "unused-child",
+          path: "nodes.2.children.0.id",
+        }),
+      ]),
     );
   });
 
@@ -801,6 +1192,67 @@ describe("@moritzbrantner/storytelling", () => {
     ).toThrow("Story content block index 10 is out of range");
   });
 
+  test("applies story patches to nested nodes and protects recursive moves", () => {
+    const withChild = applyStoryPatch(nestedStory, {
+      type: "add-node",
+      parentNodeId: "chapter",
+      node: {
+        id: "chapter-scene-c",
+        title: "Scene C",
+        content: [{ type: "paragraph", text: "Third nested scene." }],
+        data: { tone: "green" },
+      },
+    });
+
+    expect(getStoryNodeEntries(withChild).map((entry) => entry.nodeId)).toEqual([
+      "chapter",
+      "chapter-scene-a",
+      "chapter-scene-b",
+      "chapter-scene-c",
+      "ending",
+    ]);
+
+    const renamed = applyStoryPatch(withChild, {
+      type: "rename-node",
+      nodeId: "chapter-scene-c",
+      nextNodeId: "chapter-scene-final",
+    });
+
+    expect(getStoryNodeEntries(renamed).map((entry) => entry.nodeId)).toContain(
+      "chapter-scene-final",
+    );
+
+    const moved = applyStoryPatch(renamed, {
+      type: "move-node",
+      nodeId: "chapter-scene-final",
+      parentNodeId: undefined,
+      index: 1,
+    });
+
+    expect(moved.nodes.map((node) => node.id)).toEqual([
+      "chapter",
+      "chapter-scene-final",
+      "ending",
+    ]);
+
+    const removedParent = applyStoryPatch(withChild, {
+      type: "remove-node",
+      nodeId: "chapter",
+      nextOpeningNodeId: "ending",
+    });
+
+    expect(getStoryNodeEntries(removedParent).map((entry) => entry.nodeId)).toEqual(["ending"]);
+    expect(removedParent.openingNodeId).toBe("ending");
+    expect(() =>
+      applyStoryPatch(withChild, {
+        type: "move-node",
+        nodeId: "chapter",
+        parentNodeId: "chapter-scene-a",
+        index: 0,
+      }),
+    ).toThrow("Cannot move story node");
+  });
+
   test("serializes and parses story path choice ids", () => {
     const serialized = serializeStoryPath(["answer", "trace/with spaces"]);
 
@@ -843,6 +1295,144 @@ describe("@moritzbrantner/storytelling", () => {
     expect(maxSteps.completed).toBe(false);
   });
 
+  test("resolves long branching story paths with intermediate sequence nodes and control points", () => {
+    const stabilize = resolveStoryPath(longBranchStory, {
+      choiceIds: ["answer-pilot", "stabilize-route"],
+      autoAdvanceLinearNodes: true,
+    });
+
+    expect(stabilize.nodes.map((node) => node.id)).toEqual([
+      "opening",
+      "pilot-check",
+      "pilot-wave",
+      "pilot-decision",
+      "pilot-stabilize",
+      "relay-hub",
+      "relay-check",
+      "network-clearance",
+    ]);
+
+    const traceRoute = resolveStoryPath(longBranchStory, {
+      choiceIds: ["trace-source", "send-team"],
+      autoAdvanceLinearNodes: true,
+    });
+    expect(traceRoute.nodes.map((node) => node.id)).toEqual([
+      "opening",
+      "trace-scan",
+      "trace-grid",
+      "trace-team",
+      "relay-hub",
+      "relay-check",
+      "network-clearance",
+    ]);
+
+    const stopped = resolveStoryPath(longBranchStory, {
+      choiceIds: ["answer-pilot", "stabilize-route"],
+      autoAdvanceLinearNodes: true,
+      stopAt: "pilot-decision",
+    });
+    expect(stopped.stoppedReason).toBe("stop-at");
+    expect(stopped.nodes.map((node) => node.id)).toEqual([
+      "opening",
+      "pilot-check",
+      "pilot-wave",
+      "pilot-decision",
+    ]);
+
+    const maxSteps = resolveStoryPath(longBranchStory, {
+      choiceIds: ["answer-pilot", "stabilize-route"],
+      autoAdvanceLinearNodes: true,
+      maxSteps: 3,
+    });
+    expect(maxSteps.stoppedReason).toBe("max-steps");
+    expect(maxSteps.nodes.map((node) => node.id)).toEqual([
+      "opening",
+      "pilot-check",
+      "pilot-wave",
+      "pilot-decision",
+    ]);
+  });
+
+  test("resolves nested story paths depth-first with subtree exits and overrides", () => {
+    expect(
+      resolveStoryPath(nestedStory, { autoAdvanceLinearNodes: true }).nodes.map((node) => node.id),
+    ).toEqual(["chapter", "chapter-scene-a", "chapter-scene-b", "ending"]);
+
+    const stopped = resolveStoryPath(nestedStory, {
+      autoAdvanceLinearNodes: true,
+      stopAt: "chapter-scene-b",
+    });
+
+    expect(stopped.stoppedAt).toBe("chapter-scene-b");
+    expect(stopped.nodes.map((node) => node.id)).toEqual([
+      "chapter",
+      "chapter-scene-a",
+      "chapter-scene-b",
+    ]);
+
+    const childOverrideStory: StoryDocument<FixtureData> = {
+      ...nestedStory,
+      nodes: [
+        {
+          id: "chapter",
+          title: "Chapter",
+          next: "ending",
+          children: [
+            { id: "chapter-scene-a", title: "Scene A", next: "ending" },
+            { id: "chapter-scene-b", title: "Scene B" },
+          ],
+        },
+        { id: "ending", title: "Ending", data: { tone: "green" } },
+      ],
+    };
+
+    expect(
+      resolveStoryPath(childOverrideStory, { autoAdvanceLinearNodes: true }).nodes.map(
+        (node) => node.id,
+      ),
+    ).toEqual(["chapter", "chapter-scene-a", "ending"]);
+
+    const choiceParentStory: StoryDocument<FixtureData> = {
+      ...nestedStory,
+      nodes: [
+        {
+          id: "chapter",
+          title: "Chapter",
+          choices: [{ id: "skip", label: "Skip", target: "ending" }],
+          children: [{ id: "nested-child", title: "Nested child" }],
+        },
+        { id: "ending", title: "Ending", data: { tone: "green" } },
+      ],
+    };
+
+    expect(
+      resolveStoryPath(choiceParentStory, { autoAdvanceLinearNodes: true }).nodes.map(
+        (node) => node.id,
+      ),
+    ).toEqual(["chapter"]);
+    expect(
+      resolveStoryPath(choiceParentStory, {
+        choiceIds: ["skip"],
+        autoAdvanceLinearNodes: true,
+      }).nodes.map((node) => node.id),
+    ).toEqual(["chapter", "ending"]);
+    expect(() =>
+      validateStory({
+        id: "nested-cycle",
+        title: "Nested cycle",
+        openingNodeId: "parent",
+        nodes: [
+          {
+            id: "parent",
+            title: "Parent",
+            next: "parent",
+            children: [{ id: "child", title: "Child" }],
+          },
+        ],
+      }),
+    ).toThrow("contains a cycle");
+  });
+
   test("builds deterministic timelines with starts, ends, transitions, and total duration", () => {
     const timeline = buildStoryTimeline(story, {
       choiceIds: ["answer"],
@@ -859,6 +1449,64 @@ describe("@moritzbrantner/storytelling", () => {
       "answer-node",
       "pilot-ending",
     ]);
+  });
+
+  test("builds long branching timelines while preserving sequence order and frame layout", () => {
+    const timeline = buildStoryTimeline(longBranchStory, {
+      choiceIds: ["answer-pilot", "stabilize-route"],
+      defaultDurationInFrames: 100,
+      transitionInFrames: 12,
+    });
+
+    expect(timeline.scenes.map((scene) => scene.node.id)).toEqual([
+      "opening",
+      "pilot-check",
+      "pilot-wave",
+      "pilot-decision",
+      "pilot-stabilize",
+      "relay-hub",
+      "relay-check",
+      "network-clearance",
+    ]);
+    expect(timeline.scenes.map((scene) => scene.pathIndex)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+    expect(timeline.scenes.map((scene) => scene.startFrame)).toEqual([
+      0,
+      100,
+      200,
+      300,
+      400,
+      500,
+      600,
+      700,
+    ]);
+    expect(timeline.totalFrames).toBe(800);
+    expect(timeline.scenes.map((scene) => scene.transitionInFrames)).toEqual([
+      12,
+      12,
+      12,
+      12,
+      12,
+      12,
+      12,
+      12,
+    ]);
+  });
+
+  test("builds nested timelines with flattened path indexes and hierarchy metadata", () => {
+    const timeline = buildStoryTimeline(nestedStory, {
+      defaultDurationInFrames: 100,
+      transitionInFrames: 10,
+    });
+
+    expect(timeline.scenes.map((scene) => scene.node.id)).toEqual([
+      "chapter",
+      "chapter-scene-a",
+      "chapter-scene-b",
+      "ending",
+    ]);
+    expect(timeline.scenes.map((scene) => scene.pathIndex)).toEqual([0, 1, 2, 3]);
+    expect(timeline.scenes.map((scene) => scene.nodeEntry?.depth)).toEqual([0, 1, 1, 0]);
+    expect(timeline.totalFrames).toBe(400);
   });
 
   test("renders StoryPlayer content, advances, goes back, restarts, restores focus, and calls callbacks", async () => {
@@ -902,6 +1550,21 @@ describe("@moritzbrantner/storytelling", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     expect(await screen.findByText("Publish the report at noon.")).toBeTruthy();
+  });
+
+  test("renders nested StoryPlayer stories as continueable child scenes", async () => {
+    render(<StoryPlayer story={nestedStory} />);
+
+    expect(screen.getByText("Open the chapter.")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(await screen.findByText("First nested scene.")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(await screen.findByText("Second nested scene.")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(await screen.findByText("Finish the nested story.")).toBeTruthy();
   });
 
   test("supports controlled StoryPlayer choice ids", async () => {
@@ -1183,6 +1846,36 @@ describe("@moritzbrantner/storytelling", () => {
       key: "ArrowRight",
     });
     expect(await screen.findByText("Review the copy for sequence and clarity.")).toBeTruthy();
+  });
+
+  test("renders nested StoryScroller scenes with hierarchy metadata", async () => {
+    render(
+      <StoryScroller
+        story={nestedStory}
+        renderScene={(props) => (
+          <div>
+            Nested scene {props.node.id} depth {props.nodeEntry?.depth ?? -1}
+          </div>
+        )}
+        renderMinimap={(props) => (
+          <nav aria-label="Nested minimap">
+            {props.items.map((item, index) => (
+              <button key={item.id} type="button" onClick={() => props.scrollToScene(index)}>
+                {item.title} depth {item.depth ?? -1}
+              </button>
+            ))}
+          </nav>
+        )}
+      />,
+    );
+
+    expect(screen.getByText("Nested scene chapter depth 0")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Scene A depth 1" })).toBeTruthy();
+
+    fireEvent.keyDown(screen.getByRole("region", { name: "Nested report" }), {
+      key: "ArrowRight",
+    });
+    expect(await screen.findByText("Nested scene chapter-scene-a depth 1")).toBeTruthy();
   });
 
   test("supports controlled StoryScroller choice ids", async () => {
@@ -2090,6 +2783,8 @@ describe("@moritzbrantner/storytelling", () => {
       await import("./timeline");
     const workflowDocument = storyToWorkflowDocument(story);
     const timelineDocument = storyToTimelineEditorDocument(story, { choiceIds: ["answer"] });
+    const nestedWorkflowDocument = storyToWorkflowDocument(nestedStory);
+    const nestedTimelineDocument = storyToTimelineEditorDocument(nestedStory);
 
     expect(workflowDocument.nodes.map((node) => node.id)).toContain("wake");
     expect(workflowDocument.edges.map((edge) => edge.data.choiceId)).toContain("answer");
@@ -2101,6 +2796,24 @@ describe("@moritzbrantner/storytelling", () => {
       "answer-node",
       "pilot-ending",
     ]);
+    expect(nestedWorkflowDocument.nodes.map((node) => node.id)).toEqual([
+      "chapter",
+      "chapter-scene-a",
+      "chapter-scene-b",
+      "ending",
+    ]);
+    expect(
+      nestedWorkflowDocument.nodes.find((node) => node.id === "chapter-scene-a"),
+    ).toMatchObject({
+      categoryPath: ["Story", "Chapter"],
+    });
+    expect(nestedTimelineDocument.tracks[0]?.items.map((item) => item.data?.nodeId)).toEqual([
+      "chapter",
+      "chapter-scene-a",
+      "chapter-scene-b",
+      "ending",
+    ]);
+    expect(nestedTimelineDocument.tracks[0]?.items[1]?.data?.nodeEntry?.depth).toBe(1);
 
     const positionedWorkflowDocument = storyToWorkflowDocument(story, {
       positions: { wake: { x: 11, y: 22 } },
@@ -2158,6 +2871,30 @@ describe("@moritzbrantner/storytelling", () => {
         ],
       }).nodes[0]?.durationInFrames,
     ).toBe(60);
+    expect(
+      applyTimelineTimingsToStory(nestedStory, {
+        tracks: [
+          {
+            id: "story-scenes",
+            label: "Story scenes",
+            items: [
+              {
+                id: "story-scene-a",
+                trackId: "story-scenes",
+                label: "Scene A",
+                startMs: 0,
+                durationMs: 3000,
+                data: {
+                  nodeId: "chapter-scene-a",
+                  storyNode: nestedStory.nodes[0]!.children![0]!,
+                  pathIndex: 1,
+                },
+              },
+            ],
+          },
+        ],
+      }).nodes[0]?.children?.[0]?.durationInFrames,
+    ).toBe(90);
   });
 
   test("computes Remotion composition props", async () => {
@@ -2169,6 +2906,9 @@ describe("@moritzbrantner/storytelling", () => {
       width: 1280,
       height: 720,
     });
+    const nestedComposition = getStoryCompositionProps(nestedStory, {
+      fps: 30,
+    });
 
     expect(composition).toMatchObject({
       id: "signal-answer",
@@ -2178,6 +2918,7 @@ describe("@moritzbrantner/storytelling", () => {
       durationInFrames: 290,
     });
     expect(composition.defaultProps.choiceIds).toEqual(["answer"]);
+    expect(nestedComposition.durationInFrames).toBe(480);
   });
 
   test("keeps Remotion composition registration props serializable", async () => {

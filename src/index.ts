@@ -11,6 +11,7 @@ export {
   getStoryRendererKey,
   getStoryStageProps,
 } from "./story-render-registry";
+export { getStoryNodeEntries, getStoryNodeEntry, getStoryNodes } from "./story-node-tree";
 export {
   assertStoryDocument,
   defineStory,
@@ -137,6 +138,7 @@ export type {
   StoryMediaTextTrack,
   StoryNode,
   StoryNodeData,
+  StoryNodeTreeEntry,
   StoryStageDescriptor,
   StoryTimeline,
   StoryTimelineScene,

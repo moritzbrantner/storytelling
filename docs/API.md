@@ -34,6 +34,9 @@ labels, defaults, and validation-compatible numeric constraints.
 - `compileStory(story)` returns node and edge lookups for authoring tools.
 - `getStoryBranches(compiledStory)` returns nodes with multiple enabled outgoing choices.
 - `getStoryEndings(compiledStory)` returns terminal nodes.
+- `getStoryNodeEntries(story)`, `getStoryNodes(story)`, and
+  `getStoryNodeEntry(story, nodeId)` expose the flattened nested node tree with
+  parent, ancestor, depth, index, and source-path metadata.
 - `enumerateStoryPaths(story, options)` returns every selectable path through an acyclic story.
 - `analyzeStory(story, options)` returns validation errors, authoring warnings, graph reachability, and story metrics for editor UIs.
 - `getStoryReachability(story)` returns reachable and unreachable node ids without requiring a full report.
@@ -73,6 +76,17 @@ labels, defaults, and validation-compatible numeric constraints.
 
 ### Path State
 
+- `StoryNode.children` nests serializable story scenes under a parent node.
+  Node ids remain globally unique across the full tree, and `openingNodeId`,
+  `next`, and choice targets may point to nodes at any depth.
+- Nested story playback is depth-first: the parent renders first, then its
+  children render in order, and the last descendant falls through to the
+  parent `next` target or inherited continuation.
+- Explicit `choices` take priority over automatic child traversal. A parent
+  with choices can still declare `children`, but those children are only reached
+  when targeted by a choice or another link.
+- `StoryRenderProps.nodeEntry` and `StoryTimelineScene.nodeEntry` include
+  optional hierarchy metadata for breadcrumbs, minimaps, and editors.
 - `ResolvedStoryPath` includes `consumedChoiceIds`, `unconsumedChoiceIds`, and
   `stoppedReason`.
 - `stoppedReason` is one of `ending`, `awaiting-choice`, `invalid-choice`,
@@ -104,15 +118,19 @@ labels, defaults, and validation-compatible numeric constraints.
 
 - `applyStoryPatch` throws for missing nodes or choices by default. Pass
   `{ onMissing: "ignore" }` for legacy no-op behavior.
+- `add-node` accepts `parentNodeId` to add a nested child; omitted still inserts
+  at the top level. `move-node` also accepts `parentNodeId` and rejects moving a
+  node into itself or its descendants.
 - Use `{ type: "rename-node", nodeId, nextNodeId }` to change a node id. This
-  updates `openingNodeId`, `next`, and choice targets.
+  updates `openingNodeId`, `next`, and choice targets across nested descendants.
 - Use `move-node` and `move-choice` to reorder authoring lists without changing
   ids, references, choice targets, or node data.
 - Use `add-content-block`, `update-content-block`, `remove-content-block`, and
   `move-content-block` for immutable content edits. Invalid content indexes
   always throw, even with `{ onMissing: "ignore" }`.
 - `update-node` rejects `fields.id`; callers must use `rename-node`.
-- Removing the opening node requires `nextOpeningNodeId` unless no nodes remain.
+- Removing a node removes its whole subtree. Removing the opening node or an
+  ancestor of it requires `nextOpeningNodeId` unless no nodes remain.
 - `validate: true` honors `validationMode`.
 
 ### Authoring Fixes
@@ -173,6 +191,9 @@ labels, defaults, and validation-compatible numeric constraints.
 - Story-backed scrollers accept `renderScene`, `renderChoicePanel`, and
   `renderMinimap` slots. `renderScene` receives `StoryRenderProps` plus the
   active scroll scene render props.
+- Story-backed scrollers flatten nested `StoryNode.children` into normal scroll
+  pages and pass hierarchy metadata to custom minimap items. Custom
+  `StoryScrollScene[]` arrays remain flat.
 
 ## `./media`
 
@@ -184,9 +205,12 @@ labels, defaults, and validation-compatible numeric constraints.
 ## `./workflow`
 
 - `storyToWorkflowDocument(story, options)` converts story nodes and edges into a workflow-editor compatible document.
-- `workflowDocumentToStory(document, options)` converts that document shape back into a `StoryDocument`.
+- `workflowDocumentToStory(document, options)` converts that document shape back into a flat `StoryDocument`.
 - `createStoryWorkflowNodeTemplates()` returns a minimal story-node template for workflow-editor palettes.
 - `storyToWorkflowDocument` accepts `positions`, `direction`, `includeDiagnostics`, and `allowInvalid` layout options for editor roundtrips.
+- Nested story nodes are exported as workflow nodes with category paths derived
+  from their ancestors. Workflow import currently flattens hierarchy unless the
+  caller restores nesting from its own metadata.
 - Use `{ allowInvalid: true, includeDiagnostics: true }` to build workflow
   documents from draft stories that do not pass graph validation.
 
@@ -194,6 +218,8 @@ labels, defaults, and validation-compatible numeric constraints.
 
 - `storyToTimelineEditorDocument(story, options)` converts a story path into timeline-editor compatible scene items.
 - `applyTimelineTimingsToStory(story, document, options)` writes edited item durations back to matching story nodes.
+- Nested story scenes are emitted in flattened path order, and timeline item
+  data includes `nodeEntry` hierarchy metadata.
 - `createStoryTimelineExtension()` returns a lightweight extension descriptor for story scene items.
 - `storyToTimelineEditorDocument` accepts `includeBranchMarkers` to add branch and ending markers alongside scene markers.
 - Timeline `fps` must be finite and greater than `0`.

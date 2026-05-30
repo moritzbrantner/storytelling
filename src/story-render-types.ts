@@ -8,12 +8,14 @@ import type {
   StoryHistoryEntry,
   StoryNode,
   StoryNodeData,
+  StoryNodeTreeEntry,
   StoryTimelineScene,
 } from "./story-model";
 
 export type StoryRenderProps<TData extends StoryNodeData = StoryNodeData> = {
   story: StoryDocument<TData>;
   node: StoryNode<TData>;
+  nodeEntry?: StoryNodeTreeEntry<TData>;
   history: StoryHistoryEntry<TData>[];
   path: ResolvedStoryPath<TData>;
   currentIndex: number;

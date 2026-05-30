@@ -1,4 +1,4 @@
-import type { StoryDocument, StoryNode, StoryNodeData } from "./story-model";
+import type { StoryDocument, StoryNode, StoryNodeData, StoryNodeTreeEntry } from "./story-model";
 import { compileStory, getStoryBranches, getStoryEndings } from "./story-graph";
 import { buildStoryTimeline } from "./story-path";
 
@@ -10,6 +10,7 @@ export type StoryTimelineItemData<TData extends StoryNodeData = StoryNodeData> =
   mediaType?: "story-node";
   nodeId: string;
   storyNode: StoryNode<TData>;
+  nodeEntry?: StoryNodeTreeEntry<TData>;
   pathIndex: number;
 };
 
@@ -166,6 +167,7 @@ export function storyToTimelineEditorDocument<TData extends StoryNodeData>(
             mediaType: "story-node",
             nodeId: scene.node.id,
             storyNode: scene.node,
+            nodeEntry: scene.nodeEntry,
             pathIndex: scene.pathIndex,
           },
         })),
@@ -192,12 +194,16 @@ export function applyTimelineTimingsToStory<TData extends StoryNodeData>(
     }
   }
 
-  return {
-    ...story,
-    nodes: story.nodes.map((node) => ({
+  const applyDurations = (nodes: StoryNode<TData>[]): StoryNode<TData>[] =>
+    nodes.map((node) => ({
       ...node,
       durationInFrames: durationByNodeId.get(node.id) ?? node.durationInFrames,
-    })),
+      children: node.children ? applyDurations(node.children) : undefined,
+    }));
+
+  return {
+    ...story,
+    nodes: applyDurations(story.nodes),
   };
 }
 

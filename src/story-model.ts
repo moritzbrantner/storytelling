@@ -69,10 +69,22 @@ export type StoryNode<TData extends StoryNodeData = StoryNodeData> = {
   data?: TData;
   next?: string;
   choices?: StoryChoice[];
+  children?: StoryNode<TData>[];
   durationInFrames?: number;
   scrollUnits?: number;
   transition?: StoryTransition;
   stage?: StoryStageDescriptor;
+};
+
+export type StoryNodeTreeEntry<TData extends StoryNodeData = StoryNodeData> = {
+  node: StoryNode<TData>;
+  nodeId: string;
+  parentNodeId?: string;
+  ancestorNodeIds: string[];
+  depth: number;
+  index: number;
+  indexPath: number[];
+  path: string;
 };
 
 export type StoryDocument<TData extends StoryNodeData = StoryNodeData> = {
@@ -105,6 +117,7 @@ export type ResolvedStoryPath<TData extends StoryNodeData = StoryNodeData> = {
 
 export type StoryTimelineScene<TData extends StoryNodeData = StoryNodeData> = {
   node: StoryNode<TData>;
+  nodeEntry?: StoryNodeTreeEntry<TData>;
   startFrame: number;
   durationInFrames: number;
   endFrame: number;

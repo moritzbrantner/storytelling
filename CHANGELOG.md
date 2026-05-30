@@ -1,5 +1,13 @@
 # @moritzbrantner/storytelling
 
+## Unreleased
+
+### Minor Changes
+
+- Add nested story scenes with `StoryNode.children`, depth-first path
+  traversal, hierarchy metadata, and recursive validation, authoring, patch,
+  workflow, timeline, scroller, and Remotion support.
+
 ## 0.4.0 - 2026-05-28
 
 ### Minor Changes

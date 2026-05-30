@@ -1,4 +1,9 @@
 import type { StoryChoice, StoryDocument, StoryNode, StoryNodeData } from "./story-model";
+import {
+  createStoryNodeLookup as createTreeStoryNodeLookup,
+  getImplicitStoryContinuationTarget,
+  getStoryNodeEntries,
+} from "./story-node-tree";
 
 const isDevelopment = process.env.NODE_ENV !== "production";
 
@@ -114,7 +119,7 @@ function isValidContentBlock(block: unknown) {
 }
 
 export function createStoryNodeLookup<TData extends StoryNodeData>(story: StoryDocument<TData>) {
-  return new Map(story.nodes.map((node) => [node.id, node] as const));
+  return createTreeStoryNodeLookup(story);
 }
 
 export function getStoryNode<TData extends StoryNodeData>(
@@ -138,7 +143,9 @@ export function getStoryChoices<TData extends StoryNodeData>(
     return node.choices;
   }
 
-  if (!node.next) {
+  const target = getImplicitStoryContinuationTarget(story, node);
+
+  if (!target) {
     return [];
   }
 
@@ -146,7 +153,7 @@ export function getStoryChoices<TData extends StoryNodeData>(
     {
       id: `${node.id}__continue`,
       label: story.labels?.continue ?? "Continue",
-      target: node.next,
+      target,
     },
   ];
 }
@@ -215,11 +222,10 @@ export function validateStoryDocument<TData extends StoryNodeData>(
     });
   }
 
+  const nodeEntries = getStoryNodeEntries(story);
   const nodeIds = new Set<string>();
 
-  story.nodes.forEach((node, nodeIndex) => {
-    const nodePath = `nodes.${nodeIndex}`;
-
+  nodeEntries.forEach(({ node, path: nodePath }) => {
     if (node.id.length === 0) {
       addIssue(issues, {
         code: "empty-node-id",
@@ -429,13 +435,13 @@ export function validateStoryDocument<TData extends StoryNodeData>(
     });
   }
 
-  story.nodes.forEach((node, nodeIndex) => {
+  nodeEntries.forEach(({ node, path: nodePath }) => {
     for (const [choiceIndex, choice] of (node.choices ?? []).entries()) {
       if (!nodeIds.has(choice.target)) {
         addIssue(issues, {
           code: "missing-choice-target",
           message: `Choice "${choice.id}" on "${node.id}" points to missing node "${choice.target}".`,
-          path: `nodes.${nodeIndex}.choices.${choiceIndex}.target`,
+          path: `${nodePath}.choices.${choiceIndex}.target`,
           storyId,
           nodeId: node.id,
           choiceId: choice.id,
@@ -448,7 +454,7 @@ export function validateStoryDocument<TData extends StoryNodeData>(
       addIssue(issues, {
         code: "missing-next-target",
         message: `Node "${node.id}" points to missing next node "${node.next}".`,
-        path: `nodes.${nodeIndex}.next`,
+        path: `${nodePath}.next`,
         storyId,
         nodeId: node.id,
         target: node.next,
@@ -526,19 +532,15 @@ function collectStoryGraphCycles<TData extends StoryNodeData>(
 
     visiting.add(nodeId);
 
-    for (const choice of node.choices ?? []) {
+    for (const choice of getStoryChoices(story, node)) {
       visit(choice.target, [...trail, nodeId]);
-    }
-
-    if (node.next) {
-      visit(node.next, [...trail, nodeId]);
     }
 
     visiting.delete(nodeId);
     visited.add(nodeId);
   };
 
-  for (const node of story.nodes) {
+  for (const { node } of getStoryNodeEntries(story)) {
     visit(node.id, []);
   }
 }

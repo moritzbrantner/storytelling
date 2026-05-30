@@ -128,6 +128,56 @@ test.describe("StoryScroller example app", () => {
     );
   });
 
+  test("Long branching showcase player supports alternate route choices", async ({ page }) => {
+    await openExample(page);
+    await page.getByRole("button", { name: "Branching (Deep)" }).click();
+
+    const region = page.getByRole("region", { name: "Extended Relay Route" });
+    await expect(region).toBeVisible();
+    await expectPlayerHeading(region, "Relay awakening");
+
+    await page.getByRole("button", { name: "Answer the pilot" }).click();
+    await expectPlayerHeading(region, "Pilot signature locks in");
+
+    await page.getByRole("button", { name: "Stabilize the route" }).click();
+    await expectPlayerHeading(region, "Network clearance");
+    await expect(storyStateSummary(page)).toContainText("Relay hub convergence");
+  });
+
+  test("Long branching showcase player preset displays expected branch sequence", async ({ page }) => {
+    await openExample(page);
+    await page.getByRole("button", { name: "Branching (Deep)" }).click();
+    await page.getByRole("button", { name: "Pilot route (stabilize)" }).click();
+
+    await expect(choiceIdsSummary(page)).toHaveText("answer-pilot -> stabilize-route");
+    await expectPlayerHeading(page.getByRole("region", { name: "Extended Relay Route" }), "Network clearance");
+    await expect(storyStateSummary(page)).toContainText("Pilot signature locks in");
+    await expect(storyStateSummary(page)).toContainText("Relay hub convergence");
+  });
+
+  test("Long branching showcase scroller can jump to overlay choices and switch branches after return", async ({
+    page,
+  }) => {
+    await openExample(page);
+    await page.getByRole("button", { name: "Branching (Deep)" }).click();
+    await chooseComponent(page, "Scroller");
+
+    const region = page.getByRole("region", { name: "Extended Relay Route scroller" });
+    await expect(region).toBeVisible();
+    await focusScroller(region);
+
+    await setScrollerSceneProgress(page, 0.95);
+    await page.getByRole("button", { name: /Trace the source/ }).click();
+    await expect(page.getByRole("heading", { name: "Relay hub convergence" })).toBeVisible();
+
+    await region.press("Home");
+    await expectActiveScene(page, /1\. Relay awakening/);
+
+    await setScrollerSceneProgress(page, 0.95);
+    await page.getByRole("button", { name: /Answer the pilot/ }).click();
+    await expect(page.getByRole("heading", { name: "Relay hub convergence" })).toBeVisible();
+  });
+
   test("linear story scroller supports vertical scrolling and horizontal scene navigation", async ({
     page,
   }) => {

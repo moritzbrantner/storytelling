@@ -18,6 +18,7 @@ import { storyDocumentJsonSchema } from "@moritzbrantner/storytelling/schema";
 import {
   authoringDraftStory,
   autoscrollLabScenes,
+  extendedRelayStory,
   linearStory,
   motionLabScenes,
   signalStory,
@@ -40,7 +41,7 @@ import {
 } from "@moritzbrantner/ui";
 
 type ExampleMode = "player" | "scroller";
-type ExampleStoryId = "branching" | "linear" | "motion" | "autoscroll" | "authoring";
+type ExampleStoryId = "branching" | "branching-deep" | "linear" | "motion" | "autoscroll" | "authoring";
 
 type PathPreset = {
   id: string;
@@ -80,6 +81,7 @@ type ExampleCatalog = {
 const exampleCatalog: ExampleCatalog = {
   storyOptions: [
     { id: "branching", label: "Branching" },
+    { id: "branching-deep", label: "Branching (Deep)" },
     { id: "linear", label: "Linear" },
     { id: "motion", label: "Motion" },
     { id: "autoscroll", label: "Autoscroll" },
@@ -97,6 +99,26 @@ const exampleCatalog: ExampleCatalog = {
         { id: "harbor-team", label: "Harbor team", choiceIds: ["trace", "send-team"] },
         { id: "harbor-broadcast", label: "Broadcast fix", choiceIds: ["trace", "broadcast"] },
         { id: "archive", label: "Archive route", choiceIds: ["archive"] },
+      ],
+    },
+    {
+      id: "branching-deep",
+      label: "Branching (Deep)",
+      story: extendedRelayStory,
+      presets: [
+        { id: "opening", label: "Opening", choiceIds: [] },
+        { id: "pilot-route", label: "Pilot route", choiceIds: ["answer-pilot"] },
+        {
+          id: "pilot-route_stabilize",
+          label: "Pilot route (stabilize)",
+          choiceIds: ["answer-pilot", "stabilize-route"],
+        },
+        { id: "harbor-team", label: "Harbor team", choiceIds: ["trace-source", "send-team"] },
+        {
+          id: "archive-verify",
+          label: "Archive verify",
+          choiceIds: ["archive-review", "verify-archive"],
+        },
       ],
     },
     {
@@ -180,6 +202,7 @@ function getDefaultPresetId(storyId: ExampleStoryId, catalog: ExampleCatalog) {
 
 const storyOptionsFallback: { id: ExampleStoryId; label: string }[] = [
   { id: "branching", label: "Branching" },
+  { id: "branching-deep", label: "Branching (Deep)" },
   { id: "linear", label: "Linear" },
   { id: "motion", label: "Motion" },
   { id: "autoscroll", label: "Autoscroll" },

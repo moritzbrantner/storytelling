@@ -1,6 +1,7 @@
 import type { StoryChoice, StoryDocument, StoryNode, StoryNodeData } from "./story-model";
 import { analyzeStory, type StoryAuthoringIssue } from "./story-authoring";
 import { compileStory } from "./story-graph";
+import { createStoryNodeEntryLookup, getStoryNodeEntries } from "./story-node-tree";
 
 export type StoryWorkflowNodeData<TData extends StoryNodeData = StoryNodeData> = {
   storyNode: StoryNode<TData>;
@@ -95,6 +96,16 @@ function getRawStoryChoices<TData extends StoryNodeData>(
     return node.choices;
   }
 
+  if (node.children?.[0]) {
+    return [
+      {
+        id: `${node.id}__continue`,
+        label: story.labels?.continue ?? "Continue",
+        target: node.children[0].id,
+      },
+    ];
+  }
+
   if (!node.next) {
     return [];
   }
@@ -117,9 +128,11 @@ export function storyToWorkflowDocument<TData extends StoryNodeData>(
   const rowGap = layout.rowGap ?? 180;
   const direction = layout.direction ?? "horizontal";
   const diagnostics = layout.includeDiagnostics ? analyzeStory(story).issues : [];
+  const nodeEntryLookup = createStoryNodeEntryLookup(story);
   const graphNodes = compiledStory
     ? compiledStory.nodes.map((entry) => ({
         node: entry.node,
+        nodeEntry: nodeEntryLookup.get(entry.node.id),
         outgoing: entry.outgoing.map((edge) => ({
           id: edge.id,
           source: edge.source,
@@ -129,12 +142,13 @@ export function storyToWorkflowDocument<TData extends StoryNodeData>(
           disabled: edge.disabled,
         })),
       }))
-    : story.nodes.map((node) => {
+    : getStoryNodeEntries(story).map(({ node, ...nodeEntry }) => {
         const kind =
           node.choices && node.choices.length > 0 ? ("choice" as const) : ("next" as const);
 
         return {
           node,
+          nodeEntry: { ...nodeEntry, node },
           outgoing: getRawStoryChoices(story, node).map((choice) => ({
             id: `${node.id}:${choice.id}`,
             source: node,
@@ -165,6 +179,10 @@ export function storyToWorkflowDocument<TData extends StoryNodeData>(
   const nodes = graphNodes.map((entry) => {
     const depth = depths.get(entry.node.id) ?? 0;
     const row = rowIndexes.get(depth) ?? 0;
+    const ancestorLabels =
+      entry.nodeEntry?.ancestorNodeIds
+        .map((nodeId) => nodeEntryLookup.get(nodeId)?.node.title)
+        .filter((label): label is string => Boolean(label)) ?? [];
     const position = layout.positions?.[entry.node.id] ?? {
       x: direction === "horizontal" ? depth * columnGap : row * columnGap,
       y: direction === "horizontal" ? row * rowGap : depth * rowGap,
@@ -177,8 +195,8 @@ export function storyToWorkflowDocument<TData extends StoryNodeData>(
       label: entry.node.title,
       description: entry.node.prompt,
       kind: "story.node" as const,
-      category: "Story",
-      categoryPath: ["Story"],
+      category: ancestorLabels[ancestorLabels.length - 1] ?? "Story",
+      categoryPath: ["Story", ...ancestorLabels],
       x: position.x,
       y: position.y,
       inputs: [{ id: "in", label: "In", type: STORY_PORT_TYPE }],

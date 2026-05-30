@@ -5,12 +5,13 @@ import type {
   StoryNode,
   StoryNodeData,
 } from "./story-model";
+import { getStoryNodeEntries, getStoryNodes } from "./story-node-tree";
 import { assertStoryDocument, type StoryValidationMode } from "./story-validation";
 
 export type StoryPatch<TData extends StoryNodeData = StoryNodeData> =
   | { type: "set-story-fields"; fields: Partial<Omit<StoryDocument<TData>, "nodes">> }
-  | { type: "add-node"; node: StoryNode<TData>; index?: number }
-  | { type: "move-node"; nodeId: string; index: number }
+  | { type: "add-node"; node: StoryNode<TData>; index?: number; parentNodeId?: string }
+  | { type: "move-node"; nodeId: string; index: number; parentNodeId?: string }
   | { type: "update-node"; nodeId: string; fields: Partial<StoryNode<TData>> }
   | { type: "rename-node"; nodeId: string; nextNodeId: string }
   | {
@@ -71,15 +72,27 @@ function moveArrayItem<T>(items: T[], fromIndex: number, toIndex: number) {
   return nextItems;
 }
 
-function updateNode<TData extends StoryNodeData>(
-  story: StoryDocument<TData>,
+function updateNodeList<TData extends StoryNodeData>(
+  nodes: StoryNode<TData>[],
   nodeId: string,
   updater: (node: StoryNode<TData>) => StoryNode<TData>,
-  options: ApplyStoryPatchOptions,
-): StoryDocument<TData> {
+): { nodes: StoryNode<TData>[]; found: boolean } {
   let found = false;
-  const nodes = story.nodes.map((node) => {
+
+  const nextNodes: StoryNode<TData>[] = nodes.map((node) => {
     if (node.id !== nodeId) {
+      const nextChildren: { nodes: StoryNode<TData>[]; found: boolean } | undefined = node.children
+        ? updateNodeList(node.children, nodeId, updater)
+        : undefined;
+
+      if (nextChildren?.found) {
+        found = true;
+        return {
+          ...node,
+          children: nextChildren.nodes,
+        };
+      }
+
       return node;
     }
 
@@ -87,13 +100,24 @@ function updateNode<TData extends StoryNodeData>(
     return updater(node);
   });
 
-  if (!found && options.onMissing !== "ignore") {
+  return { nodes: nextNodes, found };
+}
+
+function updateNode<TData extends StoryNodeData>(
+  story: StoryDocument<TData>,
+  nodeId: string,
+  updater: (node: StoryNode<TData>) => StoryNode<TData>,
+  options: ApplyStoryPatchOptions,
+): StoryDocument<TData> {
+  const result = updateNodeList(story.nodes, nodeId, updater);
+
+  if (!result.found && options.onMissing !== "ignore") {
     throw new Error(`Story "${story.id}" does not contain node "${nodeId}".`);
   }
 
   return {
     ...story,
-    nodes,
+    nodes: result.nodes,
   };
 }
 
@@ -118,6 +142,140 @@ function updateChoiceTargets(choices: StoryChoice[] | undefined, from: string, t
   }));
 }
 
+function getNodeAndDescendantIds<TData extends StoryNodeData>(node: StoryNode<TData>) {
+  const ids = [node.id];
+
+  for (const child of node.children ?? []) {
+    ids.push(...getNodeAndDescendantIds(child));
+  }
+
+  return ids;
+}
+
+function mapNodeTree<TData extends StoryNodeData>(
+  nodes: StoryNode<TData>[],
+  mapper: (node: StoryNode<TData>) => StoryNode<TData> | undefined,
+): StoryNode<TData>[] {
+  return nodes.flatMap((node) => {
+    const mappedChildren = node.children ? mapNodeTree(node.children, mapper) : undefined;
+    const mappedNode = mapper({
+      ...node,
+      children: mappedChildren && mappedChildren.length > 0 ? mappedChildren : undefined,
+    });
+
+    return mappedNode ? [mappedNode] : [];
+  });
+}
+
+function removeNodeFromTree<TData extends StoryNodeData>(
+  nodes: StoryNode<TData>[],
+  nodeId: string,
+): { nodes: StoryNode<TData>[]; removed?: StoryNode<TData> } {
+  let removed: StoryNode<TData> | undefined;
+  const nextNodes: StoryNode<TData>[] = [];
+
+  for (const node of nodes) {
+    if (node.id === nodeId) {
+      removed = node;
+      continue;
+    }
+
+    const childResult = node.children
+      ? removeNodeFromTree(node.children, nodeId)
+      : { nodes: undefined, removed: undefined };
+
+    if (childResult.removed) {
+      removed = childResult.removed;
+      nextNodes.push({
+        ...node,
+        children: childResult.nodes && childResult.nodes.length > 0 ? childResult.nodes : undefined,
+      });
+    } else {
+      nextNodes.push(node);
+    }
+  }
+
+  return { nodes: nextNodes, removed };
+}
+
+function insertNodeInTree<TData extends StoryNodeData>(
+  nodes: StoryNode<TData>[],
+  node: StoryNode<TData>,
+  index: number | undefined,
+  parentNodeId: string | undefined,
+): { nodes: StoryNode<TData>[]; inserted: boolean } {
+  if (!parentNodeId) {
+    const insertIndex = clampInsertIndex(index, nodes.length);
+
+    return {
+      nodes: [...nodes.slice(0, insertIndex), node, ...nodes.slice(insertIndex)],
+      inserted: true,
+    };
+  }
+
+  let inserted = false;
+  const nextNodes = nodes.map((candidate) => {
+    if (candidate.id === parentNodeId) {
+      inserted = true;
+      const children = [...(candidate.children ?? [])];
+      const insertIndex = clampInsertIndex(index, children.length);
+
+      children.splice(insertIndex, 0, node);
+
+      return {
+        ...candidate,
+        children,
+      };
+    }
+
+    if (!candidate.children) {
+      return candidate;
+    }
+
+    const childResult = insertNodeInTree(candidate.children, node, index, parentNodeId);
+    if (childResult.inserted) {
+      inserted = true;
+      return {
+        ...candidate,
+        children: childResult.nodes,
+      };
+    }
+
+    return candidate;
+  });
+
+  return { nodes: nextNodes, inserted };
+}
+
+function removeReferencesToNodeIds<TData extends StoryNodeData>(
+  nodes: StoryNode<TData>[],
+  removedNodeIds: ReadonlySet<string>,
+) {
+  return mapNodeTree(nodes, (node) => {
+    const next = node.next && removedNodeIds.has(node.next) ? undefined : node.next;
+    const choices = node.choices?.filter((choice) => !removedNodeIds.has(choice.target));
+
+    return {
+      ...node,
+      next,
+      choices: choices && choices.length > 0 ? choices : undefined,
+    };
+  });
+}
+
+function renameNodeReferences<TData extends StoryNodeData>(
+  nodes: StoryNode<TData>[],
+  from: string,
+  to: string,
+) {
+  return mapNodeTree(nodes, (node) => ({
+    ...node,
+    id: node.id === from ? to : node.id,
+    next: node.next === from ? to : node.next,
+    choices: updateChoiceTargets(node.choices, from, to),
+  }));
+}
+
 function applySingleStoryPatch<TData extends StoryNodeData>(
   story: StoryDocument<TData>,
   patch: StoryPatch<TData>,
@@ -131,24 +289,66 @@ function applySingleStoryPatch<TData extends StoryNodeData>(
         nodes: story.nodes,
       };
     case "add-node": {
-      const index = clampInsertIndex(patch.index, story.nodes.length);
+      const result = insertNodeInTree(story.nodes, patch.node, patch.index, patch.parentNodeId);
+
+      if (!result.inserted && options.onMissing !== "ignore") {
+        throw new Error(
+          `Story "${story.id}" does not contain parent node "${patch.parentNodeId}".`,
+        );
+      }
+
       return {
         ...story,
-        nodes: [...story.nodes.slice(0, index), patch.node, ...story.nodes.slice(index)],
+        nodes: result.nodes,
       };
     }
     case "move-node": {
-      const currentIndex = story.nodes.findIndex((node) => node.id === patch.nodeId);
-      if (currentIndex < 0) {
+      const currentEntry = getStoryNodeEntries(story).find(
+        (entry) => entry.nodeId === patch.nodeId,
+      );
+      if (!currentEntry) {
         if (options.onMissing === "ignore") return story;
         throw new Error(`Story "${story.id}" does not contain node "${patch.nodeId}".`);
       }
 
-      assertMoveTargetIndex(patch.index, story.nodes.length, "Story node");
+      const targetParentEntry = patch.parentNodeId
+        ? getStoryNodeEntries(story).find((entry) => entry.nodeId === patch.parentNodeId)
+        : undefined;
+
+      if (patch.parentNodeId && !targetParentEntry) {
+        if (options.onMissing === "ignore") return story;
+        throw new Error(
+          `Story "${story.id}" does not contain parent node "${patch.parentNodeId}".`,
+        );
+      }
+
+      if (
+        patch.parentNodeId === patch.nodeId ||
+        targetParentEntry?.ancestorNodeIds.includes(patch.nodeId)
+      ) {
+        throw new Error(`Cannot move story node "${patch.nodeId}" into itself or its descendants.`);
+      }
+
+      const targetLength = patch.parentNodeId
+        ? (targetParentEntry?.node.children?.length ?? 0)
+        : story.nodes.length;
+      assertMoveTargetIndex(patch.index, targetLength, "Story node");
+      const removedResult = removeNodeFromTree(story.nodes, patch.nodeId);
+      if (!removedResult.removed) {
+        if (options.onMissing === "ignore") return story;
+        throw new Error(`Story "${story.id}" does not contain node "${patch.nodeId}".`);
+      }
+
+      const insertResult = insertNodeInTree(
+        removedResult.nodes,
+        removedResult.removed,
+        patch.index,
+        patch.parentNodeId,
+      );
 
       return {
         ...story,
-        nodes: moveArrayItem(story.nodes, currentIndex, patch.index),
+        nodes: insertResult.nodes,
       };
     }
     case "update-node": {
@@ -168,7 +368,7 @@ function applySingleStoryPatch<TData extends StoryNodeData>(
       );
     }
     case "rename-node": {
-      const found = story.nodes.some((node) => node.id === patch.nodeId);
+      const found = getStoryNodes(story).some((node) => node.id === patch.nodeId);
       if (!found) {
         if (options.onMissing === "ignore") return story;
         throw new Error(`Story "${story.id}" does not contain node "${patch.nodeId}".`);
@@ -178,26 +378,26 @@ function applySingleStoryPatch<TData extends StoryNodeData>(
         ...story,
         openingNodeId:
           story.openingNodeId === patch.nodeId ? patch.nextNodeId : story.openingNodeId,
-        nodes: story.nodes.map((node) => ({
-          ...node,
-          id: node.id === patch.nodeId ? patch.nextNodeId : node.id,
-          next: node.next === patch.nodeId ? patch.nextNodeId : node.next,
-          choices: updateChoiceTargets(node.choices, patch.nodeId, patch.nextNodeId),
-        })),
+        nodes: renameNodeReferences(story.nodes, patch.nodeId, patch.nextNodeId),
       };
     }
     case "remove-node": {
       const removeReferences = patch.removeReferences ?? true;
-      const nodeExists = story.nodes.some((node) => node.id === patch.nodeId);
-      if (!nodeExists) {
+      const entry = getStoryNodeEntries(story).find(
+        (candidate) => candidate.nodeId === patch.nodeId,
+      );
+      if (!entry) {
         if (options.onMissing === "ignore") return story;
         throw new Error(`Story "${story.id}" does not contain node "${patch.nodeId}".`);
       }
 
-      const remainingNodes = story.nodes.filter((node) => node.id !== patch.nodeId);
+      const removedNodeIds = new Set(getNodeAndDescendantIds(entry.node));
+      const removalResult = removeNodeFromTree(story.nodes, patch.nodeId);
+      const remainingNodes = removalResult.nodes;
+      const remainingStoryNodeCount = getStoryNodes({ ...story, nodes: remainingNodes }).length;
       if (
-        story.openingNodeId === patch.nodeId &&
-        remainingNodes.length > 0 &&
+        removedNodeIds.has(story.openingNodeId) &&
+        remainingStoryNodeCount > 0 &&
         !patch.nextOpeningNodeId
       ) {
         throw new Error(
@@ -205,34 +405,15 @@ function applySingleStoryPatch<TData extends StoryNodeData>(
         );
       }
 
-      const nodes: StoryNode<TData>[] = [];
-
-      for (const node of story.nodes) {
-        if (node.id === patch.nodeId) {
-          continue;
-        }
-
-        if (!removeReferences) {
-          nodes.push(node);
-          continue;
-        }
-
-        const next = node.next === patch.nodeId ? undefined : node.next;
-        const choices = node.choices?.filter((choice) => choice.target !== patch.nodeId);
-
-        nodes.push({
-          ...node,
-          next,
-          choices: choices && choices.length > 0 ? choices : undefined,
-        });
-      }
+      const nodes = removeReferences
+        ? removeReferencesToNodeIds(remainingNodes, removedNodeIds)
+        : remainingNodes;
 
       return {
         ...story,
-        openingNodeId:
-          story.openingNodeId === patch.nodeId
-            ? (patch.nextOpeningNodeId ?? "")
-            : story.openingNodeId,
+        openingNodeId: removedNodeIds.has(story.openingNodeId)
+          ? (patch.nextOpeningNodeId ?? "")
+          : story.openingNodeId,
         nodes,
       };
     }

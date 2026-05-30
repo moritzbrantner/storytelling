@@ -287,6 +287,499 @@ export const signalStory = defineStory<SignalStoryData>({
   ],
 });
 
+export const extendedRelayStory = defineStory<SignalStoryData>({
+  id: "observatory-relay-extended",
+  title: "Extended Relay Route",
+  subtitle: "A longer branch-heavy relay mission",
+  openingNodeId: "relay-awakening",
+  labels: {
+    choosePrompt: "Choose the next move.",
+    completedBranch: "This branch is complete.",
+    continue: "Continue",
+    restart: "Restart",
+      scrollerLabel: "Extended Relay Route scroller",
+  },
+  defaults: {
+    durationInFrames: 110,
+    transitionInFrames: 16,
+  },
+  nodes: [
+    {
+      id: "relay-awakening",
+      title: "Relay awakening",
+      eyebrow: "Opening",
+      prompt: "Sort the channels before the next interval drops.",
+      stage: { renderer: "signal-stage" },
+      data: {
+        channel: "R-01",
+        imageAlt: "An observatory tower on a moonlit ridge",
+        imageSrc:
+          "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=1400&q=80",
+        intensity: 66,
+        location: "Signal ridge",
+        metricLabel: "Signal lock",
+        metricValue: "66%",
+        tone: "cyan",
+      },
+      content: [
+        {
+          type: "paragraph",
+          text: "A late-night beacon wakes three independent tracks at once.",
+        },
+        {
+          type: "list",
+          items: ["Pilot traffic", "Unmapped source", "A familiar archive ping"],
+        },
+      ],
+      choices: [
+        {
+          id: "answer-pilot",
+          label: "Answer the pilot",
+          description: "Keep the flight on one-line.",
+          target: "pilot-check",
+        },
+        {
+          id: "trace-source",
+          label: "Trace the source",
+          description: "Hold the sweep and keep bearings fresh.",
+          target: "trace-scan",
+        },
+        {
+          id: "archive-review",
+          label: "Review the archive",
+          description: "Compare the pattern to older relief logs.",
+          target: "archive-index",
+        },
+      ],
+    },
+    {
+      id: "pilot-check",
+      title: "Pilot signature locks in",
+      eyebrow: "Pilot route",
+      stage: { renderer: "signal-stage" },
+      data: {
+        channel: "Pilot band",
+        imageAlt: "Cockpit lights against a rainy window",
+        imageSrc:
+          "https://images.unsplash.com/photo-1474302770737-173ee21bab63?auto=format&fit=crop&w=1400&q=80",
+        intensity: 84,
+        location: "Cloud approach lane",
+        metricLabel: "Audio clarity",
+        metricValue: "84%",
+        tone: "amber",
+      },
+      content: [
+        {
+          type: "paragraph",
+          text: "The pilot answers with clipped breathing, unsure if this channel is official.",
+        },
+      ],
+      next: "pilot-wave",
+    },
+    {
+      id: "pilot-wave",
+      title: "The wave is stable",
+      eyebrow: "Pilot route",
+      stage: { renderer: "signal-stage" },
+      data: {
+        channel: "ILS",
+        imageAlt: "A radar screen with a narrow green arc",
+        imageSrc:
+          "https://images.unsplash.com/photo-1516321497487-e288fb4c58f1?auto=format&fit=crop&w=1400&q=80",
+        intensity: 91,
+        location: "Approach shelf",
+        metricLabel: "Carrier drift",
+        metricValue: "Stable",
+        tone: "green",
+      },
+      content: [
+        {
+          type: "paragraph",
+          text: "Two beacons ring in and the transponder reads a false corridor.",
+        },
+      ],
+      next: "pilot-decision",
+    },
+    {
+      id: "pilot-decision",
+      title: "Control asks for a route decision",
+      eyebrow: "Pilot branch",
+      prompt: "Choose the relay method.",
+      stage: { renderer: "signal-stage" },
+      data: {
+        channel: "Relay ops",
+        imageAlt: "A map table covered by a route overlay",
+        imageSrc:
+          "https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1400&q=80",
+        intensity: 88,
+        location: "Command room",
+        metricLabel: "Route confidence",
+        metricValue: "61%",
+        tone: "rose",
+      },
+      choices: [
+        {
+          id: "stabilize-route",
+          label: "Stabilize the route",
+          description: "Hold the current corridor until weather updates.",
+          target: "pilot-stabilize",
+        },
+        {
+          id: "confirm-route",
+          label: "Confirm alternate route",
+          description: "Cut to a preapproved backup line.",
+          target: "pilot-confirm",
+        },
+      ],
+      content: [
+        {
+          type: "paragraph",
+          text: "The signal is readable, but it is close to terrain echo.",
+        },
+      ],
+    },
+    {
+      id: "pilot-stabilize",
+      title: "Stabilized route active",
+      eyebrow: "Pilot branch",
+      stage: { renderer: "signal-stage" },
+      data: {
+        channel: "Corridor 4",
+        imageAlt: "A long line of runway lights in dusk",
+        imageSrc:
+          "https://images.unsplash.com/photo-1506784926709-22f1ec3958c5?auto=format&fit=crop&w=1400&q=80",
+        intensity: 95,
+        location: "Low corridor",
+        metricLabel: "Stability",
+        metricValue: "95%",
+        tone: "cyan",
+      },
+      content: [
+        {
+          type: "paragraph",
+          text: "The route holds, and the pilot checks in with confidence.",
+        },
+      ],
+      next: "relay-hub",
+    },
+    {
+      id: "pilot-confirm",
+      title: "Alternate route confirmed",
+      eyebrow: "Pilot branch",
+      stage: { renderer: "signal-stage" },
+      data: {
+        channel: "Fallback vector",
+        imageAlt: "A compass and hand-drawn flight plan",
+        imageSrc:
+          "https://images.unsplash.com/photo-1474487548417-781cb71495f3?auto=format&fit=crop&w=1400&q=80",
+        intensity: 74,
+        location: "Secondary approach",
+        metricLabel: "Fuel impact",
+        metricValue: "+12%",
+        tone: "amber",
+      },
+      content: [
+        {
+          type: "paragraph",
+          text: "A longer line is possible, and the backup route still has clearance.",
+        },
+      ],
+      next: "relay-hub",
+    },
+    {
+      id: "trace-scan",
+      title: "Unknown source appears on scan",
+      eyebrow: "Source trace",
+      stage: { renderer: "signal-stage" },
+      data: {
+        channel: "Bearing grid",
+        imageAlt: "A dark inlet viewed from above",
+        imageSrc:
+          "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1400&q=80",
+        intensity: 72,
+        location: "Uncharted inlet",
+        metricLabel: "Bearing fit",
+        metricValue: "84%",
+        tone: "green",
+      },
+      content: [
+        {
+          type: "paragraph",
+          text: "The map says the cove vanished from civilian charts, then came back in a test band.",
+        },
+      ],
+      next: "trace-grid",
+    },
+    {
+      id: "trace-grid",
+      title: "The coast map becomes two-branched",
+      eyebrow: "Source trace",
+      prompt: "How should the teams react?",
+      stage: { renderer: "signal-stage" },
+      data: {
+        channel: "Chart band",
+        imageAlt: "Coastal relief map on glowing screens",
+        imageSrc:
+          "https://images.unsplash.com/photo-1514924013411-cbf25faa35bb?auto=format&fit=crop&w=1400&q=80",
+        intensity: 78,
+        location: "Outer harbor",
+        metricLabel: "Coordinate certainty",
+        metricValue: "78%",
+        tone: "rose",
+      },
+      choices: [
+        {
+          id: "send-team",
+          label: "Send a ground team",
+          description: "Dispatch a rapid response team before darkness.",
+          target: "trace-team",
+        },
+        {
+          id: "broadcast-fix",
+          label: "Broadcast mesh fix",
+          description: "Publish the grid to neighboring relays.",
+          target: "trace-broadcast",
+        },
+      ],
+      content: [
+        {
+          type: "paragraph",
+          text: "Both actions would reopen the route, but each closes a different safety gate.",
+        },
+      ],
+    },
+    {
+      id: "trace-team",
+      title: "Field team is en route",
+      eyebrow: "Source trace",
+      stage: { renderer: "signal-stage" },
+      data: {
+        channel: "Field",
+        imageAlt: "A rescue truck crossing a narrow road",
+        imageSrc:
+          "https://images.unsplash.com/photo-1465101162946-4377e57745c3?auto=format&fit=crop&w=1400&q=80",
+        intensity: 83,
+        location: "Inlet road",
+        metricLabel: "Team ETA",
+        metricValue: "14m",
+        tone: "cyan",
+      },
+      content: [
+        {
+          type: "paragraph",
+          text: "A local crew confirms a signal source and locks relay on a temporary mast.",
+        },
+      ],
+      next: "relay-hub",
+    },
+    {
+      id: "trace-broadcast",
+      title: "Mesh patch is active",
+      eyebrow: "Source trace",
+      stage: { renderer: "signal-stage" },
+      data: {
+        channel: "Mesh",
+        imageAlt: "A network graph glowing in blue",
+        imageSrc:
+          "https://images.unsplash.com/photo-1518773553398-650c184e0bb5?auto=format&fit=crop&w=1400&q=80",
+        intensity: 86,
+        location: "Regional relay",
+        metricLabel: "Patch spread",
+        metricValue: "89%",
+        tone: "amber",
+      },
+      content: [
+        {
+          type: "paragraph",
+          text: "Other stations repeat the signal as a public route beacon.",
+        },
+      ],
+      next: "relay-hub",
+    },
+    {
+      id: "archive-index",
+      title: "Archive index flags a match",
+      eyebrow: "Archive",
+      stage: { renderer: "signal-stage" },
+      data: {
+        channel: "Archive stack",
+        imageAlt: "A shelf of labeled signal logs",
+        imageSrc:
+          "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1400&q=80",
+        intensity: 62,
+        location: "Cold archive",
+        metricLabel: "Similarity score",
+        metricValue: "62%",
+        tone: "green",
+      },
+      content: [
+        {
+          type: "paragraph",
+          text: "A paper log from the 90s resembles the tone and delay pattern exactly.",
+        },
+      ],
+      next: "archive-decoder",
+    },
+    {
+      id: "archive-decoder",
+      title: "Decoder suggests one of two leads",
+      eyebrow: "Archive",
+      prompt: "Which historical lead should be trusted?",
+      stage: { renderer: "signal-stage" },
+      data: {
+        channel: "Legacy node",
+        imageAlt: "A hand-scanned chart against a lamp",
+        imageSrc:
+          "https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=1400&q=80",
+        intensity: 68,
+        location: "Old terminal",
+        metricLabel: "Archive reliability",
+        metricValue: "73%",
+        tone: "cyan",
+      },
+      choices: [
+        {
+          id: "verify-archive",
+          label: "Verify the archive note",
+          description: "Pull the primary page and crosscheck with live telemetry.",
+          target: "archive-verify",
+        },
+        {
+          id: "archive-stash",
+          label: "Use a secondary cache",
+          description: "Fallback to a secondary signal source.",
+          target: "archive-stash",
+        },
+      ],
+      content: [
+        {
+          type: "paragraph",
+          text: "One branch leads to a clear harbor route, the other to a weather diversion.",
+        },
+      ],
+    },
+    {
+      id: "archive-verify",
+      title: "Verified archive route restored",
+      eyebrow: "Archive branch",
+      stage: { renderer: "signal-stage" },
+      data: {
+        channel: "Primary log",
+        imageAlt: "A stamped ledger on a weathered desk",
+        imageSrc:
+          "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&w=1400&q=80",
+        intensity: 89,
+        location: "Research wing",
+        metricLabel: "Variance",
+        metricValue: "4.2°",
+        tone: "rose",
+      },
+      content: [
+        {
+          type: "paragraph",
+          text: "The verified route aligns with current wind and can be reused immediately.",
+        },
+      ],
+      next: "relay-hub",
+    },
+    {
+      id: "archive-stash",
+      title: "Secondary cache is stale",
+      eyebrow: "Archive branch",
+      stage: { renderer: "signal-stage" },
+      data: {
+        channel: "Backup cache",
+        imageAlt: "A cracked hard-drive tray in a dark room",
+        imageSrc:
+          "https://images.unsplash.com/photo-1527681602529-7be8ea8f8f54?auto=format&fit=crop&w=1400&q=80",
+        intensity: 57,
+        location: "Decommissioned rack",
+        metricLabel: "Delay spread",
+        metricValue: "18s",
+        tone: "amber",
+      },
+      content: [
+        {
+          type: "paragraph",
+          text: "The cached path still works, but margins are not as clean as expected.",
+        },
+      ],
+      next: "relay-hub",
+    },
+    {
+      id: "relay-hub",
+      title: "Relay hub convergence",
+      eyebrow: "Rejoin",
+      stage: { renderer: "signal-stage" },
+      data: {
+        channel: "Hub uplink",
+        imageAlt: "A glass operations room full of monitors",
+        imageSrc:
+          "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=1400&q=80",
+        intensity: 97,
+        location: "Control center",
+        metricLabel: "Convergence",
+        metricValue: "100%",
+        tone: "green",
+      },
+      content: [
+        {
+          type: "paragraph",
+          text: "Every branch now shares one final path: confirm and release the clearance.",
+        },
+      ],
+      next: "relay-check",
+    },
+    {
+      id: "relay-check",
+      title: "Clearance diagnostics run",
+      eyebrow: "Finale",
+      stage: { renderer: "signal-stage" },
+      data: {
+        channel: "Compliance",
+        imageAlt: "An empty runway at sunrise",
+        imageSrc:
+          "https://images.unsplash.com/photo-1489515217757-5fd1be406fef?auto=format&fit=crop&w=1400&q=80",
+        intensity: 93,
+        location: "Regional command",
+        metricLabel: "Verification",
+        metricValue: "Pass",
+        tone: "cyan",
+      },
+      content: [
+        {
+          type: "paragraph",
+          text: "The safety check clears and the last safety channel closes.",
+        },
+      ],
+      next: "network-clearance",
+    },
+    {
+      id: "network-clearance",
+      title: "Network clearance",
+      eyebrow: "Ending",
+      stage: { renderer: "signal-stage" },
+      data: {
+        channel: "Clearance",
+        imageAlt: "A calm shoreline under sunrise",
+        imageSrc:
+          "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1400&q=80",
+        intensity: 100,
+        location: "Route secure",
+        metricLabel: "Mission status",
+        metricValue: "Clear",
+        tone: "green",
+      },
+      content: [
+        {
+          type: "paragraph",
+          text: "All branches align, and the relay route is open for scheduled handoff.",
+        },
+      ],
+    },
+  ],
+});
+
 export const linearStory = defineStory<SignalStoryData>({
   id: "morning-dispatch",
   title: "Morning Dispatch",

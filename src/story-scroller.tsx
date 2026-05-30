@@ -22,8 +22,15 @@ import {
   getHistoryChoiceIds,
 } from "./story-runtime";
 import { resolveStoryPath } from "./story-path";
+import { createStoryNodeEntryLookup } from "./story-node-tree";
 import { getStoryChoices, getStoryNode, isStoryEnding, validateStory } from "./story-validation";
-import type { StoryChoice, StoryDocument, StoryHistoryEntry, StoryNodeData } from "./story-model";
+import type {
+  StoryChoice,
+  StoryDocument,
+  StoryHistoryEntry,
+  StoryNodeData,
+  StoryNodeTreeEntry,
+} from "./story-model";
 import type { StoryRendererRegistry, StoryRenderProps } from "./story-render-types";
 import type { StoryPathState } from "./story-state";
 
@@ -51,7 +58,14 @@ export type StoryScrollerChoicePanelRenderProps<TData extends StoryNodeData = St
 
 export type StoryScrollerMinimapProps<TData extends StoryNodeData = StoryNodeData> = {
   story: StoryDocument<TData>;
-  items: { id: string; title: string; eyebrow?: string; menuLabel?: string }[];
+  items: Array<
+    { id: string; title: string; eyebrow?: string; menuLabel?: string } & Partial<
+      Pick<
+        StoryNodeTreeEntry<TData>,
+        "nodeId" | "parentNodeId" | "ancestorNodeIds" | "depth" | "indexPath"
+      >
+    >
+  >;
   activeIndex: number;
   scrollToScene: (index: number) => void;
   history: StoryHistoryEntry<TData>[];
@@ -156,6 +170,7 @@ function StoryDocumentScroller<TData extends StoryNodeData = StoryNodeData>({
     () => resolveInitialHistory(story, choiceIds ?? resolvedDefaultChoiceIds),
     [controlledChoiceKey, defaultChoiceKey, isChoiceIdsControlled, story],
   );
+  const nodeEntryLookup = useMemo(() => createStoryNodeEntryLookup(story), [story]);
   const [history, setHistory] = useState<StoryHistoryEntry<TData>[]>(() => initialHistory);
   const [scrollTarget, setScrollTarget] = useState<StoryScrollTarget | undefined>();
   const [activeIndex, setActiveIndex] = useState(0);
@@ -226,6 +241,7 @@ function StoryDocumentScroller<TData extends StoryNodeData = StoryNodeData>({
     () =>
       history.map((entry, index) => {
         const node = getStoryNode(story, entry.nodeId);
+        const nodeEntry = nodeEntryLookup.get(node.id);
 
         return {
           id: getStoryScrollerPageId(story.id, node.id),
@@ -243,6 +259,7 @@ function StoryDocumentScroller<TData extends StoryNodeData = StoryNodeData>({
             const renderProps = createStoryRenderProps({
               story,
               path: { ...nodePath, currentNode: node, completed: ending },
+              nodeEntry,
               history: nodeHistory,
               currentIndex: index,
               progress: scrollProps.progress,
@@ -302,6 +319,7 @@ function StoryDocumentScroller<TData extends StoryNodeData = StoryNodeData>({
       allowBranchReselection,
       chooseFrom,
       history,
+      nodeEntryLookup,
       registry,
       renderChoicePanel,
       renderScene,
@@ -321,12 +339,23 @@ function StoryDocumentScroller<TData extends StoryNodeData = StoryNodeData>({
 
   const minimap = renderMinimap?.({
     story,
-    items: scenes.map((scene) => ({
-      id: scene.id,
-      title: scene.title,
-      eyebrow: scene.eyebrow,
-      menuLabel: scene.menuLabel,
-    })),
+    items: scenes.map((scene, index) => {
+      const nodeEntry = history[index]?.nodeId
+        ? nodeEntryLookup.get(history[index]!.nodeId)
+        : undefined;
+
+      return {
+        id: scene.id,
+        title: scene.title,
+        eyebrow: scene.eyebrow,
+        menuLabel: scene.menuLabel,
+        nodeId: nodeEntry?.nodeId,
+        parentNodeId: nodeEntry?.parentNodeId,
+        ancestorNodeIds: nodeEntry?.ancestorNodeIds,
+        depth: nodeEntry?.depth,
+        indexPath: nodeEntry?.indexPath,
+      };
+    }),
     activeIndex,
     scrollToScene: requestScrollToScene,
     history,

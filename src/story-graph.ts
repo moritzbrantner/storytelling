@@ -6,6 +6,7 @@ import type {
   StoryNode,
   StoryNodeData,
 } from "./story-model";
+import { getStoryNodeEntries } from "./story-node-tree";
 import { assertStoryDocument, createStoryNodeLookup, getStoryChoices } from "./story-validation";
 
 export type StoryGraphEdge<TData extends StoryNodeData = StoryNodeData> = {
@@ -51,10 +52,11 @@ export function compileStory<TData extends StoryNodeData>(
 ): CompiledStory<TData> {
   const story = assertStoryDocument(input);
   const nodeLookup = createStoryNodeLookup(story);
+  const nodeEntries = getStoryNodeEntries(story);
   const compiledNodes = new Map<string, CompiledStoryNode<TData>>();
   const edges: StoryGraphEdge<TData>[] = [];
 
-  for (const node of story.nodes) {
+  for (const { node } of nodeEntries) {
     compiledNodes.set(node.id, {
       node,
       incoming: [],
@@ -62,7 +64,7 @@ export function compileStory<TData extends StoryNodeData>(
     });
   }
 
-  for (const source of story.nodes) {
+  for (const { node: source } of nodeEntries) {
     const kind = getChoiceKind(source);
 
     for (const choice of getStoryChoices(story, source)) {
@@ -111,7 +113,7 @@ export function enumerateStoryPaths<TData extends StoryNodeData>(
 ): EnumeratedStoryPath<TData>[] {
   const compiledStory = compileStory(input);
   const nodeEntries = new Map(compiledStory.nodes.map((entry) => [entry.node.id, entry] as const));
-  const maxDepth = options.maxDepth ?? compiledStory.story.nodes.length;
+  const maxDepth = options.maxDepth ?? compiledStory.nodes.length;
   const maxPaths = options.maxPaths ?? 1000;
   const paths: EnumeratedStoryPath<TData>[] = [];
 

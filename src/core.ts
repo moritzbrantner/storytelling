@@ -4,6 +4,7 @@ export {
   type BuildStoryTimelineOptions,
   type ResolveStoryPathOptions,
 } from "./story-path";
+export { getStoryNodeEntries, getStoryNodeEntry, getStoryNodes } from "./story-node-tree";
 export {
   assertStoryDocument,
   defineStory,
@@ -64,6 +65,7 @@ export type {
   StoryMediaTextTrack,
   StoryNode,
   StoryNodeData,
+  StoryNodeTreeEntry,
   StoryStageDescriptor,
   StoryTimeline,
   StoryTimelineScene,

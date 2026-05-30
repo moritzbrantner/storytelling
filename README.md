@@ -26,7 +26,8 @@ See [docs/API.md](docs/API.md) for the compact public API reference.
 ## Story schema
 
 Stories are serializable documents. Nodes can be linear with `next`, branching
-with `choices`, or terminal when neither is present.
+with `choices`, nested with `children`, or terminal when no continuation is
+present. Node ids are globally unique across top-level and nested nodes.
 
 ```ts
 import { defineStory } from "@moritzbrantner/storytelling";
@@ -67,6 +68,33 @@ export const story = defineStory({
 targets, missing opening nodes, and cycles. `resolveStoryPath()` returns the
 current path for a set of selected choice ids, while `buildStoryTimeline()`
 converts that path into frame ranges for video-oriented renderers.
+
+Nested nodes play as a depth-first flattened sequence. A parent scene renders
+first, then its children render in order, and the final descendant falls through
+to the parent `next` target. Generic `StoryScrollScene[]` arrays remain flat.
+
+```ts
+export const nestedStory = defineStory({
+  id: "nested-report",
+  title: "Nested Report",
+  openingNodeId: "chapter",
+  nodes: [
+    {
+      id: "chapter",
+      title: "Chapter",
+      next: "ending",
+      children: [
+        { id: "chapter-scene-a", title: "Scene A" },
+        { id: "chapter-scene-b", title: "Scene B" },
+      ],
+    },
+    { id: "ending", title: "Ending" },
+  ],
+});
+
+resolveStoryPath(nestedStory, { autoAdvanceLinearNodes: true }).nodes.map((node) => node.id);
+// ["chapter", "chapter-scene-a", "chapter-scene-b", "ending"]
+```
 
 Use `validateStoryDocument()` when an editor should show all diagnostics instead
 of throwing on the first invalid field.

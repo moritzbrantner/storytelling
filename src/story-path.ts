@@ -7,6 +7,7 @@ import type {
   StoryTimeline,
   StoryTimelineScene,
 } from "./story-model";
+import { createStoryNodeEntryLookup, getStoryNodeEntries } from "./story-node-tree";
 import { createStoryNodeLookup, getStoryChoices, maybeValidateStory } from "./story-validation";
 
 const DEFAULT_DURATION_IN_FRAMES = 120;
@@ -33,12 +34,13 @@ export function resolveStoryPath<TData extends StoryNodeData>(
 ): ResolvedStoryPath<TData> {
   const story = maybeValidateStory(input);
   const nodeLookup = createStoryNodeLookup(story);
+  const nodeEntries = getStoryNodeEntries(story);
   const nodes: StoryNode<TData>[] = [];
   const history: StoryHistoryEntry<TData>[] = [];
   const choiceIds = options.choiceIds ?? [];
   const consumedChoiceIds: string[] = [];
   const autoAdvanceLinearNodes = options.autoAdvanceLinearNodes ?? false;
-  const maxSteps = options.maxSteps ?? story.nodes.length * 2;
+  const maxSteps = options.maxSteps ?? nodeEntries.length * 2;
   let currentNode = nodeLookup.get(story.openingNodeId)!;
   let choiceIndex = 0;
 
@@ -152,6 +154,7 @@ export function buildStoryTimeline<TData extends StoryNodeData>(
     choiceIds: options.choiceIds,
     autoAdvanceLinearNodes: true,
   });
+  const nodeEntryLookup = createStoryNodeEntryLookup(story);
   const fps = options.fps ?? DEFAULT_FPS;
   const defaultDurationInFrames =
     options.defaultDurationInFrames ??
@@ -168,6 +171,7 @@ export function buildStoryTimeline<TData extends StoryNodeData>(
     const transitionInFrames = node.transition?.durationInFrames ?? defaultTransitionInFrames;
     const scene = {
       node,
+      nodeEntry: nodeEntryLookup.get(node.id),
       startFrame: cursor,
       durationInFrames,
       endFrame: cursor + durationInFrames,

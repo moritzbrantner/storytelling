@@ -14,6 +14,7 @@ import {
   type StoryValidationIssueCode,
   type StoryValidationMode,
 } from "./story-validation";
+import { getStoryNodeEntries, getStoryNodes } from "./story-node-tree";
 
 export type StoryAuthoringSeverity = "info" | "warning" | "error";
 
@@ -141,10 +142,11 @@ function getValidationFixes<TData extends StoryNodeData>(
     case "blank-node-id": {
       if (!issue.nodeId) return undefined;
 
-      const matchingNodes = story.nodes.filter((node) => node.id === issue.nodeId);
+      const storyNodes = getStoryNodes(story);
+      const matchingNodes = storyNodes.filter((node) => node.id === issue.nodeId);
       if (matchingNodes.length !== 1) return undefined;
 
-      const existingIds = new Set(story.nodes.map((node) => node.id));
+      const existingIds = new Set(storyNodes.map((node) => node.id));
       const nextNodeId = getUniqueFallbackId(existingIds, "node");
       if (!nextNodeId) return undefined;
 
@@ -158,7 +160,7 @@ function getValidationFixes<TData extends StoryNodeData>(
     case "blank-choice-id": {
       if (!issue.nodeId || issue.choiceId === undefined) return undefined;
 
-      const node = story.nodes.find((candidate) => candidate.id === issue.nodeId);
+      const node = getStoryNodes(story).find((candidate) => candidate.id === issue.nodeId);
       if (!node) return undefined;
 
       const matchingChoices = (node.choices ?? []).filter((choice) => choice.id === issue.choiceId);
@@ -282,7 +284,7 @@ function getContentWordCount(node: StoryNode) {
 }
 
 function getMediaBlockCount<TData extends StoryNodeData>(story: StoryDocument<TData>) {
-  return story.nodes.reduce(
+  return getStoryNodes(story).reduce(
     (count, node) =>
       count +
       (node.content ?? []).filter(
@@ -295,18 +297,19 @@ function getMediaBlockCount<TData extends StoryNodeData>(story: StoryDocument<TD
 function createEmptyMetrics<TData extends StoryNodeData>(
   story: StoryDocument<TData>,
 ): StoryAuthoringMetrics {
-  const contentBlockCount = story.nodes.reduce(
+  const storyNodes = getStoryNodes(story);
+  const contentBlockCount = storyNodes.reduce(
     (count, node) => count + (node.content?.length ?? 0),
     0,
   );
 
   return {
-    nodeCount: story.nodes.length,
+    nodeCount: storyNodes.length,
     edgeCount: 0,
     branchCount: 0,
     endingCount: 0,
     reachableNodeCount: 0,
-    unreachableNodeCount: story.nodes.length,
+    unreachableNodeCount: storyNodes.length,
     pathCount: 0,
     maxDepth: 0,
     minDepth: 0,
@@ -322,7 +325,7 @@ export function getStoryReachability<TData extends StoryNodeData>(story: StoryDo
 
   return {
     reachableNodeIds,
-    unreachableNodeIds: story.nodes
+    unreachableNodeIds: getStoryNodes(story)
       .map((node) => node.id)
       .filter((nodeId) => nodeId && !reachableNodeSet.has(nodeId)),
   };
@@ -388,17 +391,16 @@ export function analyzeStory<TData extends StoryNodeData>(
       });
     }
   } catch {
-    branches = story.nodes.filter(
+    const storyNodes = getStoryNodes(story);
+    branches = storyNodes.filter(
       (node) => (node.choices ?? []).filter((choice) => !choice.disabled).length > 1,
     );
-    endings = story.nodes.filter((node) => getStoryChoices(story, node).length === 0);
+    endings = storyNodes.filter((node) => getStoryChoices(story, node).length === 0);
   }
 
   const reachableNodeSet = new Set(reachability.reachableNodeIds);
 
-  for (const [nodeIndex, node] of story.nodes.entries()) {
-    const nodePath = `nodes.${nodeIndex}`;
-
+  for (const { node, path: nodePath } of getStoryNodeEntries(story)) {
     if (node.id && !reachableNodeSet.has(node.id)) {
       issues.push(
         withFixes(
@@ -492,11 +494,12 @@ export function analyzeStory<TData extends StoryNodeData>(
     }
   }
 
-  const contentBlockCount = story.nodes.reduce(
+  const storyNodes = getStoryNodes(story);
+  const contentBlockCount = storyNodes.reduce(
     (count, node) => count + (node.content?.length ?? 0),
     0,
   );
-  const wordCount = story.nodes.reduce((count, node) => count + getContentWordCount(node), 0);
+  const wordCount = storyNodes.reduce((count, node) => count + getContentWordCount(node), 0);
   const metrics = createEmptyMetrics(story);
 
   metrics.edgeCount = edgeCount;

@@ -142,40 +142,7 @@ const storyTransitionSchema = {
   },
 } satisfies JsonSchema;
 
-const storyNodeSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["id", "title"],
-  properties: {
-    id: { type: "string" },
-    title: { type: "string" },
-    eyebrow: { type: "string" },
-    content: {
-      type: "array",
-      items: contentBlockSchema,
-    },
-    prompt: { type: "string" },
-    data: {
-      type: "object",
-      additionalProperties: true,
-    },
-    next: { type: "string" },
-    choices: {
-      type: "array",
-      items: storyChoiceSchema,
-    },
-    durationInFrames: {
-      type: "integer",
-      minimum: 1,
-    },
-    scrollUnits: {
-      type: "number",
-      exclusiveMinimum: 0,
-    },
-    transition: storyTransitionSchema,
-    stage: storyStageDescriptorSchema,
-  },
-} satisfies JsonSchema;
+const storyNodeSchema = { $ref: "#/$defs/storyNode" } satisfies JsonSchema;
 
 export const storyDocumentJsonSchema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
@@ -222,6 +189,46 @@ export const storyDocumentJsonSchema = {
         completedBranch: { type: "string" },
         scrollerLabel: { type: "string" },
         minimapLabel: { type: "string" },
+      },
+    },
+  },
+  $defs: {
+    storyNode: {
+      type: "object",
+      additionalProperties: false,
+      required: ["id", "title"],
+      properties: {
+        id: { type: "string" },
+        title: { type: "string" },
+        eyebrow: { type: "string" },
+        content: {
+          type: "array",
+          items: contentBlockSchema,
+        },
+        prompt: { type: "string" },
+        data: {
+          type: "object",
+          additionalProperties: true,
+        },
+        next: { type: "string" },
+        choices: {
+          type: "array",
+          items: storyChoiceSchema,
+        },
+        children: {
+          type: "array",
+          items: { $ref: "#/$defs/storyNode" },
+        },
+        durationInFrames: {
+          type: "integer",
+          minimum: 1,
+        },
+        scrollUnits: {
+          type: "number",
+          exclusiveMinimum: 0,
+        },
+        transition: storyTransitionSchema,
+        stage: storyStageDescriptorSchema,
       },
     },
   },

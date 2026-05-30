@@ -8,16 +8,19 @@ import type {
   StoryDocument,
   StoryHistoryEntry,
   StoryLabels,
+  StoryNodeTreeEntry,
   StoryNodeData,
 } from "./story-model";
 import type { StoryRenderProps } from "./story-render-types";
 import { createStoryPathState, type StoryPathState } from "./story-state";
 import { useStoryPathState, type UseStoryPathStateOptions } from "./use-story-path-state";
 import { defineStory, getStoryChoices, getStoryNode, isStoryEnding } from "./story-validation";
+import { createStoryNodeEntryLookup, getStoryNodeEntries } from "./story-node-tree";
 
 export type CreateStoryRenderPropsInput<TData extends StoryNodeData = StoryNodeData> = {
   story: StoryDocument<TData>;
   path: ResolvedStoryPath<TData>;
+  nodeEntry?: StoryNodeTreeEntry<TData>;
   history?: StoryHistoryEntry<TData>[];
   currentIndex?: number;
   progress?: number;
@@ -97,9 +100,10 @@ export function createStoryPathStateFromHistory<TData extends StoryNodeData>(
 export function createStoryRenderProps<TData extends StoryNodeData>({
   story,
   path,
+  nodeEntry = createStoryNodeEntryLookup(story).get(path.currentNode.id),
   history = path.history,
   currentIndex = Math.max(history.length - 1, 0),
-  progress = history.length / Math.max(story.nodes.length, 1),
+  progress = history.length / Math.max(getStoryNodeEntries(story).length, 1),
   choices = getStoryChoices(story, path.currentNode),
   canGoBack = history.length > 1,
   choose = () => {},
@@ -109,6 +113,7 @@ export function createStoryRenderProps<TData extends StoryNodeData>({
   return {
     story,
     node: path.currentNode,
+    nodeEntry,
     history,
     path,
     currentIndex,
@@ -149,7 +154,8 @@ export function useStoryRuntime<TData extends StoryNodeData>(
   });
   const labels = useMemo(() => resolveStoryRuntimeLabels(story.labels), [story.labels]);
   const progress =
-    options.progress?.(pathState) ?? pathState.history.length / Math.max(story.nodes.length, 1);
+    options.progress?.(pathState) ??
+    pathState.history.length / Math.max(getStoryNodeEntries(story).length, 1);
 
   const choose = (choiceId: string) => {
     const choice = pathState.choices.find(
