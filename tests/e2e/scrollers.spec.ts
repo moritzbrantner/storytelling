@@ -33,6 +33,14 @@ async function expectPlayerHeading(region: Locator, name: string) {
   await expect(region.getByRole("heading", { name }).last()).toBeVisible();
 }
 
+async function continuePlayerTo(page: Page, region: Locator, heading: string) {
+  const continueButton = page.getByRole("button", { name: "Continue" });
+  await continueButton.focus();
+  await expect(continueButton).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expectPlayerHeading(region, heading);
+}
+
 function storyStateSummary(page: Page) {
   return page.getByLabel("Story state").locator("pre").first();
 }
@@ -130,7 +138,7 @@ test.describe("StoryScroller example app", () => {
 
   test("Long branching showcase player supports alternate route choices", async ({ page }) => {
     await openExample(page);
-    await page.getByRole("button", { name: "Branching (Deep)" }).click();
+    await chooseStoryType(page, "Branching (Deep)");
 
     const region = page.getByRole("region", { name: "Extended Relay Route" });
     await expect(region).toBeVisible();
@@ -139,18 +147,28 @@ test.describe("StoryScroller example app", () => {
     await page.getByRole("button", { name: "Answer the pilot" }).click();
     await expectPlayerHeading(region, "Pilot signature locks in");
 
+    await continuePlayerTo(page, region, "The wave is stable");
+    await continuePlayerTo(page, region, "Control asks for a route decision");
     await page.getByRole("button", { name: "Stabilize the route" }).click();
-    await expectPlayerHeading(region, "Network clearance");
+    await expectPlayerHeading(region, "Stabilized route active");
+    await continuePlayerTo(page, region, "Relay hub convergence");
+    await continuePlayerTo(page, region, "Clearance diagnostics run");
+    await continuePlayerTo(page, region, "Network clearance");
     await expect(storyStateSummary(page)).toContainText("Relay hub convergence");
   });
 
-  test("Long branching showcase player preset displays expected branch sequence", async ({ page }) => {
+  test("Long branching showcase player preset displays expected branch sequence", async ({
+    page,
+  }) => {
     await openExample(page);
-    await page.getByRole("button", { name: "Branching (Deep)" }).click();
+    await chooseStoryType(page, "Branching (Deep)");
     await page.getByRole("button", { name: "Pilot route (stabilize)" }).click();
 
     await expect(choiceIdsSummary(page)).toHaveText("answer-pilot -> stabilize-route");
-    await expectPlayerHeading(page.getByRole("region", { name: "Extended Relay Route" }), "Network clearance");
+    await expectPlayerHeading(
+      page.getByRole("region", { name: "Extended Relay Route" }),
+      "Network clearance",
+    );
     await expect(storyStateSummary(page)).toContainText("Pilot signature locks in");
     await expect(storyStateSummary(page)).toContainText("Relay hub convergence");
   });
@@ -159,7 +177,7 @@ test.describe("StoryScroller example app", () => {
     page,
   }) => {
     await openExample(page);
-    await page.getByRole("button", { name: "Branching (Deep)" }).click();
+    await chooseStoryType(page, "Branching (Deep)");
     await chooseComponent(page, "Scroller");
 
     const region = page.getByRole("region", { name: "Extended Relay Route scroller" });
@@ -168,14 +186,14 @@ test.describe("StoryScroller example app", () => {
 
     await setScrollerSceneProgress(page, 0.95);
     await page.getByRole("button", { name: /Trace the source/ }).click();
-    await expect(page.getByRole("heading", { name: "Relay hub convergence" })).toBeVisible();
+    await expectActiveScene(page, /2\. Unknown source appears on scan/);
 
     await region.press("Home");
     await expectActiveScene(page, /1\. Relay awakening/);
 
     await setScrollerSceneProgress(page, 0.95);
     await page.getByRole("button", { name: /Answer the pilot/ }).click();
-    await expect(page.getByRole("heading", { name: "Relay hub convergence" })).toBeVisible();
+    await expectActiveScene(page, /2\. Pilot signature locks in/);
   });
 
   test("linear story scroller supports vertical scrolling and horizontal scene navigation", async ({

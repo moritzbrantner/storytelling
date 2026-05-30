@@ -62,6 +62,7 @@ export function resolveStoryPath<TData extends StoryNodeData>(
     }
 
     const choices = getStoryChoices(story, currentNode);
+    const hasExplicitChoices = (currentNode.choices?.length ?? 0) > 0;
     if (choices.length === 0) {
       return {
         nodes,
@@ -80,7 +81,7 @@ export function resolveStoryPath<TData extends StoryNodeData>(
         ? choices.find((choice) => choice.id === requestedChoiceId && !choice.disabled)
         : undefined;
 
-    if (requestedChoiceId !== undefined && !selectedChoice) {
+    if (requestedChoiceId !== undefined && hasExplicitChoices && !selectedChoice) {
       return {
         nodes,
         history,
@@ -92,7 +93,7 @@ export function resolveStoryPath<TData extends StoryNodeData>(
       };
     }
 
-    if (!selectedChoice && autoAdvanceLinearNodes && !currentNode.choices?.length) {
+    if (!selectedChoice && autoAdvanceLinearNodes && !hasExplicitChoices) {
       selectedChoice = choices.find((choice) => !choice.disabled);
     }
 

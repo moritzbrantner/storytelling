@@ -297,7 +297,7 @@ export const extendedRelayStory = defineStory<SignalStoryData>({
     completedBranch: "This branch is complete.",
     continue: "Continue",
     restart: "Restart",
-      scrollerLabel: "Extended Relay Route scroller",
+    scrollerLabel: "Extended Relay Route scroller",
   },
   defaults: {
     durationInFrames: 110,

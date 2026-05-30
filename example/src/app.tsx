@@ -41,7 +41,13 @@ import {
 } from "@moritzbrantner/ui";
 
 type ExampleMode = "player" | "scroller";
-type ExampleStoryId = "branching" | "branching-deep" | "linear" | "motion" | "autoscroll" | "authoring";
+type ExampleStoryId =
+  | "branching"
+  | "branching-deep"
+  | "linear"
+  | "motion"
+  | "autoscroll"
+  | "authoring";
 
 type PathPreset = {
   id: string;
