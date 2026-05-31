@@ -1,0 +1,44 @@
+{
+  "core.validate.linear-1000": {
+    "p95Ms": 20
+  },
+  "core.compile.linear-1000": {
+    "p95Ms": 20
+  },
+  "core.resolve.linear-1000": {
+    "p95Ms": 15
+  },
+  "core.timeline.linear-1000": {
+    "p95Ms": 25
+  },
+  "core.analyze.linear-1000": {
+    "p95Ms": 80
+  },
+  "core.validate.branch-5x3": {
+    "p95Ms": 25
+  },
+  "core.compile.branch-5x3": {
+    "p95Ms": 40
+  },
+  "core.enumerate.branch-5x3": {
+    "p95Ms": 50
+  },
+  "core.analyze.branch-5x3": {
+    "p95Ms": 120
+  },
+  "scroll.build-timeline.scenes-1000": {
+    "p95Ms": 15
+  },
+  "react.story-player.render.linear-100": {
+    "p95Ms": 80
+  },
+  "react.story-player.choice-update.branch": {
+    "p95Ms": 40
+  },
+  "react.story-scroller.render.scenes-100": {
+    "p95Ms": 140
+  },
+  "react.scroll-timeline.update": {
+    "p95Ms": 8
+  }
+}

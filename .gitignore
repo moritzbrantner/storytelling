@@ -8,6 +8,7 @@ example/dist/
 *.log
 *.tsbuildinfo
 coverage/
+bench/results/
 playwright-report/
 test-results/
 storybook-static/

@@ -1,0 +1,11 @@
+{
+  "files": {
+    "dist/core.js": 4096,
+    "dist/schema.js": 1024,
+    "dist/index.js": 92160,
+    "dist/remotion.js": 20480,
+    "dist/three.js": 10240,
+    "dist/media.js": 20480
+  },
+  "totalJs": 202000
+}

@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "baseUrl": "../..",
+    "paths": {
+      "@moritzbrantner/storytelling": ["src/index.ts"],
+      "@moritzbrantner/storytelling/core": ["src/core.ts"],
+      "@moritzbrantner/storytelling/schema": ["src/schema.ts"],
+      "@moritzbrantner/storytelling/remotion": ["src/remotion.tsx"],
+      "@moritzbrantner/storytelling/three": ["src/three.tsx"],
+      "@moritzbrantner/storytelling/media": ["src/media.tsx"],
+      "@moritzbrantner/storytelling/workflow": ["src/workflow.ts"],
+      "@moritzbrantner/storytelling/timeline": ["src/timeline.ts"]
+    }
+  },
+  "include": ["./*.ts", "./*.tsx"]
+}

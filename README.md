@@ -580,3 +580,19 @@ type checking, unit tests, build output, package export smoke tests, temporary
 consumer install smoke coverage, and package dry-run contents. After publishing,
 run `bun run test:published` to verify npm metadata, the `latest` dist-tag, and
 clean-project installability from the public registry.
+
+The repository also includes focused quality gates for library correctness and
+performance:
+
+```sh
+bun run test:property
+bun run test:coverage
+bun run test:types
+bun run size
+bun run perf:smoke
+```
+
+`perf:smoke` runs deterministic core and React benchmarks against built `dist`
+output and checks `bench/budgets.smoke.json`. Use `bun run perf` for the full
+benchmark matrix and `bun run perf:compare` to compare `bench/results/latest.json`
+with the checked-in baseline.
