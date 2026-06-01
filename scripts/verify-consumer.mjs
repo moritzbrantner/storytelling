@@ -77,7 +77,7 @@ try {
     "utf8",
   );
 
-  execFileSync("node", ["verify.mjs"], {
+  execFileSync(process.execPath, ["verify.mjs"], {
     cwd: tempRoot,
     stdio: "inherit",
   });
@@ -115,7 +115,7 @@ try {
       "utf8",
     );
 
-    execFileSync("node", ["verify-core.mjs"], {
+    execFileSync(process.execPath, ["verify-core.mjs"], {
       cwd: coreOnlyRoot,
       stdio: "inherit",
     });

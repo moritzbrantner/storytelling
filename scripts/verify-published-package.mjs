@@ -1,17 +1,12 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const packageJson = JSON.parse(
-  execFileSync("node", ["-p", "JSON.stringify(require('./package.json'))"], {
-    cwd: repoRoot,
-    encoding: "utf8",
-  }),
-);
+const packageJson = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8"));
 const registry = "https://registry.npmjs.org";
 const spec = `${packageJson.name}@${packageJson.version}`;
 

@@ -4,7 +4,7 @@ import path from "node:path";
 const [, , targetDir, ...forbiddenPatterns] = process.argv;
 
 if (!targetDir) {
-  console.error("Usage: node scripts/verify-package-imports.mjs <dir> <pattern>...");
+  console.error("Usage: bun scripts/verify-package-imports.mjs <dir> <pattern>...");
   process.exit(1);
 }
 

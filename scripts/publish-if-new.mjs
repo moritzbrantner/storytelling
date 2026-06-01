@@ -73,7 +73,7 @@ function isGitHubActionsTagContext() {
 }
 
 function verifyPublishedPackage() {
-  execFileSync("node", ["scripts/verify-published-package.mjs"], {
+  execFileSync(process.execPath, ["scripts/verify-published-package.mjs"], {
     cwd: repoRoot,
     stdio: "inherit",
     env: {

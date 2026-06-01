@@ -27,7 +27,7 @@ function readArgs(argv) {
 
   if (!args.baseline || !args.candidate) {
     throw new Error(
-      "Usage: node scripts/compare-benchmarks.mjs --baseline <file> --candidate <file>",
+      "Usage: bun scripts/compare-benchmarks.mjs --baseline <file> --candidate <file>",
     );
   }
 
