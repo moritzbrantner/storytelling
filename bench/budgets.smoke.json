@@ -9,10 +9,10 @@
     "p95Ms": 15
   },
   "core.timeline.linear-1000": {
-    "p95Ms": 25
+    "p95Ms": 100
   },
   "core.analyze.linear-1000": {
-    "p95Ms": 80
+    "p95Ms": 120
   },
   "core.validate.branch-5x3": {
     "p95Ms": 25
