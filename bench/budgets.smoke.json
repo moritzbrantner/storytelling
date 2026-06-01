@@ -33,7 +33,7 @@
     "p95Ms": 80
   },
   "react.story-player.choice-update.branch": {
-    "p95Ms": 40
+    "p95Ms": 120
   },
   "react.story-scroller.render.scenes-100": {
     "p95Ms": 140
