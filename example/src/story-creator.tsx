@@ -1,19 +1,11 @@
 import { useMemo, useState } from "react";
-import {
-  StoryPlayer,
-  defineStory,
-  validateStoryDocument,
-  type StoryDocument,
-  type StoryNode,
-} from "@moritzbrantner/storytelling";
+import { StoryPlayer, validateStoryDocument } from "@moritzbrantner/storytelling";
 import {
   applyTimelineTimingsToStory,
-  storyToTimelineEditorDocument,
   type StoryTimelineItemData,
 } from "@moritzbrantner/storytelling/timeline";
 import {
   TimelineEditor,
-  type TimelineEditorDocument,
   type TimelineEditorItemRenderContext,
   type TimelineEditorSelection,
   type TimelineEditorViewport,
@@ -35,195 +27,26 @@ import {
 } from "@moritzbrantner/ui";
 
 import { storyRegistry, type SignalStoryData } from "./story";
+import {
+  createCreatorNode,
+  createStarterStory,
+  createTimelineDocument,
+  creatorFps,
+  creatorTones,
+  findNodeIdForSelection,
+  getItemIdForNode,
+  getNodeBody,
+  makeUniqueNodeId,
+  normalizeLinearNodes,
+  updateNodeBody,
+  type CreatorNode,
+  type CreatorStory,
+  type CreatorTimelineDocument,
+} from "./story-creator-model";
 
 type StoryCreatorPageProps = {
   onOpenLab: () => void;
 };
-
-type CreatorStory = StoryDocument<SignalStoryData>;
-type CreatorNode = StoryNode<SignalStoryData>;
-type CreatorTimelineDocument = TimelineEditorDocument<
-  Record<string, unknown>,
-  StoryTimelineItemData<SignalStoryData>
->;
-
-const creatorFps = 30;
-const creatorTones: SignalStoryData["tone"][] = ["cyan", "amber", "green", "rose"];
-
-const starterImages = [
-  "https://images.unsplash.com/photo-1519608487953-e999c86e7455?auto=format&fit=crop&w=1400&q=80",
-  "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1400&q=80",
-  "https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?auto=format&fit=crop&w=1400&q=80",
-  "https://images.unsplash.com/photo-1489515217757-5fd1be406fef?auto=format&fit=crop&w=1400&q=80",
-];
-
-function createCreatorNode(index: number, partial: Partial<CreatorNode> = {}): CreatorNode {
-  const id = partial.id ?? `scene-${index + 1}`;
-  const tone = creatorTones[index % creatorTones.length]!;
-
-  return {
-    ...partial,
-    id,
-    title: partial.title ?? `Scene ${index + 1}`,
-    eyebrow: partial.eyebrow ?? `Beat ${String(index + 1).padStart(2, "0")}`,
-    stage: partial.stage ?? { renderer: "signal-stage" },
-    durationInFrames: partial.durationInFrames ?? 120,
-    data: {
-      channel: `Draft ${index + 1}`,
-      imageAlt: `Scene ${index + 1} image`,
-      imageSrc: starterImages[index % starterImages.length]!,
-      intensity: 64,
-      location: "Story world",
-      metricLabel: "Focus",
-      metricValue: "64%",
-      tone,
-      ...partial.data,
-    },
-    content: partial.content ?? [
-      {
-        type: "paragraph",
-        text: "Write what happens in this part of the story.",
-      },
-    ],
-  };
-}
-
-function normalizeLinearNodes(nodes: CreatorNode[]) {
-  return nodes.map((node, index) => {
-    const nextNode = nodes[index + 1];
-
-    return {
-      ...node,
-      next: nextNode?.id,
-      choices: undefined,
-    };
-  });
-}
-
-function createStarterStory(): CreatorStory {
-  const nodes = normalizeLinearNodes([
-    createCreatorNode(0, {
-      id: "opening",
-      title: "Opening signal",
-      eyebrow: "Start",
-      data: {
-        channel: "Draft 1",
-        imageAlt: "A mountain observatory under a star field",
-        location: "North Ridge",
-        metricLabel: "Signal",
-        metricValue: "64%",
-        tone: "cyan",
-      },
-      content: [{ type: "paragraph", text: "A quiet night breaks when a new signal appears." }],
-    }),
-    createCreatorNode(1, {
-      id: "turning-point",
-      title: "Turning point",
-      eyebrow: "Middle",
-      data: {
-        channel: "Draft 2",
-        location: "Hidden harbor",
-        metricLabel: "Pressure",
-        metricValue: "78%",
-        tone: "amber",
-      },
-      content: [{ type: "paragraph", text: "The clue leads somewhere nobody expected." }],
-    }),
-    createCreatorNode(2, {
-      id: "resolution",
-      title: "Resolution",
-      eyebrow: "End",
-      data: {
-        channel: "Draft 3",
-        location: "Relay room",
-        metricLabel: "Clarity",
-        metricValue: "91%",
-        tone: "green",
-      },
-      content: [{ type: "paragraph", text: "The final choice turns the signal into a path." }],
-    }),
-  ]);
-
-  return defineStory<SignalStoryData>({
-    id: "custom-story",
-    title: "Custom Story",
-    subtitle: "Timeline-authored draft",
-    openingNodeId: nodes[0]!.id,
-    labels: {
-      choosePrompt: "Choose the next move.",
-      completedBranch: "This story is complete.",
-      continue: "Continue",
-      restart: "Restart",
-      scrollerLabel: "Custom story",
-    },
-    defaults: {
-      durationInFrames: 120,
-      transitionInFrames: 16,
-    },
-    nodes,
-  });
-}
-
-function getNodeBody(node: CreatorNode) {
-  const paragraph = node.content?.find((block) => block.type === "paragraph");
-
-  return paragraph?.text ?? "";
-}
-
-function updateNodeBody(node: CreatorNode, text: string): CreatorNode {
-  const nextContent = [...(node.content ?? [])];
-  const paragraphIndex = nextContent.findIndex((block) => block.type === "paragraph");
-
-  if (paragraphIndex >= 0) {
-    nextContent[paragraphIndex] = { type: "paragraph", text };
-  } else {
-    nextContent.unshift({ type: "paragraph", text });
-  }
-
-  return {
-    ...node,
-    content: nextContent,
-  };
-}
-
-function makeUniqueNodeId(nodes: CreatorNode[]) {
-  const usedIds = new Set(nodes.map((node) => node.id));
-  let index = nodes.length + 1;
-  let id = `scene-${index}`;
-
-  while (usedIds.has(id)) {
-    index += 1;
-    id = `scene-${index}`;
-  }
-
-  return id;
-}
-
-function createTimelineDocument(story: CreatorStory): CreatorTimelineDocument {
-  return storyToTimelineEditorDocument(story, {
-    fps: creatorFps,
-    includeBranchMarkers: true,
-    trackLabel: "Story beats",
-  }) as CreatorTimelineDocument;
-}
-
-function getItemIdForNode(nodeId: string) {
-  return `story-scene-${nodeId}`;
-}
-
-function findNodeIdForSelection(
-  document: CreatorTimelineDocument,
-  selection: TimelineEditorSelection,
-) {
-  const selectedItemId = selection.itemIds[0];
-
-  if (!selectedItemId) {
-    return undefined;
-  }
-
-  return document.tracks.flatMap((track) => track.items).find((item) => item.id === selectedItemId)
-    ?.data?.nodeId;
-}
 
 function StoryTimelineItem({
   item,
@@ -232,9 +55,16 @@ function StoryTimelineItem({
   const seconds = Math.max(0.1, item.durationMs / 1000);
 
   return (
-    <div className="story-creator-timeline-item" data-selected={selected ? "true" : undefined}>
-      <strong>{item.label}</strong>
-      <span>{seconds.toFixed(1)}s</span>
+    <div
+      className="grid h-full content-center gap-0.5 overflow-hidden rounded-md bg-[linear-gradient(135deg,#0a7c6f,#be5034)] px-2 py-1 text-white data-[selected=true]:outline data-[selected=true]:outline-2 data-[selected=true]:-outline-offset-2 data-[selected=true]:outline-[#111817]"
+      data-selected={selected ? "true" : undefined}
+    >
+      <strong className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-sm leading-tight">
+        {item.label}
+      </strong>
+      <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs opacity-80">
+        {seconds.toFixed(1)}s
+      </span>
     </div>
   );
 }
@@ -367,18 +197,29 @@ export function StoryCreatorPage({ onOpenLab }: StoryCreatorPageProps) {
   return (
     <main className="min-h-screen bg-[#f6f7f8] text-[#17211f]">
       <div className="mx-auto grid w-full max-w-[1580px] gap-4 p-3 md:p-6">
-        <header className="story-page-header" aria-labelledby="story-creator-title">
+        <header
+          className="grid items-end gap-4 border-b border-[#17211f]/10 pb-4 min-[760px]:grid-cols-[minmax(0,1fr)_auto]"
+          aria-labelledby="story-creator-title"
+        >
           <div>
             <Badge variant="outline" className="mb-3 border-[#17211f]/15 bg-white/70">
               Timeline editor
             </Badge>
-            <h1 id="story-creator-title">Create your story</h1>
-            <p>
+            <h1
+              id="story-creator-title"
+              className="m-0 max-w-[10ch] text-[clamp(3rem,8vw,6rem)] font-bold leading-[0.92] tracking-normal text-[#111817]"
+            >
+              Create your story
+            </h1>
+            <p className="m-0 mt-4 text-base leading-relaxed text-[#3d4a46]">
               {story.nodes.length} scenes on a {totalSeconds.toFixed(1)}s timeline.
             </p>
           </div>
 
-          <nav className="story-page-nav" aria-label="Example pages">
+          <nav
+            className="flex w-fit max-w-full flex-wrap justify-start gap-1 rounded-lg border border-[#17211f]/15 bg-white/80 p-1 shadow-[0_10px_24px_rgba(23,33,31,0.06)]"
+            aria-label="Example pages"
+          >
             <Button type="button" variant="ghost" onClick={onOpenLab}>
               Component lab
             </Button>
@@ -388,25 +229,35 @@ export function StoryCreatorPage({ onOpenLab }: StoryCreatorPageProps) {
           </nav>
         </header>
 
-        <section className="story-creator-shell" aria-label="Story creator">
-          <aside className="story-creator-panel" aria-label="Story outline">
-            <div className="story-creator-panel-header">
+        <section
+          className="grid items-start gap-4 min-[1180px]:grid-cols-[minmax(16rem,20rem)_minmax(0,1.25fr)_minmax(19rem,0.8fr)]"
+          aria-label="Story creator"
+        >
+          <aside
+            className="grid gap-4 rounded-lg border border-[#17211f]/15 bg-white/90 p-4 shadow-[0_16px_36px_rgba(23,33,31,0.08)] min-[1180px]:sticky min-[1180px]:top-4"
+            aria-label="Story outline"
+          >
+            <div className="flex items-start justify-between gap-3">
               <Badge variant="outline">Outline</Badge>
               <Button type="button" size="sm" onClick={addScene}>
                 Add scene
               </Button>
             </div>
 
-            <div className="story-creator-fields">
-              <label>
-                <span>Story title</span>
+            <div className="grid gap-3">
+              <label className="grid gap-1.5">
+                <span className="text-xs font-extrabold uppercase tracking-[0.1em] text-[#4a5753]">
+                  Story title
+                </span>
                 <Input
                   value={story.title}
                   onChange={(event) => updateStoryMeta({ title: event.currentTarget.value })}
                 />
               </label>
-              <label>
-                <span>Subtitle</span>
+              <label className="grid gap-1.5">
+                <span className="text-xs font-extrabold uppercase tracking-[0.1em] text-[#4a5753]">
+                  Subtitle
+                </span>
                 <Input
                   value={story.subtitle ?? ""}
                   onChange={(event) => updateStoryMeta({ subtitle: event.currentTarget.value })}
@@ -414,36 +265,45 @@ export function StoryCreatorPage({ onOpenLab }: StoryCreatorPageProps) {
               </label>
             </div>
 
-            <ol className="story-creator-scenes">
+            <ol className="m-0 grid list-none gap-2 p-0 min-[1180px]:grid-cols-1 max-[1179px]:grid-cols-[repeat(auto-fit,minmax(13rem,1fr))]">
               {story.nodes.map((node, index) => (
                 <li key={node.id}>
                   <button
                     type="button"
                     className={cn(
-                      "story-creator-scene",
-                      node.id === selectedNode.id && "is-active",
+                      "grid w-full cursor-pointer grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-0.5 rounded-lg border border-[#17211f]/10 bg-white p-3 text-left text-[#17211f] hover:border-[#0a7c6f]/45 hover:shadow-[0_10px_24px_rgba(23,33,31,0.08)]",
+                      node.id === selectedNode.id &&
+                        "border-[#0a7c6f]/45 shadow-[0_10px_24px_rgba(23,33,31,0.08)]",
                     )}
                     onClick={() => selectNode(node.id)}
                   >
-                    <span>{String(index + 1).padStart(2, "0")}</span>
-                    <strong>{node.title}</strong>
-                    <small>{node.eyebrow ?? "Scene"}</small>
+                    <span className="text-xs font-extrabold text-[#0a7c6f]">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <strong className="min-w-0 text-sm [overflow-wrap:anywhere]">
+                      {node.title}
+                    </strong>
+                    <small className="col-start-2 text-xs text-[#66726e]">
+                      {node.eyebrow ?? "Scene"}
+                    </small>
                   </button>
                 </li>
               ))}
             </ol>
           </aside>
 
-          <section className="story-creator-main" aria-label="Scene editor">
-            <div className="story-creator-editor-card">
-              <div className="story-creator-editor-header">
+          <section className="grid gap-4" aria-label="Scene editor">
+            <div className="grid gap-4 rounded-lg border border-[#17211f]/15 bg-white/90 p-4 shadow-[0_16px_36px_rgba(23,33,31,0.08)]">
+              <div className="flex items-start justify-between gap-3">
                 <div>
                   <Badge variant="outline">Scene {selectedIndex + 1}</Badge>
-                  <h2>{selectedNode.title}</h2>
+                  <h2 className="m-0 mt-2 max-w-[16ch] text-[clamp(1.6rem,3vw,2.5rem)] leading-none tracking-normal text-[#111817]">
+                    {selectedNode.title}
+                  </h2>
                 </div>
 
                 <TooltipProvider>
-                  <div className="story-creator-tools" aria-label="Scene tools">
+                  <div className="flex flex-wrap justify-end gap-1" aria-label="Scene tools">
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
@@ -490,9 +350,11 @@ export function StoryCreatorPage({ onOpenLab }: StoryCreatorPageProps) {
                 </TooltipProvider>
               </div>
 
-              <div className="story-creator-form">
-                <label>
-                  <span>Scene title</span>
+              <div className="grid gap-3 min-[760px]:grid-cols-2">
+                <label className="grid gap-1.5">
+                  <span className="text-xs font-extrabold uppercase tracking-[0.1em] text-[#4a5753]">
+                    Scene title
+                  </span>
                   <Input
                     value={selectedNode.title}
                     onChange={(event) =>
@@ -503,8 +365,10 @@ export function StoryCreatorPage({ onOpenLab }: StoryCreatorPageProps) {
                     }
                   />
                 </label>
-                <label>
-                  <span>Eyebrow</span>
+                <label className="grid gap-1.5">
+                  <span className="text-xs font-extrabold uppercase tracking-[0.1em] text-[#4a5753]">
+                    Eyebrow
+                  </span>
                   <Input
                     value={selectedNode.eyebrow ?? ""}
                     onChange={(event) =>
@@ -515,8 +379,10 @@ export function StoryCreatorPage({ onOpenLab }: StoryCreatorPageProps) {
                     }
                   />
                 </label>
-                <label className="story-creator-form-wide">
-                  <span>Story text</span>
+                <label className="grid gap-1.5 min-[760px]:col-span-2">
+                  <span className="text-xs font-extrabold uppercase tracking-[0.1em] text-[#4a5753]">
+                    Story text
+                  </span>
                   <Textarea
                     rows={5}
                     value={getNodeBody(selectedNode)}
@@ -525,8 +391,10 @@ export function StoryCreatorPage({ onOpenLab }: StoryCreatorPageProps) {
                     }
                   />
                 </label>
-                <label className="story-creator-form-wide">
-                  <span>Image URL</span>
+                <label className="grid gap-1.5 min-[760px]:col-span-2">
+                  <span className="text-xs font-extrabold uppercase tracking-[0.1em] text-[#4a5753]">
+                    Image URL
+                  </span>
                   <Input
                     value={selectedNode.data.imageSrc}
                     onChange={(event) =>
@@ -540,8 +408,10 @@ export function StoryCreatorPage({ onOpenLab }: StoryCreatorPageProps) {
                     }
                   />
                 </label>
-                <label>
-                  <span>Location</span>
+                <label className="grid gap-1.5">
+                  <span className="text-xs font-extrabold uppercase tracking-[0.1em] text-[#4a5753]">
+                    Location
+                  </span>
                   <Input
                     value={selectedNode.data.location}
                     onChange={(event) =>
@@ -555,8 +425,10 @@ export function StoryCreatorPage({ onOpenLab }: StoryCreatorPageProps) {
                     }
                   />
                 </label>
-                <label>
-                  <span>Metric value</span>
+                <label className="grid gap-1.5">
+                  <span className="text-xs font-extrabold uppercase tracking-[0.1em] text-[#4a5753]">
+                    Metric value
+                  </span>
                   <Input
                     value={selectedNode.data.metricValue}
                     onChange={(event) =>
@@ -570,9 +442,12 @@ export function StoryCreatorPage({ onOpenLab }: StoryCreatorPageProps) {
                     }
                   />
                 </label>
-                <label>
-                  <span>Tone</span>
+                <label className="grid gap-1.5">
+                  <span className="text-xs font-extrabold uppercase tracking-[0.1em] text-[#4a5753]">
+                    Tone
+                  </span>
                   <select
+                    className="min-h-10 w-full rounded-lg border border-[#17211f]/15 bg-white px-3 text-[#17211f]"
                     value={selectedNode.data.tone}
                     onChange={(event) =>
                       updateSelectedNode((node) => ({
@@ -591,9 +466,12 @@ export function StoryCreatorPage({ onOpenLab }: StoryCreatorPageProps) {
                     ))}
                   </select>
                 </label>
-                <label>
-                  <span>Intensity</span>
+                <label className="grid gap-1.5">
+                  <span className="text-xs font-extrabold uppercase tracking-[0.1em] text-[#4a5753]">
+                    Intensity
+                  </span>
                   <input
+                    className="min-h-10"
                     type="range"
                     min="1"
                     max="100"
@@ -618,7 +496,7 @@ export function StoryCreatorPage({ onOpenLab }: StoryCreatorPageProps) {
               </div>
             </div>
 
-            <Card className="story-creator-timeline-card">
+            <Card className="rounded-lg border-[#17211f]/15 bg-white/90 shadow-[0_16px_36px_rgba(23,33,31,0.08)] [&_.card-content]:pt-0">
               <CardHeader>
                 <Badge variant="outline" className="w-fit">
                   Timing
@@ -627,7 +505,7 @@ export function StoryCreatorPage({ onOpenLab }: StoryCreatorPageProps) {
               </CardHeader>
               <CardContent>
                 <TimelineEditor
-                  className="story-creator-timeline"
+                  className="min-h-64 overflow-hidden rounded-lg border border-[#17211f]/10 bg-[#f9faf9]"
                   document={timelineDocument}
                   selection={selection}
                   viewport={viewport}
@@ -649,8 +527,8 @@ export function StoryCreatorPage({ onOpenLab }: StoryCreatorPageProps) {
             </Card>
           </section>
 
-          <aside className="story-creator-preview" aria-label="Preview and export">
-            <div className="story-creator-preview-stage">
+          <aside className="grid gap-4" aria-label="Preview and export">
+            <div className="overflow-hidden rounded-lg border border-[#17211f]/15 bg-white/90 shadow-[0_16px_36px_rgba(23,33,31,0.08)] [&_.demo-stage]:min-h-[32rem] [&_.demo-stage>div:nth-of-type(3)]:grid-cols-1 [&_.demo-stage>div:nth-of-type(3)]:gap-4 [&_.demo-stage>div:nth-of-type(3)]:p-4 [&_.demo-stage>div:nth-of-type(3)]:pb-16 [&_.demo-stage_h2]:max-w-[7ch] [&_.demo-stage_h2]:text-[clamp(2.45rem,4vw,3.6rem)] [&_.demo-stage_h2]:leading-[0.95] [&_.demo-stage_section]:min-h-[32rem] [&_.demo-stage_section]:border-0">
               <StoryPlayer
                 key={storyJson}
                 story={story}
@@ -673,11 +551,11 @@ export function StoryCreatorPage({ onOpenLab }: StoryCreatorPageProps) {
                     Remotion, or timeline adapters.
                   </p>
                 ) : (
-                  <ul className="story-creator-issues">
+                  <ul className="m-0 grid list-none gap-2 p-0">
                     {validationIssues.map((issue) => (
-                      <li key={`${issue.code}-${issue.path}`}>
-                        <strong>{issue.code}</strong>
-                        <span>{issue.path}</span>
+                      <li key={`${issue.code}-${issue.path}`} className="grid gap-1">
+                        <strong className="text-sm text-[#be5034]">{issue.code}</strong>
+                        <span className="text-sm text-[#4a5753]">{issue.path}</span>
                       </li>
                     ))}
                   </ul>
@@ -693,7 +571,11 @@ export function StoryCreatorPage({ onOpenLab }: StoryCreatorPageProps) {
                 <CardTitle>Story JSON</CardTitle>
               </CardHeader>
               <CardContent>
-                <Textarea className="story-creator-json" readOnly value={storyJson} />
+                <Textarea
+                  className="min-h-64 font-mono text-xs leading-relaxed"
+                  readOnly
+                  value={storyJson}
+                />
               </CardContent>
             </Card>
           </aside>

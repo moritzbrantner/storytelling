@@ -6,11 +6,7 @@ import {
   StoryPlayer,
   StoryScroller,
   resolveStoryPath,
-  type StoryDocument,
   type StoryHistoryEntry,
-  type StoryScrollAutoplay,
-  type StoryScrollScene,
-  type StoryScrollTransition,
 } from "@moritzbrantner/storytelling";
 import { analyzeStory, applyStoryPatch } from "@moritzbrantner/storytelling/core";
 import { storyDocumentJsonSchema } from "@moritzbrantner/storytelling/schema";
@@ -18,14 +14,24 @@ import { storyDocumentJsonSchema } from "@moritzbrantner/storytelling/schema";
 import {
   authoringDraftStory,
   autoscrollLabScenes,
-  extendedRelayStory,
-  linearStory,
   motionLabScenes,
-  signalStory,
   storyRegistry,
-  type MotionLabSceneData,
   type SignalStoryData,
 } from "./story";
+import {
+  exampleCatalog,
+  getAutoscrollPaceLabel,
+  getDefaultPresetId,
+  getExampleCatalog,
+  getHistorySummary,
+  getSceneSummary,
+  getStoryScrollerPageId,
+  getTransitionSummary,
+  storyOptionsFallback,
+  type ExampleMode,
+  type ExamplePage,
+  type ExampleStoryId,
+} from "./example-catalog";
 import {
   Badge,
   Button,
@@ -40,238 +46,6 @@ import {
   cn,
 } from "@moritzbrantner/ui";
 import { StoryCreatorPage } from "./story-creator";
-
-type ExampleMode = "player" | "scroller";
-type ExamplePage = "lab" | "creator";
-type ExampleStoryId =
-  | "branching"
-  | "branching-deep"
-  | "linear"
-  | "motion"
-  | "autoscroll"
-  | "authoring";
-
-type PathPreset = {
-  id: string;
-  label: string;
-  choiceIds: string[];
-};
-
-type ExampleStory = {
-  id: Exclude<ExampleStoryId, "motion">;
-  label: string;
-  story: StoryDocument<SignalStoryData>;
-  presets: PathPreset[];
-};
-
-type MotionPreset = {
-  id: string;
-  label: string;
-  transition: StoryScrollTransition;
-};
-
-type AutoscrollPreset = {
-  id: string;
-  label: string;
-  description: string;
-  autoplay: StoryScrollAutoplay;
-  transition: StoryScrollTransition;
-  scrollInputScale: number;
-};
-
-type ExampleCatalog = {
-  storyOptions: { id: ExampleStoryId; label: string }[];
-  stories: ExampleStory[];
-  motionPresets: MotionPreset[];
-  autoscrollPresets: AutoscrollPreset[];
-};
-
-const exampleCatalog: ExampleCatalog = {
-  storyOptions: [
-    { id: "branching", label: "Branching" },
-    { id: "branching-deep", label: "Branching (Deep)" },
-    { id: "linear", label: "Linear" },
-    { id: "motion", label: "Motion" },
-    { id: "autoscroll", label: "Autoscroll" },
-    { id: "authoring", label: "Authoring" },
-  ],
-  stories: [
-    {
-      id: "branching",
-      label: "Branching",
-      story: signalStory,
-      presets: [
-        { id: "opening", label: "Opening", choiceIds: [] },
-        { id: "pilot", label: "Pilot route", choiceIds: ["answer"] },
-        { id: "trace", label: "Harbor choice", choiceIds: ["trace"] },
-        { id: "harbor-team", label: "Harbor team", choiceIds: ["trace", "send-team"] },
-        { id: "harbor-broadcast", label: "Broadcast fix", choiceIds: ["trace", "broadcast"] },
-        { id: "archive", label: "Archive route", choiceIds: ["archive"] },
-      ],
-    },
-    {
-      id: "branching-deep",
-      label: "Branching (Deep)",
-      story: extendedRelayStory,
-      presets: [
-        { id: "opening", label: "Opening", choiceIds: [] },
-        { id: "pilot-route", label: "Pilot route", choiceIds: ["answer-pilot"] },
-        {
-          id: "pilot-route_stabilize",
-          label: "Pilot route (stabilize)",
-          choiceIds: ["answer-pilot", "stabilize-route"],
-        },
-        { id: "harbor-team", label: "Harbor team", choiceIds: ["trace-source", "send-team"] },
-        {
-          id: "archive-verify",
-          label: "Archive verify",
-          choiceIds: ["archive-review", "verify-archive"],
-        },
-      ],
-    },
-    {
-      id: "linear",
-      label: "Linear",
-      story: linearStory,
-      presets: [
-        { id: "linear-opening", label: "Opening", choiceIds: [] },
-        {
-          id: "linear-complete",
-          label: "Full sequence",
-          choiceIds: ["briefing__continue", "field-report__continue", "edit-room__continue"],
-        },
-      ],
-    },
-  ],
-  motionPresets: [
-    { id: "soft-fade", label: "Fade", transition: { type: "fade", scrollUnits: 18 } },
-    {
-      id: "slide-up",
-      label: "Slide",
-      transition: { type: "slide", scrollUnits: 22, direction: "up" },
-    },
-    {
-      id: "push-left",
-      label: "Push",
-      transition: { type: "push", scrollUnits: 24, direction: "left" },
-    },
-    {
-      id: "wipe-right",
-      label: "Wipe",
-      transition: { type: "wipe", scrollUnits: 24, direction: "right" },
-    },
-    { id: "zoom", label: "Zoom", transition: { type: "zoom", scrollUnits: 24 } },
-    { id: "blur", label: "Blur", transition: { type: "blur", scrollUnits: 22 } },
-    { id: "direct", label: "Direct", transition: { type: "none" } },
-  ],
-  autoscrollPresets: [
-    {
-      id: "reading",
-      label: "Reading pace",
-      description: "Autoscrolls at a measured pace with a short crossfade between panels.",
-      autoplay: { unitsPerSecond: 12 },
-      transition: { type: "fade", scrollUnits: 14 },
-      scrollInputScale: 0.5,
-    },
-    {
-      id: "tour",
-      label: "Guided tour",
-      description: "Uses the default autoplay pace with a pushed visual handoff.",
-      autoplay: true,
-      transition: { type: "push", scrollUnits: 26, direction: "up" },
-      scrollInputScale: 0.75,
-    },
-    {
-      id: "scan",
-      label: "Fast scan",
-      description: "Moves quickly through scenes while keeping manual wheel input responsive.",
-      autoplay: { unitsPerSecond: 34 },
-      transition: { type: "none" },
-      scrollInputScale: 1.25,
-    },
-  ],
-};
-
-async function getExampleCatalog() {
-  return exampleCatalog;
-}
-
-function getDefaultPresetId(storyId: ExampleStoryId, catalog: ExampleCatalog) {
-  if (storyId === "motion") {
-    return catalog.motionPresets[0]?.id ?? "soft-fade";
-  }
-
-  if (storyId === "autoscroll") {
-    return catalog.autoscrollPresets[0]?.id ?? "reading";
-  }
-
-  return catalog.stories.find((example) => example.id === storyId)?.presets[0]?.id ?? "opening";
-}
-
-const storyOptionsFallback: { id: ExampleStoryId; label: string }[] = [
-  { id: "branching", label: "Branching" },
-  { id: "branching-deep", label: "Branching (Deep)" },
-  { id: "linear", label: "Linear" },
-  { id: "motion", label: "Motion" },
-  { id: "autoscroll", label: "Autoscroll" },
-  { id: "authoring", label: "Authoring" },
-];
-
-function getStoryScrollerPageId(storyId: string, nodeId: string) {
-  return `story-scroller-page-${storyId}-${nodeId}`;
-}
-
-function getHistorySummary(
-  story: StoryDocument<SignalStoryData>,
-  history: StoryHistoryEntry<SignalStoryData>[],
-) {
-  if (history.length === 0) {
-    return "No active path";
-  }
-
-  return history
-    .map((entry, index) => {
-      const node = story.nodes.find((candidate) => candidate.id === entry.nodeId);
-      return `${index + 1}. ${node?.title ?? entry.nodeId}`;
-    })
-    .join("\n");
-}
-
-function getSceneSummary(
-  scenes: StoryScrollScene<MotionLabSceneData>[],
-  activeIndex: number,
-  progress: number,
-) {
-  const activeScene = scenes[activeIndex] ?? scenes[0];
-
-  if (!activeScene) {
-    return "No active scene";
-  }
-
-  return `${activeScene.title}\nProgress ${Math.round(progress)}%\nScene ${activeIndex + 1} of ${
-    scenes.length
-  }`;
-}
-
-function getAutoscrollPaceLabel(autoplay: StoryScrollAutoplay) {
-  if (autoplay === true) {
-    return "20 units/s";
-  }
-
-  if (!autoplay || autoplay.enabled === false) {
-    return "Off";
-  }
-
-  return `${autoplay.unitsPerSecond ?? 20} units/s`;
-}
-
-function getTransitionSummary(transition: StoryScrollTransition) {
-  if (transition.type === "none") {
-    return "direct";
-  }
-
-  return `${transition.scrollUnits} units ${transition.type}`;
-}
 
 function StateSummary({ summary }: { summary: string }) {
   return <pre className="m-0 whitespace-pre-wrap text-sm leading-7 text-[#2d3835]">{summary}</pre>;
@@ -302,31 +76,45 @@ function AuthoringWorkbench() {
   const fixableIssues = report.issues.filter((issue) => (issue.fixes?.length ?? 0) > 0);
 
   return (
-    <section className="authoring-workbench" aria-label="Authoring workbench">
-      <div className="authoring-workbench-main">
+    <section
+      className="grid min-h-[clamp(34rem,70vw,48rem)] gap-4 rounded-lg border border-white/25 bg-[linear-gradient(135deg,rgba(86,213,196,0.22),transparent_34%),linear-gradient(315deg,rgba(239,139,114,0.2),transparent_38%),#101615] p-[clamp(1rem,3vw,2rem)] text-white"
+      aria-label="Authoring workbench"
+    >
+      <div className="grid min-h-72 content-end gap-6">
         <div>
           <Badge variant="outline" className="mb-3 border-white/25 bg-white/10 text-white">
             Core export
           </Badge>
-          <h2>Authoring draft review</h2>
-          <p>
+          <h2 className="m-0 max-w-[10ch] text-[clamp(3rem,9vw,7rem)] leading-[0.88] tracking-normal">
+            Authoring draft review
+          </h2>
+          <p className="m-0 mt-5 max-w-[44rem] text-[clamp(1rem,1.6vw,1.15rem)] leading-relaxed text-white/75">
             This view imports analysis and patch helpers from the server-safe core entrypoint, then
             applies deterministic fixes to a draft story.
           </p>
         </div>
 
-        <div className="authoring-scoreboard" aria-label="Authoring metrics">
-          <div>
-            <span>Issues</span>
-            <strong>{patchedReport.issues.length}</strong>
+        <div
+          className="grid max-w-[38rem] gap-3 min-[760px]:grid-cols-3"
+          aria-label="Authoring metrics"
+        >
+          <div className="grid gap-2 rounded-lg border border-white/15 bg-[#080c0c]/50 p-3 backdrop-blur-xl">
+            <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-white/60">
+              Issues
+            </span>
+            <strong className="text-3xl leading-none">{patchedReport.issues.length}</strong>
           </div>
-          <div>
-            <span>Fixes</span>
-            <strong>{fixableIssues.length}</strong>
+          <div className="grid gap-2 rounded-lg border border-white/15 bg-[#080c0c]/50 p-3 backdrop-blur-xl">
+            <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-white/60">
+              Fixes
+            </span>
+            <strong className="text-3xl leading-none">{fixableIssues.length}</strong>
           </div>
-          <div>
-            <span>Reachable</span>
-            <strong>
+          <div className="grid gap-2 rounded-lg border border-white/15 bg-[#080c0c]/50 p-3 backdrop-blur-xl">
+            <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-white/60">
+              Reachable
+            </span>
+            <strong className="text-3xl leading-none">
               {patchedReport.metrics.reachableNodeCount}/{patchedReport.metrics.nodeCount}
             </strong>
           </div>
@@ -337,34 +125,48 @@ function AuthoringWorkbench() {
         </Button>
       </div>
 
-      <div className="authoring-panels">
-        <div className="authoring-panel">
-          <span>Diagnostics</span>
-          <ul>
+      <div className="grid items-stretch gap-3 min-[760px]:grid-cols-3">
+        <div className="min-h-60 rounded-lg border border-white/15 bg-[#080c0c]/50 p-4 backdrop-blur-xl">
+          <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-white/60">
+            Diagnostics
+          </span>
+          <ul className="m-0 mt-4 grid list-none gap-3 p-0">
             {patchedReport.issues.slice(0, 6).map((issue) => (
-              <li key={`${issue.code}-${issue.path}-${issue.nodeId ?? ""}`}>
-                <strong>{issue.code}</strong>
-                <small>{issue.nodeId ?? issue.path}</small>
+              <li
+                key={`${issue.code}-${issue.path}-${issue.nodeId ?? ""}`}
+                className="grid gap-1 border-t border-white/10 pt-3"
+              >
+                <strong className="text-sm text-white">{issue.code}</strong>
+                <small className="text-sm leading-6 text-white/65">
+                  {issue.nodeId ?? issue.path}
+                </small>
               </li>
             ))}
           </ul>
         </div>
 
-        <div className="authoring-panel">
-          <span>Suggested patches</span>
-          <ul>
+        <div className="min-h-60 rounded-lg border border-white/15 bg-[#080c0c]/50 p-4 backdrop-blur-xl">
+          <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-white/60">
+            Suggested patches
+          </span>
+          <ul className="m-0 mt-4 grid list-none gap-3 p-0">
             {fixableIssues.map((issue) => (
-              <li key={`${issue.code}-${issue.path}-${issue.nodeId ?? ""}`}>
-                <strong>{issue.fixes?.[0]?.label}</strong>
-                <small>{issue.code}</small>
+              <li
+                key={`${issue.code}-${issue.path}-${issue.nodeId ?? ""}`}
+                className="grid gap-1 border-t border-white/10 pt-3"
+              >
+                <strong className="text-sm text-white">{issue.fixes?.[0]?.label}</strong>
+                <small className="text-sm leading-6 text-white/65">{issue.code}</small>
               </li>
             ))}
           </ul>
         </div>
 
-        <div className="authoring-panel">
-          <span>Schema export</span>
-          <p>
+        <div className="min-h-60 rounded-lg border border-white/15 bg-[#080c0c]/50 p-4 backdrop-blur-xl">
+          <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-white/60">
+            Schema export
+          </span>
+          <p className="m-0 mt-4 text-sm leading-6 text-white/65">
             `storyDocumentJsonSchema` covers {schemaProperties.length} top-level fields:
             {` ${schemaProperties.join(", ")}`}.
           </p>
@@ -390,7 +192,10 @@ function ExamplePageNav({
   onPageChange: (page: ExamplePage) => void;
 }) {
   return (
-    <nav className="story-page-nav" aria-label="Example pages">
+    <nav
+      className="flex w-fit max-w-full flex-wrap justify-start gap-1 rounded-lg border border-[#17211f]/15 bg-white/80 p-1 shadow-[0_10px_24px_rgba(23,33,31,0.06)]"
+      aria-label="Example pages"
+    >
       <Button
         type="button"
         variant={activePage === "lab" ? "default" : "ghost"}
@@ -702,7 +507,7 @@ Transition ${getTransitionSummary(activeAutoscrollPreset.transition)}`;
             isAuthoringStory ? "" : "xl:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]",
           )}
         >
-          <div className="example-component-frame [&>section]:shadow-[0_18px_54px_rgba(23,33,31,0.10)]">
+          <div className="[&>section]:shadow-[0_18px_54px_rgba(23,33,31,0.10)] [&_[data-story-scroller-page]_.demo-stage]:h-full [&_[data-story-scroller-page]_.demo-stage]:min-h-0 [&_[data-story-scroller-page]_.demo-stage]:transition-[border-color,box-shadow] [&_[data-story-scroller-page][data-active=true]_.demo-stage]:border-white/70 [&_[data-story-scroller-page][data-active=true]_.demo-stage]:shadow-[0_18px_54px_rgba(23,33,31,0.18)]">
             {isAuthoringStory ? (
               <AuthoringWorkbench />
             ) : isMotionStory ? (
