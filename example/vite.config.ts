@@ -9,6 +9,9 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
+      "@moritzbrantner/storytelling/timeline": fileURLToPath(
+        new URL("../src/timeline.ts", import.meta.url),
+      ),
       "@moritzbrantner/storytelling/core": fileURLToPath(
         new URL("../src/core.ts", import.meta.url),
       ),

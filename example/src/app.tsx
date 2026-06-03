@@ -39,8 +39,10 @@ import {
   ToggleGroupItem,
   cn,
 } from "@moritzbrantner/ui";
+import { StoryCreatorPage } from "./story-creator";
 
 type ExampleMode = "player" | "scroller";
+type ExamplePage = "lab" | "creator";
 type ExampleStoryId =
   | "branching"
   | "branching-deep"
@@ -372,7 +374,44 @@ function AuthoringWorkbench() {
   );
 }
 
-export function ExampleApp() {
+function getExamplePageFromHash(): ExamplePage {
+  return window.location.hash === "#create-story" ? "creator" : "lab";
+}
+
+function setExamplePageHash(page: ExamplePage) {
+  window.location.hash = page === "creator" ? "create-story" : "";
+}
+
+function ExamplePageNav({
+  activePage,
+  onPageChange,
+}: {
+  activePage: ExamplePage;
+  onPageChange: (page: ExamplePage) => void;
+}) {
+  return (
+    <nav className="story-page-nav" aria-label="Example pages">
+      <Button
+        type="button"
+        variant={activePage === "lab" ? "default" : "ghost"}
+        aria-current={activePage === "lab" ? "page" : undefined}
+        onClick={() => onPageChange("lab")}
+      >
+        Component lab
+      </Button>
+      <Button
+        type="button"
+        variant={activePage === "creator" ? "default" : "ghost"}
+        aria-current={activePage === "creator" ? "page" : undefined}
+        onClick={() => onPageChange("creator")}
+      >
+        Create story
+      </Button>
+    </nav>
+  );
+}
+
+function ExampleLab({ onOpenCreator }: { onOpenCreator: () => void }) {
   const catalogQuery = useQuery({
     queryKey: ["storytelling-example-catalog"],
     queryFn: getExampleCatalog,
@@ -525,6 +564,11 @@ Transition ${getTransitionSummary(activeAutoscrollPreset.transition)}`;
           </div>
 
           <div className="grid gap-3 lg:justify-items-end" aria-label="Example controls">
+            <ExamplePageNav
+              activePage="lab"
+              onPageChange={(page) => page === "creator" && onOpenCreator()}
+            />
+
             <ToggleGroup
               type="single"
               value={storyId}
@@ -781,4 +825,27 @@ Transition ${getTransitionSummary(activeAutoscrollPreset.transition)}`;
       </section>
     </main>
   );
+}
+
+export function ExampleApp() {
+  const [page, setPage] = useState<ExamplePage>(() => getExamplePageFromHash());
+
+  useEffect(() => {
+    const syncPageFromHash = () => setPage(getExamplePageFromHash());
+
+    window.addEventListener("hashchange", syncPageFromHash);
+
+    return () => window.removeEventListener("hashchange", syncPageFromHash);
+  }, []);
+
+  const openPage = (nextPage: ExamplePage) => {
+    setPage(nextPage);
+    setExamplePageHash(nextPage);
+  };
+
+  if (page === "creator") {
+    return <StoryCreatorPage onOpenLab={() => openPage("lab")} />;
+  }
+
+  return <ExampleLab onOpenCreator={() => openPage("creator")} />;
 }
