@@ -115,6 +115,14 @@ labels, defaults, and validation-compatible numeric constraints.
 - `StoryChoiceList` renders choice buttons, `StoryChoicePanel` renders the
   scroller overlay, `StoryActionBar` renders back/restart controls, and
   `StoryPathTrail` renders the visited path.
+- `StoryScroller` is callable for the default scroller and also exposes
+  compound parts for custom layouts: `StoryScroller.Root`,
+  `StoryScroller.Canvas`, `StoryScroller.Stage`,
+  `StoryScroller.Overlays`, `StoryScroller.Menu`,
+  `StoryScroller.Minimap`, and `StoryScroller.Layout`.
+- `useStoryScrollerController`, `useStoryScroller`, and
+  `useStoryScrollerScene` expose the controller, root context, and per-scene
+  render context for headless scroller layouts.
 - `StoryContent` accepts `renderers` and `renderBlock`. Built-in content blocks
   still render by default, and custom block types can be rendered by adding a
   keyed renderer.
@@ -128,14 +136,19 @@ labels, defaults, and validation-compatible numeric constraints.
 
 <StoryScroller story={story} modules={{ minimap: true }} />
 
-<StoryScroller
-  story={story}
-  slots={{
-    minimap: ({ items, activeIndex, scrollToScene }) => (
-      <CustomMap items={items} activeIndex={activeIndex} onSelect={scrollToScene} />
-    ),
-  }}
-/>
+<StoryScroller.Root story={story} registry={storyRegistry}>
+  <StoryScroller.Layout className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
+    <StoryScroller.Canvas>
+      <StoryScroller.Stage />
+      <StoryScroller.Overlays />
+    </StoryScroller.Canvas>
+
+    <aside className="grid gap-4">
+      <StoryScroller.Menu />
+      <StoryScroller.Minimap collapsible />
+    </aside>
+  </StoryScroller.Layout>
+</StoryScroller.Root>
 ```
 
 ### Story Patches
@@ -212,10 +225,11 @@ labels, defaults, and validation-compatible numeric constraints.
 - Story-backed scrollers allow branch re-selection by default when a user
   scrolls back to an answered branch scene. Set `allowBranchReselection={false}`
   to keep those branch choices locked after a path has been selected.
-- Prefer `StoryScroller` `slots` for new composition work. Existing direct
-  render props remain supported and take precedence over grouped slots:
-  `renderScene`, `renderChoicePanel`, and `renderMinimap`. `renderScene`
-  receives `StoryRenderProps` plus the active scroll scene render props.
+- Prefer the compound `StoryScroller.Root` API for new composition work.
+  Existing direct render props remain supported by the callable component and
+  take precedence over grouped slots: `renderScene`, `renderChoicePanel`, and
+  `renderMinimap`. `renderScene` receives `StoryRenderProps` plus the active
+  scroll scene render props.
 - `StoryScroller` `modules.choicePanel=false` disables the default branch
   overlay. `modules.minimap` is off by default; set it to `true` or an options
   object to render the built-in `StoryMinimap` for story-backed scrollers.

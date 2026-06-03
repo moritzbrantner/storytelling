@@ -400,22 +400,33 @@ matching grouped slot.
 />
 ```
 
-`StoryScroller` keeps the minimap opt-in. Use the built-in minimap only when the
-story surface needs it, or provide a custom minimap slot with the same
-story-backed metadata.
+`StoryScroller` can also be composed from named parts. Use the callable
+component for the default scroller, or use `Root`, `Canvas`, `Stage`,
+`Overlays`, `Menu`, and `Minimap` when the page needs to place navigation or
+overlays outside the canvas.
 
 ```tsx
 <StoryScroller story={story} modules={{ minimap: true }} />
 
-<StoryScroller
-  story={story}
-  slots={{
-    minimap: ({ items, activeIndex, scrollToScene }) => (
-      <CustomMap items={items} activeIndex={activeIndex} onSelect={scrollToScene} />
-    ),
-  }}
-/>
+<StoryScroller.Root story={story} registry={storyRegistry}>
+  <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
+    <StoryScroller.Canvas>
+      <StoryScroller.Stage />
+      <StoryScroller.Overlays />
+    </StoryScroller.Canvas>
+
+    <aside className="grid gap-4">
+      <StoryScroller.Menu />
+      <StoryScroller.Minimap collapsible />
+    </aside>
+  </div>
+</StoryScroller.Root>
 ```
+
+For headless layouts, `useStoryScrollerController`, `useStoryScroller`, and
+`useStoryScrollerScene` expose the same state and navigation actions used by the
+compound parts. Existing `renderScene`, `renderChoicePanel`, `renderMinimap`,
+`slots`, and `modules` props remain supported on the callable component.
 
 `StoryContent` can render custom serializable blocks by type.
 

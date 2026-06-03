@@ -35,6 +35,8 @@ import {
   type StoryRenderProps,
   type StoryScrollSceneRenderProps,
   type StoryScrollTransition,
+  useStoryScrollerController,
+  useStoryScrollerScene,
 } from ".";
 
 type FixtureData = {
@@ -2086,6 +2088,146 @@ describe("@moritzbrantner/storytelling", () => {
     expect(screen.getByRole("navigation", { name: "Direct scroller minimap" })).toBeTruthy();
     expect(screen.queryByText("Grouped scroller scene")).toBeNull();
     expect(screen.queryByRole("navigation", { name: "Grouped scroller minimap" })).toBeNull();
+  });
+
+  test("renders compound StoryScroller canvas, overlays, menu, and minimap", async () => {
+    const { container } = render(
+      <StoryScroller.Root story={story} pathChoiceIds={["answer"]}>
+        <StoryScroller.Layout className="compound-grid">
+          <StoryScroller.Canvas />
+          <StoryScroller.Menu ariaLabel="Compound menu" />
+          <StoryScroller.Minimap ariaLabel="Compound minimap" />
+        </StoryScroller.Layout>
+      </StoryScroller.Root>,
+    );
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+
+    expect(viewport).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Compound menu" })).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Compound minimap" })).toBeTruthy();
+    expect(screen.getByText("A low signal reaches the tower.")).toBeTruthy();
+
+    setScrollerGeometry(viewport!, 3);
+    scrollScrollerViewport(viewport!, 95);
+    fireEvent.click(screen.getByRole("button", { name: /Trace the source/ }));
+
+    expect(
+      await screen.findByText("The signal comes from a cove nobody has charted in decades."),
+    ).toBeTruthy();
+  });
+
+  test("lets compound StoryScroller menu and minimap navigate resolved scenes", async () => {
+    const { container } = render(
+      <StoryScroller.Root story={linearStory}>
+        <div>
+          <StoryScroller.Canvas />
+          <StoryScroller.Menu ariaLabel="Linear menu" />
+          <StoryScroller.Minimap ariaLabel="Linear minimap" />
+        </div>
+      </StoryScroller.Root>,
+    );
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+
+    expect(viewport).toBeTruthy();
+    setScrollerGeometry(viewport!, 3);
+
+    fireEvent.click(
+      screen.getByRole("navigation", { name: "Linear menu" }).querySelectorAll("button")[1]!,
+    );
+    expect(await screen.findByText("Review the copy for sequence and clarity.")).toBeTruthy();
+
+    fireEvent.click(
+      screen.getByRole("navigation", { name: "Linear minimap" }).querySelectorAll("button")[2]!,
+    );
+    expect(await screen.findByText("Publish the report at noon.")).toBeTruthy();
+  });
+
+  test("restarts from a compound StoryScroller ending overlay", async () => {
+    const { container } = render(
+      <StoryScroller.Root story={story} pathChoiceIds={["answer"]}>
+        <StoryScroller.Canvas />
+      </StoryScroller.Root>,
+    );
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+
+    expect(viewport).toBeTruthy();
+    setScrollerGeometry(viewport!, 3);
+    scrollScrollerViewport(viewport!, 300);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Restart" }));
+    expect(await screen.findByText("A low signal reaches the tower.")).toBeTruthy();
+  });
+
+  test("exposes compound StoryScroller controller and scene hooks", () => {
+    function SceneProbe() {
+      const scene = useStoryScrollerScene<FixtureData>();
+
+      return <p>Scene hook node {scene.storyRenderProps?.node.id}</p>;
+    }
+
+    function ControllerProbe() {
+      const controller = useStoryScrollerController<FixtureData>({
+        story,
+        pathChoiceIds: ["answer"],
+      });
+
+      return (
+        <StoryScroller.Root controller={controller}>
+          <p>
+            Controller hook {controller.mode} items {controller.items.length} choices{" "}
+            {controller.choiceIds.join(",")}
+          </p>
+          <StoryScroller.Canvas>
+            <SceneProbe />
+          </StoryScroller.Canvas>
+        </StoryScroller.Root>
+      );
+    }
+
+    render(<ControllerProbe />);
+
+    expect(
+      screen.getByText(/Controller hook story items 3 choices answer,answer-node__continue/),
+    ).toBeTruthy();
+    expect(screen.getByText("Scene hook node wake")).toBeTruthy();
+  });
+
+  test("renders compound StoryScroller custom scenes with menu and minimap", async () => {
+    const customScenes = [
+      {
+        id: "custom-one",
+        title: "Custom one",
+        render: ({ progress }: StoryScrollSceneRenderProps) => (
+          <div>Custom one progress {Math.round(progress * 100)}</div>
+        ),
+      },
+      {
+        id: "custom-two",
+        title: "Custom two",
+        menuLabel: "Second",
+        render: () => <div>Custom two body</div>,
+      },
+    ];
+    const { container } = render(
+      <StoryScroller.Root scenes={customScenes}>
+        <StoryScroller.Canvas />
+        <StoryScroller.Overlays />
+        <StoryScroller.Menu ariaLabel="Custom scene menu" />
+        <StoryScroller.Minimap ariaLabel="Custom scene minimap" />
+      </StoryScroller.Root>,
+    );
+    const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
+
+    expect(viewport).toBeTruthy();
+    expect(screen.queryByTestId("story-choice-panel")).toBeNull();
+    expect(screen.getByRole("navigation", { name: "Custom scene menu" })).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Custom scene minimap" })).toBeTruthy();
+
+    setScrollerGeometry(viewport!, 2);
+    fireEvent.click(
+      screen.getByRole("navigation", { name: "Custom scene menu" }).querySelectorAll("button")[1]!,
+    );
+    expect(await screen.findByText("Custom two body")).toBeTruthy();
   });
 
   test("disables the default StoryScroller choice panel module", async () => {

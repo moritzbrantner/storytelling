@@ -4,8 +4,13 @@ import {
   StoryPlayer,
   StoryScroller,
   defineStory,
+  useStoryScroller,
+  useStoryScrollerController,
+  useStoryScrollerScene,
   type StoryChoicePanelRenderProps,
   type StoryContentBlock,
+  type StoryScrollerController,
+  type StoryScrollerSceneItem,
   type StoryDocument,
   type StoryRenderProps,
   type StoryScrollSceneRenderProps,
@@ -60,6 +65,40 @@ function renderScrollerScene(
   return <div>{progress + (props.node.data?.tone === "urgent" ? 1 : 0)}</div>;
 }
 
+function ScrollerProbe() {
+  const scroller = useStoryScroller<SceneData>();
+  const firstItem: StoryScrollerSceneItem<SceneData> | undefined = scroller.items[0];
+
+  return <p>{firstItem?.title ?? scroller.mode}</p>;
+}
+
+function SceneProbe() {
+  const scene = useStoryScrollerScene<SceneData>();
+
+  return <p>{scene.storyRenderProps?.node.data?.tone}</p>;
+}
+
+function CompoundScrollerFixture() {
+  const controller: StoryScrollerController<SceneData> = useStoryScrollerController<SceneData>({
+    story,
+  });
+
+  return (
+    <StoryScroller.Root controller={controller}>
+      <StoryScroller.Layout className="grid">
+        <ScrollerProbe />
+        <StoryScroller.Canvas>
+          <StoryScroller.Stage render={renderScrollerScene} />
+          <StoryScroller.Overlays renderChoicePanel={renderChoicePanel} />
+          <SceneProbe />
+        </StoryScroller.Canvas>
+        <StoryScroller.Menu />
+        <StoryScroller.Minimap />
+      </StoryScroller.Layout>
+    </StoryScroller.Root>
+  );
+}
+
 function renderBlock(block: StoryContentBlock): ReactNode {
   switch (block.type) {
     case "paragraph":
@@ -89,6 +128,7 @@ export function RootApiFixture() {
         renderScene={renderScrollerScene}
         renderChoicePanel={renderChoicePanel}
       />
+      <CompoundScrollerFixture />
       {renderBlock({ type: "paragraph", text: "hello" })}
     </>
   );
