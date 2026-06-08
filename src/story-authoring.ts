@@ -25,6 +25,7 @@ export type StoryAuthoringIssueCode =
   | "empty-content"
   | "missing-choice-description"
   | "disabled-only-branch"
+  | "state-hooks-not-evaluated"
   | "path-limit-reached";
 
 export type StoryAuthoringIssue = {
@@ -46,6 +47,7 @@ export type StoryIssueFix<TData extends StoryNodeData = StoryNodeData> = {
 export type StoryAuthoringMetrics = {
   nodeCount: number;
   edgeCount: number;
+  conditionalEdgeCount: number;
   branchCount: number;
   endingCount: number;
   reachableNodeCount: number;
@@ -277,6 +279,36 @@ function getContentWordCount(node: StoryNode) {
       case "audio":
       case "video":
         return count + getTextWordCount(block.title ?? "");
+      case "table":
+        return (
+          count +
+          getTextWordCount(block.caption ?? "") +
+          block.columns.reduce(
+            (columnCount, column) => columnCount + getTextWordCount(column.header),
+            0,
+          ) +
+          block.rows.reduce(
+            (rowCount, row) =>
+              rowCount +
+              Object.values(row).reduce<number>(
+                (cellCount, value) => cellCount + getTextWordCount(String(value ?? "")),
+                0,
+              ),
+            0,
+          )
+        );
+      case "code":
+        return count + getTextWordCount(block.filename ?? "");
+      case "chart":
+        return (
+          count + getTextWordCount(block.title ?? "") + getTextWordCount(block.description ?? "")
+        );
+      case "embed":
+        return count + getTextWordCount(block.title);
+      case "callout":
+        return count + getTextWordCount(block.title ?? "") + getTextWordCount(block.content);
+      case "markdown":
+        return count + getTextWordCount(block.markdown);
       default:
         return count;
     }
@@ -306,6 +338,7 @@ function createEmptyMetrics<TData extends StoryNodeData>(
   return {
     nodeCount: storyNodes.length,
     edgeCount: 0,
+    conditionalEdgeCount: 0,
     branchCount: 0,
     endingCount: 0,
     reachableNodeCount: 0,
@@ -365,6 +398,7 @@ export function analyzeStory<TData extends StoryNodeData>(
   let branches: StoryNode<TData>[] = [];
   let endings: StoryNode<TData>[] = [];
   let edgeCount = 0;
+  let conditionalEdgeCount = 0;
   let pathCount = 0;
   let maxDepth = 0;
   let minDepth = 0;
@@ -376,6 +410,7 @@ export function analyzeStory<TData extends StoryNodeData>(
     branches = getStoryBranches(compiledStory);
     endings = getStoryEndings(compiledStory);
     edgeCount = compiledStory.edges.length;
+    conditionalEdgeCount = compiledStory.edges.filter((edge) => edge.conditional).length;
     pathCount = paths.length;
     maxDepth = paths.reduce((depth, path) => Math.max(depth, path.nodes.length), 0);
     minDepth = paths.length
@@ -387,6 +422,16 @@ export function analyzeStory<TData extends StoryNodeData>(
         code: "path-limit-reached",
         severity: "warning",
         message: `Story path enumeration reached the configured limit of ${maxPaths} paths.`,
+        path: "nodes",
+      });
+    }
+
+    if (conditionalEdgeCount > 0) {
+      issues.push({
+        code: "state-hooks-not-evaluated",
+        severity: "warning",
+        message:
+          "Story contains stateful hooks. Authoring analysis reports structural reachability.",
         path: "nodes",
       });
     }
@@ -503,6 +548,7 @@ export function analyzeStory<TData extends StoryNodeData>(
   const metrics = createEmptyMetrics(story);
 
   metrics.edgeCount = edgeCount;
+  metrics.conditionalEdgeCount = conditionalEdgeCount;
   metrics.branchCount = branches.length;
   metrics.endingCount = endings.length;
   metrics.reachableNodeCount = reachability.reachableNodeIds.length;

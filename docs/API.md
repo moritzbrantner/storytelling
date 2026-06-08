@@ -10,8 +10,8 @@ UI modules.
 
 - `defineStory`, `validateStory`, `assertStoryDocument`, and
   `validateStoryDocument`
-- `resolveStoryPath`, `buildStoryTimeline`, `serializeStoryPath`,
-  `parseStoryPath`, and `createStoryPathState`
+- `resolveStoryPath`, `buildStoryTimeline`, `serializeStorySnapshot`,
+  `parseStorySnapshot`, and `createStoryPathState`
 - `compileStory`, `enumerateStoryPaths`, `getStoryBranches`, and
   `getStoryEndings`
 - `analyzeStory`, `getStoryReachability`, `applyStoryPatch`, and
@@ -29,7 +29,9 @@ labels, defaults, and validation-compatible numeric constraints.
 - `defineStory(story, options?)` validates and returns a serializable `StoryDocument`.
 - `validateStory(story, options?)` and `assertStoryDocument(story, options?)` throw `StoryValidationError` when invalid.
 - `validateStoryDocument(story, options?)` returns `StoryValidationIssue[]` without throwing.
-- `resolveStoryPath(story, options)` resolves the active node path for selected choice ids and reports consumed, unconsumed, and invalid choice ids.
+- `resolveStoryPath(story, options)` resolves the active node path from a
+  `StoryStateSnapshot`, optional `choose` choice id, and optional state hooks.
+  Legacy `choiceIds` input remains accepted for older callers.
 - `buildStoryTimeline(story, options)` converts a resolved path into frame ranges.
 - `compileStory(story)` returns node and edge lookups for authoring tools.
 - `getStoryBranches(compiledStory)` returns nodes with multiple enabled outgoing choices.
@@ -42,7 +44,10 @@ labels, defaults, and validation-compatible numeric constraints.
 - `getStoryReachability(story)` returns reachable and unreachable node ids without requiring a full report.
 - `applyStoryPatch(story, patch, options)` applies immutable story-edit operations for editor drafts.
 - `createStoryNode(input)` creates a serializable story node object from required id/title fields plus optional node fields.
-- `serializeStoryPath(value)` and `parseStoryPath(input)` convert choice ids to and from URL query strings.
+- `serializeStorySnapshot(value)` and `parseStorySnapshot(input)` convert a
+  runtime snapshot to and from a `storyState=` query string. Legacy
+  `serializeStoryPath(value)` and `parseStoryPath(input)` remain available for
+  choice-id URLs.
 - `createStoryPathState(story, options)` builds a reusable resolved path state object.
 - `useStoryPathState(story, options)` provides controlled or uncontrolled headless React path state for custom authoring UIs.
 - `useStoryRuntime(story, options)` provides reusable player-grade state, labels, actions, and `StoryRenderProps`.
@@ -78,6 +83,20 @@ labels, defaults, and validation-compatible numeric constraints.
 
 ### Path State
 
+- `StoryRuntimeState` contains `variables`, `score`, `inventory`, and `flags`.
+- `StoryStateSnapshot` stores the current node id, history, runtime state, and
+  stopped reason. It is the preferred controlled runtime value for players and
+  scrollers.
+- `StoryChoice` supports static `hidden` and function hooks:
+  `isVisible`, `isEnabled`, and `reduceState`.
+- `StoryNode` supports `canEnter` and `reduceState`.
+- `StoryStateHooks` can provide document-level `createInitialState`,
+  `canEnterNode`, `isChoiceVisible`, `isChoiceEnabled`, `applyChoice`, and
+  `applyNode` hooks.
+- Reducers run in this order: choice reducer, global choice reducer, target
+  node reducer, global node reducer.
+- If a target node cannot be entered, resolution stops with
+  `blocked-by-condition`.
 - `StoryNode.children` nests serializable story scenes under a parent node.
   Node ids remain globally unique across the full tree, and `openingNodeId`,
   `next`, and choice targets may point to nodes at any depth.
@@ -89,12 +108,14 @@ labels, defaults, and validation-compatible numeric constraints.
   when targeted by a choice or another link.
 - `StoryRenderProps.nodeEntry` and `StoryTimelineScene.nodeEntry` include
   optional hierarchy metadata for breadcrumbs, minimaps, and editors.
-- `ResolvedStoryPath` includes `consumedChoiceIds`, `unconsumedChoiceIds`, and
-  `stoppedReason`.
+- `ResolvedStoryPath` includes `state`, `snapshot`, `consumedChoiceIds`,
+  `unconsumedChoiceIds`, and `stoppedReason`.
 - `stoppedReason` is one of `ending`, `awaiting-choice`, `invalid-choice`,
-  `stop-at`, or `max-steps`.
-- `useStoryPathState` accepts `stopAt`, `defaultStopAt`, and
-  `onStopAtChange`, and returns `stopAt` plus `setStopAt`.
+  `blocked-by-condition`, `stop-at`, or `max-steps`.
+- `useStoryPathState` accepts `snapshot`, `defaultSnapshot`, `defaultState`,
+  `hooks`, `onSnapshotChange`, `stopAt`, `defaultStopAt`, and `onStopAtChange`,
+  and returns `snapshot`, `state`, `setSnapshot`, `setRuntimeState`, `stopAt`,
+  and `setStopAt`.
 - With `autoAdvanceLinearNodes`, `goBack()` moves to the previous generated
   linear node by setting `stopAt`.
 - `useStoryRuntime` builds on `useStoryPathState` and returns `story`, `state`,
@@ -123,9 +144,18 @@ labels, defaults, and validation-compatible numeric constraints.
 - `useStoryScrollerController`, `useStoryScroller`, and
   `useStoryScrollerScene` expose the controller, root context, and per-scene
   render context for headless scroller layouts.
-- `StoryContent` accepts `renderers` and `renderBlock`. Built-in content blocks
-  still render by default, and custom block types can be rendered by adding a
-  keyed renderer.
+- `StoryContent` accepts typed `renderers` and `renderBlock`. Built-in content
+  blocks still render by default, and `createStoryContentRendererRegistry(...)`
+  helps type keyed renderer maps.
+- Built-in content blocks are `paragraph`, `heading`, `quote`, `list`, `image`,
+  `audio`, `video`, `table`, `code`, `chart`, `embed`, `callout`, and
+  `markdown`.
+- Default `markdown` rendering is escaped plain text with preserved whitespace.
+  Rich markdown rendering should be supplied through a custom renderer or the
+  optional `@moritzbrantner/storytelling/adapters/markdown` export.
+- Default `chart` rendering is intentionally basic SVG plus an accessible table
+  fallback. Rich charts should be supplied through a custom renderer or the
+  optional `@moritzbrantner/storytelling/adapters/charts` export.
 
 ```tsx
 <StoryPlayer

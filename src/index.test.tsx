@@ -14,15 +14,20 @@ import {
   assertStoryDocument,
   buildStoryTimeline,
   compileStory,
+  createDefaultStoryRuntimeState,
+  createStoryContentRendererRegistry,
   createStoryRendererRegistry,
   createStoryNode,
   defineStory,
   enumerateStoryPaths,
   getStoryBranches,
   getStoryEndings,
+  getStoryNode,
   getStoryNodeEntries,
+  parseStorySnapshot,
   parseStoryPath,
   resolveStoryPath,
+  serializeStorySnapshot,
   serializeStoryPath,
   storyDocumentJsonSchema,
   useStoryPathState,
@@ -489,6 +494,12 @@ function matchesJsonSchema(
     );
   }
 
+  if (Array.isArray(schema.anyOf)) {
+    return schema.anyOf.some((candidate) =>
+      matchesJsonSchema(value, candidate as never, rootSchema),
+    );
+  }
+
   switch (schema.type) {
     case "object": {
       if (!value || typeof value !== "object" || Array.isArray(value)) return false;
@@ -503,6 +514,19 @@ function matchesJsonSchema(
       if (schema.additionalProperties === false) {
         for (const key of Object.keys(record)) {
           if (!(key in properties)) return false;
+        }
+      } else if (schema.additionalProperties && typeof schema.additionalProperties === "object") {
+        for (const [key, childValue] of Object.entries(record)) {
+          if (key in properties) continue;
+          if (
+            !matchesJsonSchema(
+              childValue,
+              schema.additionalProperties as Record<string, unknown>,
+              rootSchema,
+            )
+          ) {
+            return false;
+          }
         }
       }
 
@@ -524,6 +548,8 @@ function matchesJsonSchema(
       return typeof value === "string";
     case "boolean":
       return typeof value === "boolean";
+    case "null":
+      return value === null;
     case "integer":
       return (
         Number.isInteger(value) &&
@@ -611,6 +637,39 @@ describe("@moritzbrantner/storytelling", () => {
         poster: "/poster.png",
         tracks: [{ src: "/video.vtt", label: "English", srcLang: "en" }],
       },
+      {
+        type: "table",
+        caption: "Results",
+        columns: [
+          { id: "name", header: "Name" },
+          { id: "score", header: "Score", align: "right" },
+        ],
+        rows: [{ name: "Team", score: 42 }],
+      },
+      {
+        type: "code",
+        code: "const score = 42;",
+        language: "ts",
+        filename: "score.ts",
+        highlightedLines: [1],
+      },
+      {
+        type: "chart",
+        title: "Scores",
+        chartType: "bar",
+        data: [{ label: "A", value: 12 }],
+        xKey: "label",
+        yKey: "value",
+      },
+      {
+        type: "embed",
+        src: "https://example.com/embed",
+        title: "Example embed",
+        provider: "iframe",
+        aspectRatio: "16:9",
+      },
+      { type: "callout", tone: "info", title: "Note", content: "Remember this." },
+      { type: "markdown", markdown: "## Markdown\n\nPlain fallback." },
     ];
 
     expect(
@@ -753,6 +812,172 @@ describe("@moritzbrantner/storytelling", () => {
         nodes: [{ id: "start", title: "Start" }],
       }),
     ).toThrow("must have a title");
+  });
+
+  test("reports strict validation diagnostics for malformed ids, timing, and content blocks", () => {
+    const emptyIssues = validateStoryDocument(
+      {
+        id: "",
+        title: "",
+        openingNodeId: "",
+        nodes: [
+          {
+            id: "",
+            title: "",
+            choices: [{ id: "", label: "", target: " " }],
+          },
+        ],
+      },
+      { mode: "strict" },
+    );
+
+    expect(emptyIssues.map((issue) => issue.code)).toEqual(
+      expect.arrayContaining([
+        "empty-story-id",
+        "empty-story-title",
+        "empty-opening-node-id",
+        "empty-node-id",
+        "empty-node-title",
+        "empty-choice-id",
+        "empty-choice-label",
+        "blank-choice-target",
+      ]),
+    );
+
+    expect(
+      validateStoryDocument({ id: "empty", title: "Empty", openingNodeId: "", nodes: [] }),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "empty-opening-node-id" }),
+        expect.objectContaining({ code: "empty-node-list" }),
+      ]),
+    );
+
+    const strictIssues = validateStoryDocument(
+      {
+        id: "strict",
+        title: "Strict",
+        openingNodeId: "bad node",
+        nodes: [
+          {
+            id: "bad node",
+            title: "Bad",
+            durationInFrames: 0,
+            scrollUnits: 0,
+            transition: { durationInFrames: 1.5 },
+            choices: [{ id: "bad choice", label: "Bad", target: "end" }],
+          },
+          { id: "end", title: "End" },
+        ],
+      },
+      { mode: "strict" },
+    );
+
+    expect(strictIssues.map((issue) => issue.code)).toEqual(
+      expect.arrayContaining([
+        "invalid-node-id",
+        "invalid-node-duration",
+        "invalid-node-scroll-units",
+        "invalid-transition-duration",
+        "invalid-choice-id",
+      ]),
+    );
+
+    const validContent: StoryContentBlock[] = [
+      { type: "paragraph", text: "Paragraph" },
+      { type: "heading", text: "Heading" },
+      { type: "quote", text: "Quote" },
+      { type: "list", items: ["One", "Two"] },
+      { type: "image", src: "/image.png", alt: "Image" },
+      { type: "audio", src: "/audio.mp3" },
+      { type: "video", src: "/video.mp4" },
+      {
+        type: "table",
+        columns: [
+          { id: "left", header: "Left", align: "left" },
+          { id: "center", header: "Center", align: "center" },
+          { id: "right", header: "Right", align: "right" },
+        ],
+        rows: [{ left: "A", center: 1, right: null }],
+      },
+      { type: "code", code: "const value = 1;", highlightedLines: [1] },
+      { type: "chart", chartType: "bar", data: [{ label: "A", value: 1 }] },
+      { type: "chart", chartType: "line", data: [{ label: "A", value: 1 }] },
+      { type: "chart", chartType: "area", data: [{ label: "A", value: 1 }] },
+      { type: "chart", chartType: "pie", data: [{ label: "A", value: 1 }] },
+      { type: "embed", src: "https://example.com", title: "Embed" },
+      { type: "callout", tone: "info", content: "Info" },
+      { type: "callout", tone: "success", content: "Success" },
+      { type: "callout", tone: "warning", content: "Warning" },
+      { type: "callout", tone: "danger", content: "Danger" },
+      { type: "callout", tone: "neutral", content: "Neutral" },
+      { type: "markdown", markdown: "**Markdown**" },
+    ];
+
+    expect(
+      validateStoryDocument(
+        {
+          id: "content",
+          title: "Content",
+          openingNodeId: "start",
+          nodes: [{ id: "start", title: "Start", content: validContent }],
+        },
+        { mode: "strict" },
+      ),
+    ).toEqual([]);
+
+    const invalidContent = [
+      null,
+      { type: "table", columns: "bad", rows: [] },
+      { type: "table", columns: [null], rows: [] },
+      { type: "table", columns: [{ id: "a" }], rows: [] },
+      { type: "table", columns: [{ id: "a", header: "A", align: "wide" }], rows: [] },
+      {
+        type: "table",
+        columns: [
+          { id: "a", header: "A" },
+          { id: "a", header: "Again" },
+        ],
+        rows: [],
+      },
+      { type: "table", columns: [{ id: "a", header: "A" }], rows: [[]] },
+      { type: "table", columns: [{ id: "a", header: "A" }], rows: [{ b: "B" }] },
+      { type: "table", columns: [{ id: "a", header: "A" }], rows: [{ a: { nested: true } }] },
+      { type: "code", code: "const value = 1;", highlightedLines: [0] },
+      { type: "chart", chartType: "scatter", data: [{ label: "A", value: 1 }] },
+      { type: "chart", chartType: "bar", data: [] },
+      { type: "chart", chartType: "bar", data: [[]] },
+      { type: "chart", chartType: "bar", data: [{ label: true }] },
+      { type: "embed", src: "", title: "" },
+      { type: "callout", tone: "loud", content: "Too loud" },
+      { type: "markdown", markdown: 1 },
+    ] as unknown as StoryContentBlock[];
+
+    expect(
+      validateStoryDocument(
+        {
+          id: "invalid-content",
+          title: "Invalid content",
+          openingNodeId: "start",
+          nodes: [{ id: "start", title: "Start", content: invalidContent }],
+        },
+        { mode: "strict" },
+      ).map((issue) => issue.code),
+    ).toEqual(
+      expect.arrayContaining([
+        "invalid-content-block",
+        "invalid-table-block",
+        "invalid-code-block",
+        "invalid-chart-block",
+        "invalid-embed-block",
+        "invalid-callout-block",
+        "invalid-markdown-block",
+      ]),
+    );
+
+    expect(() => getStoryNode(story, "missing")).toThrow(
+      'Story "signal" does not contain node "missing".',
+    );
   });
 
   test("validates nested story nodes with global ids and nested issue paths", () => {
@@ -926,6 +1151,68 @@ describe("@moritzbrantner/storytelling", () => {
     );
     expect(analyzeStory(authoringStory).issues.map((issue) => issue.code)).not.toContain(
       "missing-choice-description",
+    );
+  });
+
+  test("analyzes rich content metrics and conditional story edges", () => {
+    const richStory: StoryDocument<FixtureData> = {
+      id: "rich-authoring",
+      title: "Rich authoring",
+      openingNodeId: "start",
+      nodes: [
+        {
+          id: "start",
+          title: "Start",
+          content: [
+            {
+              type: "table",
+              caption: "Quarterly results",
+              columns: [
+                { id: "quarter", header: "Quarter" },
+                { id: "value", header: "Value" },
+              ],
+              rows: [{ quarter: "Q1", value: 42 }],
+            },
+            { type: "code", code: "const value = 42;", filename: "metric.ts" },
+            {
+              type: "chart",
+              chartType: "bar",
+              title: "Revenue chart",
+              description: "Revenue by quarter",
+              data: [{ quarter: "Q1", value: 42 }],
+            },
+            { type: "embed", src: "https://example.com", title: "External report" },
+            { type: "callout", title: "Note", content: "Review before publishing." },
+            { type: "markdown", markdown: "Markdown summary" },
+          ],
+          choices: [
+            {
+              id: "continue",
+              label: "Continue",
+              target: "end",
+              isVisible: () => true,
+            },
+          ],
+        },
+        {
+          id: "end",
+          title: "End",
+          content: [{ type: "paragraph", text: "Done." }],
+        },
+      ],
+    };
+    const report = analyzeStory(richStory, { wordsPerMinute: 10 });
+
+    expect(report.valid).toBe(true);
+    expect(report.metrics.conditionalEdgeCount).toBe(1);
+    expect(report.metrics.estimatedReadingMinutes).toBeGreaterThan(1);
+    expect(report.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "state-hooks-not-evaluated",
+          severity: "warning",
+        }),
+      ]),
     );
   });
 
@@ -2331,20 +2618,121 @@ describe("@moritzbrantner/storytelling", () => {
   });
 
   test("renders custom StoryContent block renderers", () => {
+    const renderers = createStoryContentRendererRegistry({
+      chart: ({ block }) => <figure>Custom block {block.title}</figure>,
+    });
+
     render(
       <StoryContent
         content={[
           { type: "paragraph", text: "Built in paragraph." },
-          { type: "chart", title: "Revenue" } as never,
+          { type: "chart", chartType: "bar", title: "Revenue", data: [{ label: "Q1", value: 10 }] },
         ]}
-        renderers={{
-          chart: ({ block }) => <figure>Custom block {(block as { title: string }).title}</figure>,
-        }}
+        renderers={renderers}
       />,
     );
 
     expect(screen.getByText("Built in paragraph.")).toBeTruthy();
     expect(screen.getByText("Custom block Revenue")).toBeTruthy();
+  });
+
+  test("renders built-in rich StoryContent blocks", () => {
+    render(
+      <StoryContent
+        content={[
+          {
+            type: "table",
+            caption: "Outcome table",
+            columns: [{ id: "name", header: "Name" }],
+            rows: [{ name: "North" }],
+          },
+          { type: "code", code: "const ok = true;", language: "ts", filename: "ok.ts" },
+          {
+            type: "chart",
+            chartType: "bar",
+            title: "Outcome chart",
+            data: [{ label: "North", value: 7 }],
+            yKey: "value",
+          },
+          { type: "embed", src: "https://example.com", title: "Embedded report" },
+          { type: "callout", tone: "warning", title: "Careful", content: "Check the route." },
+          { type: "markdown", markdown: "## Heading\n\nPlain markdown fallback." },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Outcome table")).toBeTruthy();
+    expect(screen.getAllByText("North").length).toBeGreaterThan(0);
+    expect(screen.getByText("ok.ts")).toBeTruthy();
+    expect(screen.getAllByText("Outcome chart").length).toBeGreaterThan(0);
+    expect(screen.getByTitle("Embedded report")).toBeTruthy();
+    expect(screen.getByText("Careful")).toBeTruthy();
+    expect(screen.getByText(/Plain markdown fallback/)).toBeTruthy();
+  });
+
+  test("resolves stateful stories with snapshots, reducers, and conditions", () => {
+    type Vars = { route: string | null };
+    const statefulStory = defineStory<FixtureData, Vars>({
+      id: "stateful",
+      title: "Stateful",
+      openingNodeId: "start",
+      nodes: [
+        {
+          id: "start",
+          title: "Start",
+          data: { tone: "cold" },
+          choices: [
+            {
+              id: "take-key",
+              label: "Take key",
+              target: "locked",
+              reduceState: ({ state }) => ({
+                ...state,
+                variables: { ...state.variables, route: "key" },
+                inventory: [...state.inventory, "key"],
+                flags: { ...state.flags, hasKey: true },
+                score: state.score + 5,
+              }),
+            },
+            { id: "blocked", label: "Blocked", target: "locked" },
+            { id: "hidden", label: "Hidden", target: "locked", hidden: true },
+          ],
+        },
+        {
+          id: "locked",
+          title: "Locked",
+          data: { tone: "warm" },
+          canEnter: ({ state }) => state.flags.hasKey === true,
+          reduceState: ({ state }) => ({ ...state, score: state.score + 1 }),
+        },
+      ],
+    });
+    const defaultState = createDefaultStoryRuntimeState<Vars>({ route: null });
+    const opening = resolveStoryPath(statefulStory, { defaultState });
+    const blocked = resolveStoryPath(statefulStory, {
+      snapshot: opening.snapshot,
+      choose: "blocked",
+    });
+    const hidden = resolveStoryPath(statefulStory, {
+      snapshot: opening.snapshot,
+      choose: "hidden",
+    });
+    const unlocked = resolveStoryPath(statefulStory, {
+      snapshot: opening.snapshot,
+      choose: "take-key",
+    });
+    const encoded = serializeStorySnapshot(unlocked.snapshot);
+
+    expect(blocked.stoppedReason).toBe("blocked-by-condition");
+    expect(hidden.stoppedReason).toBe("invalid-choice");
+    expect(unlocked.currentNode.id).toBe("locked");
+    expect(unlocked.state.score).toBe(6);
+    expect(unlocked.state.inventory).toEqual(["key"]);
+    expect(parseStorySnapshot(encoded)).toMatchObject({
+      nodeId: "locked",
+      state: expect.objectContaining({ score: 6 }),
+    });
+    expect(parseStorySnapshot("not-valid")).toBeUndefined();
   });
 
   test("passes a normalized 0-100 scroll value to custom StoryScroller scenes", async () => {
@@ -3095,11 +3483,14 @@ describe("@moritzbrantner/storytelling", () => {
       node: traceNode,
       history: path.history,
       path,
+      state: path.state,
+      snapshot: path.snapshot,
       currentIndex: 1,
       progress: 0.5,
       isEnding: true,
       canGoBack: true,
       choices: [],
+      visibleChoices: [],
       choose: () => {},
       goBack: () => {},
       restart: () => {},

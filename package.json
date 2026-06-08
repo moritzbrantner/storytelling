@@ -48,6 +48,14 @@
     "./timeline": {
       "types": "./dist/timeline.d.ts",
       "import": "./dist/timeline.js"
+    },
+    "./adapters/markdown": {
+      "types": "./dist/adapters-markdown.d.ts",
+      "import": "./dist/adapters-markdown.js"
+    },
+    "./adapters/charts": {
+      "types": "./dist/adapters-charts.d.ts",
+      "import": "./dist/adapters-charts.js"
     }
   },
   "peerDependencies": {
@@ -107,7 +115,7 @@
   "scripts": {
     "dev": "vite --config example/vite.config.ts",
     "build:example": "vite build --config example/vite.config.ts",
-    "build": "tsup src/index.ts src/core.ts src/schema.ts src/remotion.tsx src/three.tsx src/media.tsx src/workflow.ts src/timeline.ts --format esm --dts --clean --out-dir dist",
+    "build": "tsup src/index.ts src/core.ts src/schema.ts src/remotion.tsx src/three.tsx src/media.tsx src/workflow.ts src/timeline.ts src/adapters-markdown.ts src/adapters-charts.ts --format esm --dts --clean --out-dir dist",
     "check-types": "tsc --noEmit",
     "lint": "oxfmt --check && oxlint --format=github && bun scripts/verify-package-imports.mjs ./src @/ next/ next-intl",
     "test": "bun run test:unit",

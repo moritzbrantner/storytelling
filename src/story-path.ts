@@ -4,154 +4,305 @@ import type {
   StoryHistoryEntry,
   StoryNode,
   StoryNodeData,
+  StoryRuntimeState,
+  StoryStateHooks,
+  StoryStateSnapshot,
   StoryTimeline,
   StoryTimelineScene,
+  StoryVariables,
 } from "./story-model";
 import { createStoryNodeEntryLookup, getStoryNodeEntries } from "./story-node-tree";
-import { createStoryNodeLookup, getStoryChoices, maybeValidateStory } from "./story-validation";
+import { createStoryNodeLookup, maybeValidateStory } from "./story-validation";
+import {
+  applyStoryChoiceState,
+  applyStoryNodeState,
+  canEnterStoryNode,
+  createInitialStoryRuntimeState,
+  createStorySnapshot,
+  getSelectableStoryChoices,
+  getVisibleStoryChoices,
+} from "./story-state-engine";
 
 const DEFAULT_DURATION_IN_FRAMES = 120;
 const DEFAULT_TRANSITION_IN_FRAMES = 18;
 const DEFAULT_FPS = 30;
 
-export type ResolveStoryPathOptions = {
+export type ResolveStoryPathOptions<
+  TData extends StoryNodeData = StoryNodeData,
+  TVars extends StoryVariables = StoryVariables,
+> = {
+  snapshot?: StoryStateSnapshot<TData, TVars>;
+  defaultState?: StoryRuntimeState<TVars>;
+  hooks?: StoryStateHooks<TData, TVars>;
+  choose?: string;
+  /** @deprecated Use snapshot plus choose instead. */
   choiceIds?: string[];
   autoAdvanceLinearNodes?: boolean;
   stopAt?: string;
   maxSteps?: number;
 };
 
-export type BuildStoryTimelineOptions = {
+export type BuildStoryTimelineOptions<
+  TData extends StoryNodeData = StoryNodeData,
+  TVars extends StoryVariables = StoryVariables,
+> = {
+  snapshot?: StoryStateSnapshot<TData, TVars>;
+  defaultState?: StoryRuntimeState<TVars>;
+  hooks?: StoryStateHooks<TData, TVars>;
+  /** @deprecated Use snapshot instead. */
   choiceIds?: string[];
   fps?: number;
   defaultDurationInFrames?: number;
   transitionInFrames?: number;
 };
 
-export function resolveStoryPath<TData extends StoryNodeData>(
-  input: StoryDocument<TData>,
-  options: ResolveStoryPathOptions = {},
-): ResolvedStoryPath<TData> {
-  const story = maybeValidateStory(input);
-  const nodeLookup = createStoryNodeLookup(story);
-  const nodeEntries = getStoryNodeEntries(story);
-  const nodes: StoryNode<TData>[] = [];
-  const history: StoryHistoryEntry<TData>[] = [];
-  const choiceIds = options.choiceIds ?? [];
-  const consumedChoiceIds: string[] = [];
-  const autoAdvanceLinearNodes = options.autoAdvanceLinearNodes ?? false;
-  const maxSteps = options.maxSteps ?? nodeEntries.length * 2;
-  let currentNode = nodeLookup.get(story.openingNodeId)!;
-  let choiceIndex = 0;
+function withHistoryState<TData extends StoryNodeData, TVars extends StoryVariables>(
+  entry: StoryHistoryEntry<TData, TVars>,
+  state: StoryRuntimeState<TVars>,
+): StoryHistoryEntry<TData, TVars> {
+  return {
+    ...entry,
+    state,
+  };
+}
 
-  nodes.push(currentNode);
-  history.push({ nodeId: currentNode.id, data: currentNode.data });
-
-  for (let step = 0; step < maxSteps; step += 1) {
-    if (options.stopAt && currentNode.id === options.stopAt) {
-      return {
-        nodes,
-        history,
-        currentNode,
-        completed: true,
-        stoppedAt: options.stopAt,
-        consumedChoiceIds,
-        unconsumedChoiceIds: choiceIds.slice(choiceIndex),
-        stoppedReason: "stop-at",
-      };
-    }
-
-    const choices = getStoryChoices(story, currentNode);
-    const hasExplicitChoices = (currentNode.choices?.length ?? 0) > 0;
-    if (choices.length === 0) {
-      return {
-        nodes,
-        history,
-        currentNode,
-        completed: true,
-        consumedChoiceIds,
-        unconsumedChoiceIds: choiceIds.slice(choiceIndex),
-        stoppedReason: choiceIndex < choiceIds.length ? "invalid-choice" : "ending",
-      };
-    }
-
-    const requestedChoiceId = choiceIds[choiceIndex];
-    let selectedChoice =
-      requestedChoiceId !== undefined
-        ? choices.find((choice) => choice.id === requestedChoiceId && !choice.disabled)
-        : undefined;
-
-    if (requestedChoiceId !== undefined && hasExplicitChoices && !selectedChoice) {
-      return {
-        nodes,
-        history,
-        currentNode,
-        completed: false,
-        consumedChoiceIds,
-        unconsumedChoiceIds: choiceIds.slice(choiceIndex),
-        stoppedReason: "invalid-choice",
-      };
-    }
-
-    if (!selectedChoice && autoAdvanceLinearNodes && !hasExplicitChoices) {
-      selectedChoice = choices.find((choice) => !choice.disabled);
-    }
-
-    if (!selectedChoice) {
-      return {
-        nodes,
-        history,
-        currentNode,
-        completed: false,
-        consumedChoiceIds,
-        unconsumedChoiceIds: choiceIds.slice(choiceIndex),
-        stoppedReason: "awaiting-choice",
-      };
-    }
-
-    if (requestedChoiceId === selectedChoice.id) {
-      consumedChoiceIds.push(selectedChoice.id);
-      choiceIndex += 1;
-    }
-
-    const nextNode = nodeLookup.get(selectedChoice.target);
-    if (!nextNode) {
-      return {
-        nodes,
-        history,
-        currentNode,
-        completed: false,
-        consumedChoiceIds,
-        unconsumedChoiceIds: choiceIds.slice(choiceIndex),
-        stoppedReason: "invalid-choice",
-      };
-    }
-
-    currentNode = nextNode;
-    nodes.push(nextNode);
-    history.push({
-      nodeId: nextNode.id,
-      choiceId: selectedChoice.id,
-      data: nextNode.data,
-    });
-  }
-
+function createResolvedPath<TData extends StoryNodeData, TVars extends StoryVariables>({
+  nodes,
+  history,
+  currentNode,
+  completed,
+  state,
+  stoppedReason,
+  stoppedAt,
+  consumedChoiceIds,
+  unconsumedChoiceIds,
+}: {
+  nodes: StoryNode<TData, TVars>[];
+  history: StoryHistoryEntry<TData, TVars>[];
+  currentNode: StoryNode<TData, TVars>;
+  completed: boolean;
+  state: StoryRuntimeState<TVars>;
+  stoppedReason?: ResolvedStoryPath<TData, TVars>["stoppedReason"];
+  stoppedAt?: string;
+  consumedChoiceIds?: string[];
+  unconsumedChoiceIds?: string[];
+}): ResolvedStoryPath<TData, TVars> {
   return {
     nodes,
     history,
     currentNode,
-    completed: false,
+    completed,
+    state,
+    snapshot: createStorySnapshot(currentNode.id, history, state, stoppedReason),
+    stoppedReason,
+    stoppedAt,
     consumedChoiceIds,
-    unconsumedChoiceIds: choiceIds.slice(choiceIndex),
-    stoppedReason: "max-steps",
+    unconsumedChoiceIds,
   };
 }
 
-export function buildStoryTimeline<TData extends StoryNodeData>(
-  story: StoryDocument<TData>,
-  options: BuildStoryTimelineOptions = {},
-): StoryTimeline<TData> {
+export function resolveStoryPath<
+  TData extends StoryNodeData,
+  TVars extends StoryVariables = StoryVariables,
+>(
+  input: StoryDocument<TData, TVars>,
+  options: ResolveStoryPathOptions<TData, TVars> = {},
+): ResolvedStoryPath<TData, TVars> {
+  const story = maybeValidateStory(input);
+  const nodeLookup = createStoryNodeLookup(story);
+  const nodeEntries = getStoryNodeEntries(story);
+  const nodes: StoryNode<TData, TVars>[] = [];
+  const history: StoryHistoryEntry<TData, TVars>[] = [];
+  const choiceIds = options.choiceIds ?? [];
+  const consumedChoiceIds: string[] = [];
+  const autoAdvanceLinearNodes = options.autoAdvanceLinearNodes ?? false;
+  const maxSteps = options.maxSteps ?? nodeEntries.length * 2;
+  let currentNode = nodeLookup.get(options.snapshot?.nodeId ?? story.openingNodeId)!;
+  let state =
+    options.snapshot?.state ??
+    createInitialStoryRuntimeState(story, {
+      defaultState: options.defaultState,
+      hooks: options.hooks,
+    });
+  let choiceIndex = 0;
+  let pendingChoose = options.choose;
+
+  if (options.snapshot) {
+    history.push(...options.snapshot.history);
+    for (const entry of history) {
+      const historyNode = nodeLookup.get(entry.nodeId);
+      if (historyNode) {
+        nodes.push(historyNode);
+      }
+    }
+    if (nodes[nodes.length - 1]?.id !== currentNode.id) {
+      nodes.push(currentNode);
+    }
+  } else {
+    state = applyStoryNodeState(story, currentNode, history, state, options.hooks);
+    nodes.push(currentNode);
+    history.push(withHistoryState({ nodeId: currentNode.id, data: currentNode.data }, state));
+  }
+
+  for (let step = 0; step < maxSteps; step += 1) {
+    if (options.stopAt && currentNode.id === options.stopAt) {
+      return createResolvedPath({
+        nodes,
+        history,
+        currentNode,
+        completed: true,
+        state,
+        stoppedAt: options.stopAt,
+        consumedChoiceIds,
+        unconsumedChoiceIds: choiceIds.slice(choiceIndex),
+        stoppedReason: "stop-at",
+      });
+    }
+
+    const visibleChoices = getVisibleStoryChoices(
+      story,
+      currentNode,
+      history,
+      state,
+      options.hooks,
+    );
+    const selectableChoices = getSelectableStoryChoices(
+      story,
+      currentNode,
+      history,
+      state,
+      options.hooks,
+    );
+    const hasExplicitChoices = (currentNode.choices?.length ?? 0) > 0;
+    if (visibleChoices.length === 0) {
+      return createResolvedPath({
+        nodes,
+        history,
+        currentNode,
+        completed: true,
+        state,
+        consumedChoiceIds,
+        unconsumedChoiceIds: choiceIds.slice(choiceIndex),
+        stoppedReason:
+          choiceIndex < choiceIds.length || pendingChoose ? "invalid-choice" : "ending",
+      });
+    }
+
+    const requestedChoiceId = pendingChoose ?? choiceIds[choiceIndex];
+    let selectedChoice =
+      requestedChoiceId !== undefined
+        ? selectableChoices.find((choice) => choice.id === requestedChoiceId)
+        : undefined;
+
+    if (requestedChoiceId !== undefined && hasExplicitChoices && !selectedChoice) {
+      return createResolvedPath({
+        nodes,
+        history,
+        currentNode,
+        completed: false,
+        state,
+        consumedChoiceIds,
+        unconsumedChoiceIds: choiceIds.slice(choiceIndex),
+        stoppedReason: "invalid-choice",
+      });
+    }
+
+    if (!selectedChoice && autoAdvanceLinearNodes && !hasExplicitChoices) {
+      selectedChoice = selectableChoices[0];
+    }
+
+    if (!selectedChoice) {
+      return createResolvedPath({
+        nodes,
+        history,
+        currentNode,
+        completed: false,
+        state,
+        consumedChoiceIds,
+        unconsumedChoiceIds: choiceIds.slice(choiceIndex),
+        stoppedReason: "awaiting-choice",
+      });
+    }
+
+    if (requestedChoiceId === selectedChoice.id && choiceIds[choiceIndex] === selectedChoice.id) {
+      consumedChoiceIds.push(selectedChoice.id);
+      choiceIndex += 1;
+    }
+    if (pendingChoose === selectedChoice.id) {
+      consumedChoiceIds.push(selectedChoice.id);
+      pendingChoose = undefined;
+    }
+
+    const nextNode = nodeLookup.get(selectedChoice.target);
+    if (!nextNode) {
+      return createResolvedPath({
+        nodes,
+        history,
+        currentNode,
+        completed: false,
+        state,
+        consumedChoiceIds,
+        unconsumedChoiceIds: choiceIds.slice(choiceIndex),
+        stoppedReason: "invalid-choice",
+      });
+    }
+
+    const choiceState = applyStoryChoiceState(
+      story,
+      currentNode,
+      selectedChoice,
+      history,
+      state,
+      options.hooks,
+    );
+    if (!canEnterStoryNode(story, nextNode, history, choiceState, options.hooks)) {
+      return createResolvedPath({
+        nodes,
+        history,
+        currentNode,
+        completed: false,
+        state,
+        consumedChoiceIds,
+        unconsumedChoiceIds: choiceIds.slice(choiceIndex),
+        stoppedReason: "blocked-by-condition",
+      });
+    }
+
+    currentNode = nextNode;
+    const nextHistoryEntry = {
+      nodeId: nextNode.id,
+      choiceId: selectedChoice.id,
+      data: nextNode.data,
+    };
+    const nextHistory = [...history, nextHistoryEntry];
+    state = applyStoryNodeState(story, nextNode, nextHistory, choiceState, options.hooks);
+    nodes.push(nextNode);
+    history.push(withHistoryState(nextHistoryEntry, state));
+  }
+
+  return createResolvedPath({
+    nodes,
+    history,
+    currentNode,
+    completed: false,
+    state,
+    consumedChoiceIds,
+    unconsumedChoiceIds: choiceIds.slice(choiceIndex),
+    stoppedReason: "max-steps",
+  });
+}
+
+export function buildStoryTimeline<
+  TData extends StoryNodeData,
+  TVars extends StoryVariables = StoryVariables,
+>(
+  story: StoryDocument<TData, TVars>,
+  options: BuildStoryTimelineOptions<TData, TVars> = {},
+): StoryTimeline<TData, TVars> {
   const path = resolveStoryPath(story, {
+    snapshot: options.snapshot,
+    defaultState: options.defaultState,
+    hooks: options.hooks,
     choiceIds: options.choiceIds,
     autoAdvanceLinearNodes: true,
   });
@@ -167,9 +318,11 @@ export function buildStoryTimeline<TData extends StoryNodeData>(
     DEFAULT_TRANSITION_IN_FRAMES;
   let cursor = 0;
 
-  const scenes: StoryTimelineScene<TData>[] = path.nodes.map((node, index) => {
+  const scenes: StoryTimelineScene<TData, TVars>[] = path.nodes.map((node, index) => {
     const durationInFrames = node.durationInFrames ?? defaultDurationInFrames;
     const transitionInFrames = node.transition?.durationInFrames ?? defaultTransitionInFrames;
+    const history = path.history.slice(0, index + 1);
+    const state = history[history.length - 1]?.state ?? path.state;
     const scene = {
       node,
       nodeEntry: nodeEntryLookup.get(node.id),
@@ -178,7 +331,9 @@ export function buildStoryTimeline<TData extends StoryNodeData>(
       endFrame: cursor + durationInFrames,
       transitionInFrames,
       pathIndex: index,
-      history: path.history.slice(0, index + 1),
+      history,
+      state,
+      snapshot: createStorySnapshot(node.id, history, state),
     };
 
     cursor = scene.endFrame;
@@ -190,5 +345,7 @@ export function buildStoryTimeline<TData extends StoryNodeData>(
     totalFrames: cursor,
     fps,
     history: path.history,
+    state: path.state,
+    snapshot: path.snapshot,
   };
 }

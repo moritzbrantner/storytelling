@@ -18,6 +18,10 @@ export type SignalStoryData = {
   tone: "amber" | "cyan" | "green" | "rose";
 };
 
+export type SignalStoryVars = {
+  route: string | null;
+};
+
 export type MotionLabSceneData = {
   accent: string;
   deck: string;
@@ -28,7 +32,7 @@ export type MotionLabSceneData = {
   readouts: { label: string; value: string }[];
 };
 
-export const signalStory = defineStory<SignalStoryData>({
+export const signalStory = defineStory<SignalStoryData, SignalStoryVars>({
   id: "observatory-relay",
   title: "Observatory Relay",
   subtitle: "A branching signal story",
@@ -43,6 +47,12 @@ export const signalStory = defineStory<SignalStoryData>({
   defaults: {
     durationInFrames: 120,
     transitionInFrames: 16,
+  },
+  initialState: {
+    variables: { route: null },
+    score: 0,
+    inventory: [],
+    flags: {},
   },
   nodes: [
     {
@@ -71,6 +81,46 @@ export const signalStory = defineStory<SignalStoryData>({
           type: "list",
           items: ["Three clean repeats", "Weak carrier drift", "No registered flight plan"],
         },
+        {
+          type: "callout",
+          tone: "info",
+          title: "Simulation state",
+          content: "Each route updates score, flags, and inventory in the story snapshot.",
+        },
+        {
+          type: "table",
+          caption: "Signal readouts",
+          columns: [
+            { id: "metric", header: "Metric" },
+            { id: "value", header: "Value", align: "right" },
+          ],
+          rows: [
+            { metric: "Repeats", value: 3 },
+            { metric: "Lock", value: "72%" },
+          ],
+        },
+        {
+          type: "chart",
+          title: "Signal confidence",
+          chartType: "bar",
+          data: [
+            { label: "Voice", value: 88 },
+            { label: "Trace", value: 74 },
+            { label: "Archive", value: 61 },
+          ],
+          xKey: "label",
+          yKey: "value",
+        },
+        {
+          type: "code",
+          filename: "routing-rule.ts",
+          language: "ts",
+          code: "state.flags.channelOpen && state.score >= 10",
+        },
+        {
+          type: "markdown",
+          markdown: "### Operator note\n\nMarkdown blocks render as safe plain text by default.",
+        },
       ],
       choices: [
         {
@@ -78,18 +128,36 @@ export const signalStory = defineStory<SignalStoryData>({
           label: "Answer the pulse",
           description: "Open a voice channel before the signal fades.",
           target: "pilot",
+          reduceState: ({ state }) => ({
+            ...state,
+            variables: { ...state.variables, route: "voice" },
+            flags: { ...state.flags, channelOpen: true },
+            score: state.score + 10,
+          }),
         },
         {
           id: "trace",
           label: "Trace the source",
           description: "Hold transmission and triangulate the coordinates.",
           target: "harbor",
+          reduceState: ({ state }) => ({
+            ...state,
+            variables: { ...state.variables, route: "trace" },
+            inventory: [...state.inventory, "triangulation"],
+            score: state.score + 7,
+          }),
         },
         {
           id: "archive",
           label: "Check the archive",
           description: "Compare the pattern against old expedition logs.",
           target: "archive",
+          reduceState: ({ state }) => ({
+            ...state,
+            variables: { ...state.variables, route: "archive" },
+            inventory: [...state.inventory, "archive-match"],
+            score: state.score + 4,
+          }),
         },
       ],
     },

@@ -38,8 +38,20 @@ export {
   type StoryGraphEdge,
 } from "./story-graph";
 export {
+  createStorySnapshot,
+  createDefaultStoryRuntimeState,
+  cloneStoryRuntimeState,
+  getVisibleStoryChoices,
+  getSelectableStoryChoices,
+  applyStoryChoiceState,
+  applyStoryNodeState,
+  canEnterStoryNode,
+} from "./story-state-engine";
+export {
   createStoryPathState,
+  parseStorySnapshot,
   parseStoryPath,
+  serializeStorySnapshot,
   serializeStoryPath,
   type CreateStoryPathStateOptions,
   type StoryPathState,
@@ -80,6 +92,8 @@ export {
 export { defaultStoryTheme, type StoryTheme } from "./story-theme";
 export {
   StoryContent,
+  createStoryContentRendererRegistry,
+  createStoryContentSchemaExtension,
   defaultStoryContentRenderers,
   type StoryContentProps,
 } from "./story-content";
@@ -147,22 +161,38 @@ export { storyDocumentJsonSchema, type StoryDocumentJsonSchema } from "./schema"
 export type {
   ResolvedStoryPath,
   StoryChoice,
+  StoryCalloutBlock,
+  StoryChartBlock,
+  StoryCodeBlock,
   StoryContentBlock,
   StoryDefaults,
   StoryDocument,
+  StoryEmbedBlock,
   StoryHistoryEntry,
   StoryLabels,
+  StoryMarkdownBlock,
   StoryMediaTextTrack,
   StoryNode,
   StoryNodeData,
+  StoryRuntimeState,
+  StoryStateHooks,
+  StoryStatePredicate,
+  StoryStatePredicateContext,
+  StoryStateReducer,
+  StoryStateReducerContext,
+  StoryStateSnapshot,
+  StoryTableBlock,
   StoryNodeTreeEntry,
   StoryStageDescriptor,
   StoryTimeline,
   StoryTimelineScene,
   StoryTransition,
+  StoryVariables,
 } from "./story-model";
 export type {
   StoryContentRenderer,
+  StoryContentBlockMap,
+  StoryContentRendererFor,
   StoryContentRendererProps,
   StoryContentRendererRegistry,
   StoryRendererRegistry,

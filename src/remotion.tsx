@@ -354,6 +354,8 @@ export function StoryRemotionComposition<TData extends StoryNodeData = StoryNode
           history,
           currentNode: node,
           completed: isStoryEnding(story, node),
+          state: scene.state,
+          snapshot: scene.snapshot,
         };
         const choices = getStoryChoices(story, node);
         const renderProps: StoryRenderProps<TData> = {
@@ -361,11 +363,14 @@ export function StoryRemotionComposition<TData extends StoryNodeData = StoryNode
           node,
           history,
           path,
+          state: scene.state,
+          snapshot: scene.snapshot,
           currentIndex: index,
           progress: (index + 1) / Math.max(timeline.scenes.length, 1),
           isEnding: isStoryEnding(story, node),
           canGoBack: index > 0,
           choices,
+          visibleChoices: choices,
           choose: () => {},
           goBack: () => {},
           restart: () => {},

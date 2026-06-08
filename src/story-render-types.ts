@@ -9,64 +9,96 @@ import type {
   StoryNode,
   StoryNodeData,
   StoryNodeTreeEntry,
+  StoryRuntimeState,
+  StoryStateSnapshot,
   StoryTimelineScene,
+  StoryVariables,
 } from "./story-model";
 
-export type StoryRenderProps<TData extends StoryNodeData = StoryNodeData> = {
-  story: StoryDocument<TData>;
-  node: StoryNode<TData>;
-  nodeEntry?: StoryNodeTreeEntry<TData>;
-  history: StoryHistoryEntry<TData>[];
-  path: ResolvedStoryPath<TData>;
+export type StoryRenderProps<
+  TData extends StoryNodeData = StoryNodeData,
+  TVars extends StoryVariables = StoryVariables,
+> = {
+  story: StoryDocument<TData, TVars>;
+  node: StoryNode<TData, TVars>;
+  nodeEntry?: StoryNodeTreeEntry<TData, TVars>;
+  history: StoryHistoryEntry<TData, TVars>[];
+  path: ResolvedStoryPath<TData, TVars>;
+  state: StoryRuntimeState<TVars>;
+  snapshot: StoryStateSnapshot<TData, TVars>;
   currentIndex: number;
   progress: number;
   isEnding: boolean;
   canGoBack: boolean;
-  choices: StoryChoice[];
+  choices: StoryChoice<TData, TVars>[];
+  visibleChoices: StoryChoice<TData, TVars>[];
   choose: (choiceId: string) => void;
   goBack: () => void;
   restart: () => void;
 };
 
-export type StoryStageComponent<TData extends StoryNodeData = StoryNodeData> = ComponentType<
-  StoryRenderProps<TData>
->;
+export type StoryStageComponent<
+  TData extends StoryNodeData = StoryNodeData,
+  TVars extends StoryVariables = StoryVariables,
+> = ComponentType<StoryRenderProps<TData, TVars>>;
 
-export type StoryRemotionSceneProps<TData extends StoryNodeData = StoryNodeData> =
-  StoryRenderProps<TData> & {
-    frame: number;
-    absoluteFrame: number;
-    durationInFrames: number;
-    fps: number;
-    sceneProgress: number;
-    timelineScene: StoryTimelineScene<TData>;
-  };
-
-export type StoryRemotionSceneComponent<TData extends StoryNodeData = StoryNodeData> =
-  ComponentType<StoryRemotionSceneProps<TData>>;
-
-export type StoryThreeSceneProps<TData extends StoryNodeData = StoryNodeData> =
-  StoryRenderProps<TData> & {
-    stageProps?: Record<string, unknown>;
-  };
-
-export type StoryThreeSceneComponent<TData extends StoryNodeData = StoryNodeData> = ComponentType<
-  StoryThreeSceneProps<TData>
->;
-
-export type StoryRendererRegistry<TData extends StoryNodeData = StoryNodeData> = {
-  web?: Record<string, StoryStageComponent<TData>>;
-  remotion?: Record<string, StoryRemotionSceneComponent<TData>>;
-  three?: Record<string, StoryThreeSceneComponent<TData>>;
+export type StoryRemotionSceneProps<
+  TData extends StoryNodeData = StoryNodeData,
+  TVars extends StoryVariables = StoryVariables,
+> = StoryRenderProps<TData, TVars> & {
+  frame: number;
+  absoluteFrame: number;
+  durationInFrames: number;
+  fps: number;
+  sceneProgress: number;
+  timelineScene: StoryTimelineScene<TData, TVars>;
 };
 
-export type StoryContentRenderer = (props: {
-  block: StoryContentBlock;
+export type StoryRemotionSceneComponent<
+  TData extends StoryNodeData = StoryNodeData,
+  TVars extends StoryVariables = StoryVariables,
+> = ComponentType<StoryRemotionSceneProps<TData, TVars>>;
+
+export type StoryThreeSceneProps<
+  TData extends StoryNodeData = StoryNodeData,
+  TVars extends StoryVariables = StoryVariables,
+> = StoryRenderProps<TData, TVars> & {
+  stageProps?: Record<string, unknown>;
+};
+
+export type StoryThreeSceneComponent<
+  TData extends StoryNodeData = StoryNodeData,
+  TVars extends StoryVariables = StoryVariables,
+> = ComponentType<StoryThreeSceneProps<TData, TVars>>;
+
+export type StoryRendererRegistry<
+  TData extends StoryNodeData = StoryNodeData,
+  TVars extends StoryVariables = StoryVariables,
+> = {
+  web?: Record<string, StoryStageComponent<TData, TVars>>;
+  remotion?: Record<string, StoryRemotionSceneComponent<TData, TVars>>;
+  three?: Record<string, StoryThreeSceneComponent<TData, TVars>>;
+};
+
+export type StoryContentBlockMap = {
+  [K in StoryContentBlock["type"]]: Extract<StoryContentBlock, { type: K }>;
+};
+
+export type StoryContentRendererFor<TBlock extends StoryContentBlock> = (props: {
+  block: TBlock;
   index: number;
   content: StoryContentBlock[];
 }) => ReactNode;
 
-export type StoryContentRendererRegistry = Record<string, StoryContentRenderer>;
+export type StoryContentRenderer = StoryContentRendererFor<StoryContentBlock>;
+
+export type StoryContentRendererRegistry<
+  TBlocks extends StoryContentBlockMap = StoryContentBlockMap,
+> = {
+  [K in keyof TBlocks]?: TBlocks[K] extends StoryContentBlock
+    ? StoryContentRendererFor<TBlocks[K]>
+    : never;
+};
 
 export type StoryContentRendererProps = {
   content?: StoryContentBlock[];

@@ -100,6 +100,125 @@ const contentBlockSchema = {
         },
       },
     },
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["type", "columns", "rows"],
+      properties: {
+        type: { const: "table" },
+        caption: { type: "string" },
+        columns: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["id", "header"],
+            properties: {
+              id: { type: "string" },
+              header: { type: "string" },
+              align: { enum: ["left", "center", "right"] },
+            },
+          },
+        },
+        rows: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: {
+              anyOf: [
+                { type: "string" },
+                { type: "number" },
+                { type: "boolean" },
+                { type: "null" },
+              ],
+            },
+          },
+        },
+      },
+    },
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["type", "code"],
+      properties: {
+        type: { const: "code" },
+        code: { type: "string" },
+        language: { type: "string" },
+        filename: { type: "string" },
+        highlightedLines: {
+          type: "array",
+          items: { type: "integer", minimum: 1 },
+        },
+      },
+    },
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["type", "chartType", "data"],
+      properties: {
+        type: { const: "chart" },
+        title: { type: "string" },
+        description: { type: "string" },
+        chartType: { enum: ["bar", "line", "area", "pie"] },
+        data: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: {
+              anyOf: [{ type: "string" }, { type: "number" }, { type: "null" }],
+            },
+          },
+        },
+        xKey: { type: "string" },
+        yKey: { type: "string" },
+        series: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["key"],
+            properties: {
+              key: { type: "string" },
+              label: { type: "string" },
+              color: { type: "string" },
+            },
+          },
+        },
+      },
+    },
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["type", "src", "title"],
+      properties: {
+        type: { const: "embed" },
+        src: { type: "string" },
+        title: { type: "string" },
+        provider: { enum: ["iframe", "youtube", "vimeo", "codepen", "custom"] },
+        aspectRatio: { enum: ["16:9", "4:3", "1:1", "auto"] },
+        allow: { type: "string" },
+      },
+    },
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["type", "content"],
+      properties: {
+        type: { const: "callout" },
+        tone: { enum: ["info", "success", "warning", "danger", "neutral"] },
+        title: { type: "string" },
+        content: { type: "string" },
+      },
+    },
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["type", "markdown"],
+      properties: {
+        type: { const: "markdown" },
+        markdown: { type: "string" },
+      },
+    },
   ],
 } satisfies JsonSchema;
 
@@ -113,6 +232,28 @@ const storyChoiceSchema = {
     target: { type: "string" },
     description: { type: "string" },
     disabled: { type: "boolean" },
+    hidden: { type: "boolean" },
+  },
+} satisfies JsonSchema;
+
+const runtimeStateSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["variables", "score", "inventory", "flags"],
+  properties: {
+    variables: {
+      type: "object",
+      additionalProperties: true,
+    },
+    score: { type: "number" },
+    inventory: {
+      type: "array",
+      items: { type: "string" },
+    },
+    flags: {
+      type: "object",
+      additionalProperties: { type: "boolean" },
+    },
   },
 } satisfies JsonSchema;
 
@@ -191,6 +332,7 @@ export const storyDocumentJsonSchema = {
         minimapLabel: { type: "string" },
       },
     },
+    initialState: runtimeStateSchema,
   },
   $defs: {
     storyNode: {

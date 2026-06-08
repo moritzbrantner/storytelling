@@ -1,18 +1,25 @@
-import type { StoryDocument, StoryNode, StoryNodeData, StoryNodeTreeEntry } from "./story-model";
+import type {
+  StoryDocument,
+  StoryNode,
+  StoryNodeData,
+  StoryNodeTreeEntry,
+  StoryVariables,
+} from "./story-model";
 
-export function getStoryNodeEntries<TData extends StoryNodeData>(
-  story: StoryDocument<TData>,
-): StoryNodeTreeEntry<TData>[] {
-  const entries: StoryNodeTreeEntry<TData>[] = [];
+export function getStoryNodeEntries<
+  TData extends StoryNodeData,
+  TVars extends StoryVariables = StoryVariables,
+>(story: StoryDocument<TData, TVars>): StoryNodeTreeEntry<TData, TVars>[] {
+  const entries: StoryNodeTreeEntry<TData, TVars>[] = [];
 
   const visit = (
-    node: StoryNode<TData>,
+    node: StoryNode<TData, TVars>,
     indexPath: number[],
     path: string,
     ancestorNodeIds: string[],
     parentNodeId?: string,
   ) => {
-    const entry: StoryNodeTreeEntry<TData> = {
+    const entry: StoryNodeTreeEntry<TData, TVars> = {
       node,
       nodeId: node.id,
       parentNodeId,
@@ -43,28 +50,31 @@ export function getStoryNodeEntries<TData extends StoryNodeData>(
   return entries;
 }
 
-export function getStoryNodes<TData extends StoryNodeData>(
-  story: StoryDocument<TData>,
-): StoryNode<TData>[] {
+export function getStoryNodes<
+  TData extends StoryNodeData,
+  TVars extends StoryVariables = StoryVariables,
+>(story: StoryDocument<TData, TVars>): StoryNode<TData, TVars>[] {
   return getStoryNodeEntries(story).map((entry) => entry.node);
 }
 
-export function createStoryNodeLookup<TData extends StoryNodeData>(
-  story: StoryDocument<TData>,
-): Map<string, StoryNode<TData>> {
+export function createStoryNodeLookup<
+  TData extends StoryNodeData,
+  TVars extends StoryVariables = StoryVariables,
+>(story: StoryDocument<TData, TVars>): Map<string, StoryNode<TData, TVars>> {
   return new Map(getStoryNodeEntries(story).map((entry) => [entry.nodeId, entry.node] as const));
 }
 
-export function createStoryNodeEntryLookup<TData extends StoryNodeData>(
-  story: StoryDocument<TData>,
-): Map<string, StoryNodeTreeEntry<TData>> {
+export function createStoryNodeEntryLookup<
+  TData extends StoryNodeData,
+  TVars extends StoryVariables = StoryVariables,
+>(story: StoryDocument<TData, TVars>): Map<string, StoryNodeTreeEntry<TData, TVars>> {
   return new Map(getStoryNodeEntries(story).map((entry) => [entry.nodeId, entry] as const));
 }
 
-export function getStoryNodeEntry<TData extends StoryNodeData>(
-  story: StoryDocument<TData>,
-  nodeId: string,
-): StoryNodeTreeEntry<TData> {
+export function getStoryNodeEntry<
+  TData extends StoryNodeData,
+  TVars extends StoryVariables = StoryVariables,
+>(story: StoryDocument<TData, TVars>, nodeId: string): StoryNodeTreeEntry<TData, TVars> {
   const entry = createStoryNodeEntryLookup(story).get(nodeId);
 
   if (!entry) {
@@ -74,10 +84,10 @@ export function getStoryNodeEntry<TData extends StoryNodeData>(
   return entry;
 }
 
-function getNextSiblingEntry<TData extends StoryNodeData>(
-  entries: StoryNodeTreeEntry<TData>[],
-  entry: StoryNodeTreeEntry<TData>,
-) {
+function getNextSiblingEntry<
+  TData extends StoryNodeData,
+  TVars extends StoryVariables = StoryVariables,
+>(entries: StoryNodeTreeEntry<TData, TVars>[], entry: StoryNodeTreeEntry<TData, TVars>) {
   const siblingIndexPath = [...entry.indexPath];
   const lastIndex = siblingIndexPath[siblingIndexPath.length - 1];
 
@@ -94,9 +104,9 @@ function getNextSiblingEntry<TData extends StoryNodeData>(
   );
 }
 
-function getParentEntry<TData extends StoryNodeData>(
-  entries: StoryNodeTreeEntry<TData>[],
-  entry: StoryNodeTreeEntry<TData>,
+function getParentEntry<TData extends StoryNodeData, TVars extends StoryVariables = StoryVariables>(
+  entries: StoryNodeTreeEntry<TData, TVars>[],
+  entry: StoryNodeTreeEntry<TData, TVars>,
 ) {
   const parentIndexPath = entry.indexPath.slice(0, -1);
 
@@ -111,10 +121,10 @@ function getParentEntry<TData extends StoryNodeData>(
   );
 }
 
-export function getImplicitStoryContinuationTarget<TData extends StoryNodeData>(
-  story: StoryDocument<TData>,
-  node: StoryNode<TData>,
-): string | undefined {
+export function getImplicitStoryContinuationTarget<
+  TData extends StoryNodeData,
+  TVars extends StoryVariables = StoryVariables,
+>(story: StoryDocument<TData, TVars>, node: StoryNode<TData, TVars>): string | undefined {
   if (node.children?.[0]) {
     return node.children[0].id;
   }

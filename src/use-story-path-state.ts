@@ -2,32 +2,65 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { StoryChoice, StoryDocument, StoryHistoryEntry, StoryNodeData } from "./story-model";
+import type {
+  StoryChoice,
+  StoryDocument,
+  StoryHistoryEntry,
+  StoryNodeData,
+  StoryRuntimeState,
+  StoryStateHooks,
+  StoryStateSnapshot,
+  StoryVariables,
+} from "./story-model";
 import { createStoryPathState, type StoryPathState } from "./story-state";
-import { getStoryChoices } from "./story-validation";
+import {
+  createInitialStoryRuntimeState,
+  createStorySnapshot,
+  getVisibleStoryChoices,
+} from "./story-state-engine";
 
-export type UseStoryPathStateOptions<TData extends StoryNodeData = StoryNodeData> = {
+export type UseStoryPathStateOptions<
+  TData extends StoryNodeData = StoryNodeData,
+  TVars extends StoryVariables = StoryVariables,
+> = {
+  snapshot?: StoryStateSnapshot<TData, TVars>;
+  defaultSnapshot?: StoryStateSnapshot<TData, TVars>;
+  defaultState?: StoryRuntimeState<TVars>;
+  hooks?: StoryStateHooks<TData, TVars>;
+  onSnapshotChange?: (
+    snapshot: StoryStateSnapshot<TData, TVars>,
+    state: StoryPathState<TData, TVars>,
+  ) => void;
+  /** @deprecated Use snapshot instead. */
   choiceIds?: string[];
+  /** @deprecated Use defaultSnapshot instead. */
   defaultChoiceIds?: string[];
   autoAdvanceLinearNodes?: boolean;
   stopAt?: string;
   defaultStopAt?: string;
   onStopAtChange?: (nodeId?: string) => void;
-  onChoiceIdsChange?: (choiceIds: string[], state: StoryPathState<TData>) => void;
-  onPathChange?: (history: StoryHistoryEntry<TData>[]) => void;
+  /** @deprecated Use onSnapshotChange instead. */
+  onChoiceIdsChange?: (choiceIds: string[], state: StoryPathState<TData, TVars>) => void;
+  onPathChange?: (history: StoryHistoryEntry<TData, TVars>[]) => void;
 };
 
-export type UseStoryPathStateResult<TData extends StoryNodeData = StoryNodeData> =
-  StoryPathState<TData> & {
-    choices: StoryChoice[];
-    canGoBack: boolean;
-    choose: (choiceId: string) => void;
-    goBack: () => void;
-    restart: () => void;
-    setChoiceIds: (choiceIds: string[]) => void;
-    stopAt?: string;
-    setStopAt: (nodeId?: string) => void;
-  };
+export type UseStoryPathStateResult<
+  TData extends StoryNodeData = StoryNodeData,
+  TVars extends StoryVariables = StoryVariables,
+> = StoryPathState<TData, TVars> & {
+  choices: StoryChoice<TData, TVars>[];
+  visibleChoices: StoryChoice<TData, TVars>[];
+  canGoBack: boolean;
+  choose: (choiceId: string) => void;
+  goBack: () => void;
+  restart: () => void;
+  setSnapshot: (snapshot: StoryStateSnapshot<TData, TVars>) => void;
+  setRuntimeState: (state: StoryRuntimeState<TVars>) => void;
+  /** @deprecated Use setSnapshot instead. */
+  setChoiceIds: (choiceIds: string[]) => void;
+  stopAt?: string;
+  setStopAt: (nodeId?: string) => void;
+};
 
 function getChoiceKey(choiceIds: string[]) {
   return choiceIds.join("|");
@@ -37,30 +70,49 @@ function getHistoryChoiceIds<TData extends StoryNodeData>(history: StoryHistoryE
   return history.flatMap((entry) => (entry.choiceId ? [entry.choiceId] : []));
 }
 
-export function useStoryPathState<TData extends StoryNodeData>(
-  story: StoryDocument<TData>,
-  options: UseStoryPathStateOptions<TData> = {},
-): UseStoryPathStateResult<TData> {
-  const { onChoiceIdsChange, onPathChange, onStopAtChange } = options;
+export function useStoryPathState<
+  TData extends StoryNodeData,
+  TVars extends StoryVariables = StoryVariables,
+>(
+  story: StoryDocument<TData, TVars>,
+  options: UseStoryPathStateOptions<TData, TVars> = {},
+): UseStoryPathStateResult<TData, TVars> {
+  const { onChoiceIdsChange, onPathChange, onSnapshotChange, onStopAtChange } = options;
   const autoAdvanceLinearNodes = options.autoAdvanceLinearNodes ?? false;
-  const isControlled = options.choiceIds !== undefined;
+  const isControlled = options.snapshot !== undefined;
+  const isChoiceIdsControlled = options.choiceIds !== undefined;
   const isStopAtControlled = Object.hasOwn(options, "stopAt");
   const controlledChoiceIds = options.choiceIds ?? [];
   const controlledStopAt = options.stopAt;
   const defaultChoiceIds = options.defaultChoiceIds ?? [];
+  const defaultSnapshot = options.defaultSnapshot;
   const defaultStopAt = options.defaultStopAt;
   const controlledChoiceKey = getChoiceKey(controlledChoiceIds);
   const defaultChoiceKey = getChoiceKey(defaultChoiceIds);
   const [uncontrolledChoiceIds, setUncontrolledChoiceIds] = useState(defaultChoiceIds);
+  const [uncontrolledSnapshot, setUncontrolledSnapshot] = useState<
+    StoryStateSnapshot<TData, TVars> | undefined
+  >(defaultSnapshot);
   const [uncontrolledStopAt, setUncontrolledStopAt] = useState(defaultStopAt);
-  const activeChoiceIds = isControlled ? controlledChoiceIds : uncontrolledChoiceIds;
+  const activeChoiceIds = isChoiceIdsControlled ? controlledChoiceIds : uncontrolledChoiceIds;
+  const activeSnapshot = isChoiceIdsControlled
+    ? undefined
+    : isControlled
+      ? options.snapshot
+      : uncontrolledSnapshot;
   const activeStopAt = isStopAtControlled ? controlledStopAt : uncontrolledStopAt;
 
   useEffect(() => {
-    if (!isControlled) {
+    if (!isChoiceIdsControlled) {
       setUncontrolledChoiceIds(defaultChoiceIds);
     }
-  }, [defaultChoiceKey, isControlled]);
+  }, [defaultChoiceKey, isChoiceIdsControlled]);
+
+  useEffect(() => {
+    if (!isControlled) {
+      setUncontrolledSnapshot(defaultSnapshot);
+    }
+  }, [defaultSnapshot, isControlled]);
 
   useEffect(() => {
     if (!isStopAtControlled) {
@@ -71,20 +123,44 @@ export function useStoryPathState<TData extends StoryNodeData>(
   const state = useMemo(
     () =>
       createStoryPathState(story, {
-        choiceIds: activeChoiceIds,
+        choiceIds: activeSnapshot ? undefined : activeChoiceIds,
+        snapshot: activeSnapshot,
+        defaultState: options.defaultState,
+        hooks: options.hooks,
         autoAdvanceLinearNodes,
         stopAt: activeStopAt,
       }),
-    [activeChoiceIds, activeStopAt, autoAdvanceLinearNodes, story],
+    [
+      activeChoiceIds,
+      activeSnapshot,
+      activeStopAt,
+      autoAdvanceLinearNodes,
+      options.defaultState,
+      options.hooks,
+      story,
+    ],
   );
-  const choices = getStoryChoices(story, state.currentNode);
+  const visibleChoices = getVisibleStoryChoices(
+    story,
+    state.currentNode,
+    state.history,
+    state.state,
+    options.hooks,
+  );
+  const choices = visibleChoices;
   const canGoBack = state.history.length > 1;
 
   useEffect(() => {
-    if (isControlled) {
+    if (isChoiceIdsControlled) {
       setUncontrolledChoiceIds(controlledChoiceIds);
     }
-  }, [controlledChoiceKey, isControlled]);
+  }, [controlledChoiceKey, isChoiceIdsControlled]);
+
+  useEffect(() => {
+    if (isControlled) {
+      setUncontrolledSnapshot(options.snapshot);
+    }
+  }, [isControlled, options.snapshot]);
 
   useEffect(() => {
     if (isStopAtControlled) {
@@ -96,15 +172,15 @@ export function useStoryPathState<TData extends StoryNodeData>(
     onPathChange?.(state.history);
   }, [onPathChange, state.history]);
 
-  const commitState = useCallback(
-    (nextChoiceIds: string[], nextStopAt = activeStopAt) => {
-      const nextState = createStoryPathState(story, {
-        choiceIds: nextChoiceIds,
-        autoAdvanceLinearNodes,
-        stopAt: nextStopAt,
-      });
+  const commitResolvedState = useCallback(
+    (nextState: StoryPathState<TData, TVars>, nextStopAt = activeStopAt) => {
+      const nextChoiceIds = getHistoryChoiceIds(nextState.history);
 
-      if (!isControlled) {
+      if (!isControlled && !isChoiceIdsControlled) {
+        setUncontrolledSnapshot(nextState.snapshot);
+      }
+
+      if (!isChoiceIdsControlled) {
         setUncontrolledChoiceIds(nextChoiceIds);
       }
 
@@ -112,6 +188,7 @@ export function useStoryPathState<TData extends StoryNodeData>(
         setUncontrolledStopAt(nextStopAt);
       }
 
+      onSnapshotChange?.(nextState.snapshot, nextState);
       onChoiceIdsChange?.(nextChoiceIds, nextState);
       if (nextStopAt !== activeStopAt) {
         onStopAtChange?.(nextStopAt);
@@ -119,11 +196,33 @@ export function useStoryPathState<TData extends StoryNodeData>(
     },
     [
       activeStopAt,
-      autoAdvanceLinearNodes,
+      isChoiceIdsControlled,
       isControlled,
       isStopAtControlled,
       onChoiceIdsChange,
+      onSnapshotChange,
       onStopAtChange,
+    ],
+  );
+
+  const commitState = useCallback(
+    (nextChoiceIds: string[], nextStopAt = activeStopAt) => {
+      const nextState = createStoryPathState(story, {
+        choiceIds: nextChoiceIds,
+        defaultState: options.defaultState,
+        hooks: options.hooks,
+        autoAdvanceLinearNodes,
+        stopAt: nextStopAt,
+      });
+
+      commitResolvedState(nextState, nextStopAt);
+    },
+    [
+      activeStopAt,
+      autoAdvanceLinearNodes,
+      commitResolvedState,
+      options.defaultState,
+      options.hooks,
       story,
     ],
   );
@@ -135,9 +234,24 @@ export function useStoryPathState<TData extends StoryNodeData>(
 
   const setStopAt = useCallback(
     (nodeId?: string) => {
-      commitState(activeChoiceIds, nodeId);
+      const nextState = createStoryPathState(story, {
+        snapshot: state.snapshot,
+        defaultState: options.defaultState,
+        hooks: options.hooks,
+        autoAdvanceLinearNodes,
+        stopAt: nodeId,
+      });
+
+      commitResolvedState(nextState, nodeId);
     },
-    [activeChoiceIds, commitState],
+    [
+      autoAdvanceLinearNodes,
+      commitResolvedState,
+      options.defaultState,
+      options.hooks,
+      state.snapshot,
+      story,
+    ],
   );
 
   const choose = useCallback(
@@ -145,13 +259,51 @@ export function useStoryPathState<TData extends StoryNodeData>(
       const choice = choices.find((candidate) => candidate.id === choiceId && !candidate.disabled);
       if (!choice) return;
 
-      commitState([...state.choiceIds, choice.id], undefined);
+      const nextState = createStoryPathState(story, {
+        snapshot: state.snapshot,
+        choose: choice.id,
+        defaultState: options.defaultState,
+        hooks: options.hooks,
+        autoAdvanceLinearNodes,
+      });
+
+      commitResolvedState(nextState, undefined);
     },
-    [choices, commitState, state.choiceIds],
+    [
+      autoAdvanceLinearNodes,
+      choices,
+      commitResolvedState,
+      options.defaultState,
+      options.hooks,
+      state.snapshot,
+      story,
+    ],
   );
 
   const goBack = useCallback(() => {
     if (state.history.length <= 1) return;
+
+    const previousHistory = state.history.slice(0, -1);
+    const previousEntry = previousHistory[previousHistory.length - 1];
+    if (previousEntry?.state) {
+      const previousSnapshot = createStorySnapshot(
+        previousEntry.nodeId,
+        previousHistory,
+        previousEntry.state,
+      );
+      const previousState = createStoryPathState(story, {
+        snapshot: previousSnapshot,
+        defaultState: options.defaultState,
+        hooks: options.hooks,
+        autoAdvanceLinearNodes: false,
+      });
+
+      commitResolvedState(
+        previousState,
+        autoAdvanceLinearNodes ? previousEntry.nodeId : activeStopAt,
+      );
+      return;
+    }
 
     if (autoAdvanceLinearNodes) {
       const previousNodeId = state.history[state.history.length - 2]?.nodeId;
@@ -162,19 +314,65 @@ export function useStoryPathState<TData extends StoryNodeData>(
     }
 
     commitChoiceIds(state.choiceIds.slice(0, -1));
-  }, [autoAdvanceLinearNodes, commitChoiceIds, commitState, state.choiceIds, state.history]);
+  }, [
+    activeStopAt,
+    autoAdvanceLinearNodes,
+    commitChoiceIds,
+    commitResolvedState,
+    commitState,
+    options.defaultState,
+    options.hooks,
+    state.choiceIds,
+    state.history,
+    story,
+  ]);
 
   const restart = useCallback(() => {
-    commitState([], undefined);
-  }, [commitState]);
+    const initialState = createInitialStoryRuntimeState(story, {
+      defaultState: options.defaultState,
+      hooks: options.hooks,
+    });
+    const nextState = createStoryPathState(story, {
+      snapshot: undefined,
+      defaultState: initialState,
+      hooks: options.hooks,
+      autoAdvanceLinearNodes: false,
+    });
+
+    commitResolvedState(nextState, undefined);
+  }, [commitResolvedState, options.defaultState, options.hooks, story]);
+
+  const setSnapshot = useCallback(
+    (snapshot: StoryStateSnapshot<TData, TVars>) => {
+      const nextState = createStoryPathState(story, {
+        snapshot,
+        defaultState: options.defaultState,
+        hooks: options.hooks,
+        autoAdvanceLinearNodes,
+      });
+
+      commitResolvedState(nextState);
+    },
+    [autoAdvanceLinearNodes, commitResolvedState, options.defaultState, options.hooks, story],
+  );
+
+  const setRuntimeState = useCallback(
+    (runtimeState: StoryRuntimeState<TVars>) => {
+      setSnapshot(createStorySnapshot(state.currentNode.id, state.history, runtimeState));
+    },
+    [setSnapshot, state.currentNode.id, state.history],
+  );
 
   return {
     ...state,
     choices,
+    visibleChoices,
     canGoBack,
     choose,
     goBack,
     restart,
+    setSnapshot,
+    setRuntimeState,
     setChoiceIds: commitChoiceIds,
     stopAt: activeStopAt,
     setStopAt,

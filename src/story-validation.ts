@@ -1,4 +1,10 @@
-import type { StoryChoice, StoryDocument, StoryNode, StoryNodeData } from "./story-model";
+import type {
+  StoryChoice,
+  StoryDocument,
+  StoryNode,
+  StoryNodeData,
+  StoryVariables,
+} from "./story-model";
 import {
   createStoryNodeLookup as createTreeStoryNodeLookup,
   getImplicitStoryContinuationTarget,
@@ -34,6 +40,13 @@ export type StoryValidationIssueCode =
   | "invalid-node-scroll-units"
   | "invalid-transition-duration"
   | "invalid-content-block"
+  | "invalid-table-block"
+  | "invalid-code-block"
+  | "invalid-chart-block"
+  | "invalid-embed-block"
+  | "invalid-callout-block"
+  | "invalid-markdown-block"
+  | "invalid-story-snapshot"
   | "missing-choice-target"
   | "missing-next-target"
   | "story-cycle";
@@ -113,19 +126,121 @@ function isValidContentBlock(block: unknown) {
     case "audio":
     case "video":
       return typeof record.src === "string";
+    case "table": {
+      if (!Array.isArray(record.columns) || !Array.isArray(record.rows)) return false;
+      const columnIds = new Set<string>();
+      for (const column of record.columns) {
+        if (!column || typeof column !== "object") return false;
+        const columnRecord = column as Record<string, unknown>;
+        if (typeof columnRecord.id !== "string" || typeof columnRecord.header !== "string") {
+          return false;
+        }
+        if (
+          columnRecord.align !== undefined &&
+          columnRecord.align !== "left" &&
+          columnRecord.align !== "center" &&
+          columnRecord.align !== "right"
+        ) {
+          return false;
+        }
+        if (columnIds.has(columnRecord.id)) return false;
+        columnIds.add(columnRecord.id);
+      }
+
+      return record.rows.every((row) => {
+        if (!row || typeof row !== "object" || Array.isArray(row)) return false;
+
+        return Object.entries(row as Record<string, unknown>).every(
+          ([key, value]) =>
+            columnIds.has(key) &&
+            (typeof value === "string" ||
+              typeof value === "number" ||
+              typeof value === "boolean" ||
+              value === null),
+        );
+      });
+    }
+    case "code":
+      return (
+        typeof record.code === "string" &&
+        (record.highlightedLines === undefined ||
+          (Array.isArray(record.highlightedLines) &&
+            record.highlightedLines.every((line) => Number.isInteger(line) && Number(line) >= 1)))
+      );
+    case "chart":
+      return (
+        (record.chartType === "bar" ||
+          record.chartType === "line" ||
+          record.chartType === "area" ||
+          record.chartType === "pie") &&
+        Array.isArray(record.data) &&
+        record.data.length > 0 &&
+        record.data.every(
+          (row) =>
+            row &&
+            typeof row === "object" &&
+            !Array.isArray(row) &&
+            Object.values(row as Record<string, unknown>).every(
+              (value) => typeof value === "string" || typeof value === "number" || value === null,
+            ),
+        )
+      );
+    case "embed":
+      return (
+        typeof record.src === "string" &&
+        record.src.length > 0 &&
+        typeof record.title === "string" &&
+        record.title.length > 0
+      );
+    case "callout":
+      return (
+        typeof record.content === "string" &&
+        (record.tone === undefined ||
+          record.tone === "info" ||
+          record.tone === "success" ||
+          record.tone === "warning" ||
+          record.tone === "danger" ||
+          record.tone === "neutral")
+      );
+    case "markdown":
+      return typeof record.markdown === "string";
     default:
       return false;
   }
 }
 
-export function createStoryNodeLookup<TData extends StoryNodeData>(story: StoryDocument<TData>) {
+function getInvalidContentIssueCode(block: unknown): StoryValidationIssueCode {
+  if (!block || typeof block !== "object") return "invalid-content-block";
+
+  switch ((block as Record<string, unknown>).type) {
+    case "table":
+      return "invalid-table-block";
+    case "code":
+      return "invalid-code-block";
+    case "chart":
+      return "invalid-chart-block";
+    case "embed":
+      return "invalid-embed-block";
+    case "callout":
+      return "invalid-callout-block";
+    case "markdown":
+      return "invalid-markdown-block";
+    default:
+      return "invalid-content-block";
+  }
+}
+
+export function createStoryNodeLookup<
+  TData extends StoryNodeData,
+  TVars extends StoryVariables = StoryVariables,
+>(story: StoryDocument<TData, TVars>) {
   return createTreeStoryNodeLookup(story);
 }
 
-export function getStoryNode<TData extends StoryNodeData>(
-  story: StoryDocument<TData>,
-  nodeId: string,
-) {
+export function getStoryNode<
+  TData extends StoryNodeData,
+  TVars extends StoryVariables = StoryVariables,
+>(story: StoryDocument<TData, TVars>, nodeId: string) {
   const node = createStoryNodeLookup(story).get(nodeId);
 
   if (!node) {
@@ -135,10 +250,10 @@ export function getStoryNode<TData extends StoryNodeData>(
   return node;
 }
 
-export function getStoryChoices<TData extends StoryNodeData>(
-  story: StoryDocument<TData>,
-  node: StoryNode<TData>,
-): StoryChoice[] {
+export function getStoryChoices<
+  TData extends StoryNodeData,
+  TVars extends StoryVariables = StoryVariables,
+>(story: StoryDocument<TData, TVars>, node: StoryNode<TData, TVars>): StoryChoice<TData, TVars>[] {
   if (node.choices && node.choices.length > 0) {
     return node.choices;
   }
@@ -158,17 +273,17 @@ export function getStoryChoices<TData extends StoryNodeData>(
   ];
 }
 
-export function isStoryEnding<TData extends StoryNodeData>(
-  story: StoryDocument<TData>,
-  node: StoryNode<TData>,
-) {
+export function isStoryEnding<
+  TData extends StoryNodeData,
+  TVars extends StoryVariables = StoryVariables,
+>(story: StoryDocument<TData, TVars>, node: StoryNode<TData, TVars>) {
   return getStoryChoices(story, node).length === 0;
 }
 
-export function validateStoryDocument<TData extends StoryNodeData>(
-  story: StoryDocument<TData>,
-  options: StoryValidationOptions = {},
-) {
+export function validateStoryDocument<
+  TData extends StoryNodeData,
+  TVars extends StoryVariables = StoryVariables,
+>(story: StoryDocument<TData, TVars>, options: StoryValidationOptions = {}) {
   const issues: StoryValidationIssue[] = [];
   const storyId = getStoryId(story);
   const strict = isStrictMode(options);
@@ -326,8 +441,9 @@ export function validateStoryDocument<TData extends StoryNodeData>(
     if (strict) {
       for (const [contentIndex, block] of (node.content ?? []).entries()) {
         if (!isValidContentBlock(block)) {
+          const code = getInvalidContentIssueCode(block);
           addIssue(issues, {
-            code: "invalid-content-block",
+            code,
             message: `Story node "${node.id}" has an invalid content block.`,
             path: `${nodePath}.content.${contentIndex}`,
             storyId,
@@ -467,10 +583,10 @@ export function validateStoryDocument<TData extends StoryNodeData>(
   return issues;
 }
 
-export function assertStoryDocument<TData extends StoryNodeData>(
-  story: StoryDocument<TData>,
-  options: StoryValidationOptions = {},
-) {
+export function assertStoryDocument<
+  TData extends StoryNodeData,
+  TVars extends StoryVariables = StoryVariables,
+>(story: StoryDocument<TData, TVars>, options: StoryValidationOptions = {}) {
   const issues = validateStoryDocument(story, options);
 
   if (issues.length > 0) {
@@ -480,17 +596,17 @@ export function assertStoryDocument<TData extends StoryNodeData>(
   return story;
 }
 
-export function validateStory<TData extends StoryNodeData>(
-  story: StoryDocument<TData>,
-  options: StoryValidationOptions = {},
-) {
+export function validateStory<
+  TData extends StoryNodeData,
+  TVars extends StoryVariables = StoryVariables,
+>(story: StoryDocument<TData, TVars>, options: StoryValidationOptions = {}) {
   return assertStoryDocument(story, options);
 }
 
-export function defineStory<TData extends StoryNodeData>(
-  story: StoryDocument<TData>,
-  options: StoryValidationOptions = {},
-) {
+export function defineStory<
+  TData extends StoryNodeData,
+  TVars extends StoryVariables = StoryVariables,
+>(story: StoryDocument<TData, TVars>, options: StoryValidationOptions = {}) {
   return validateStory(story, options);
 }
 
@@ -545,7 +661,10 @@ function collectStoryGraphCycles<TData extends StoryNodeData>(
   }
 }
 
-export function maybeValidateStory<TData extends StoryNodeData>(story: StoryDocument<TData>) {
+export function maybeValidateStory<
+  TData extends StoryNodeData,
+  TVars extends StoryVariables = StoryVariables,
+>(story: StoryDocument<TData, TVars>) {
   if (isDevelopment) {
     assertStoryDocument(story);
   }
