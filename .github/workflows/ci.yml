@@ -39,7 +39,7 @@ jobs:
     with:
       bun_version: 1.3.14
       install_command: bun install --frozen-lockfile
-      build_command: bun run build
+      pre_command: bun run build
       package_check_command: bun run size && bun run test:package && bun run test:consumer && bun run pack:dry
       timeout_minutes: 30
     secrets:
