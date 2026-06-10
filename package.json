@@ -78,7 +78,7 @@
   },
   "dependencies": {
     "@moritzbrantner/timeline-editor": "^1.0.0",
-    "@moritzbrantner/ui": "^0.8.0",
+    "@moritzbrantner/ui": "^1.0.0",
     "motion": "^12.40.0"
   },
   "devDependencies": {
