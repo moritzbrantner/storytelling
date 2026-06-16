@@ -134,13 +134,17 @@ export function applyStoryChoiceState<TData extends StoryNodeData, TState extend
   state: TState,
   hooks?: StoryStateHooks<TData, TState>,
 ) {
+  if (!hooks?.applyChoice) {
+    return state;
+  }
+
   const previousState = cloneStoryState(state);
   const hookContext = {
     ...createPredicateContext(story, node, history, state, choice),
     previousState,
   };
 
-  return hooks?.applyChoice?.(hookContext) ?? state;
+  return hooks.applyChoice(hookContext);
 }
 
 export function applyStoryNodeState<TData extends StoryNodeData, TState extends StoryState>(
@@ -150,13 +154,17 @@ export function applyStoryNodeState<TData extends StoryNodeData, TState extends 
   state: TState,
   hooks?: StoryStateHooks<TData, TState>,
 ) {
+  if (!hooks?.applyNode) {
+    return state;
+  }
+
   const previousState = cloneStoryState(state);
   const context = {
     ...createPredicateContext(story, node, history, state),
     previousState,
   };
 
-  return hooks?.applyNode?.(context) ?? state;
+  return hooks.applyNode(context);
 }
 
 export function canEnterStoryNode<TData extends StoryNodeData, TState extends StoryState>(

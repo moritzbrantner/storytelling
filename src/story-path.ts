@@ -18,8 +18,8 @@ import {
   canEnterStoryNode,
   createInitialStoryState,
   createStorySnapshot,
-  getSelectableStoryChoices,
   getVisibleStoryChoices,
+  isStoryChoiceEnabled,
 } from "./story-state-engine";
 
 const DEFAULT_DURATION_IN_FRAMES = 120;
@@ -163,12 +163,8 @@ export function resolveStoryPath<
       state,
       options.hooks,
     );
-    const selectableChoices = getSelectableStoryChoices(
-      story,
-      currentNode,
-      history,
-      state,
-      options.hooks,
+    const selectableChoices = visibleChoices.filter((choice) =>
+      isStoryChoiceEnabled(story, currentNode, choice, history, state, options.hooks),
     );
     const hasExplicitChoices = (currentNode.choices?.length ?? 0) > 0;
     if (visibleChoices.length === 0) {
