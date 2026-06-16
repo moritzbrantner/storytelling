@@ -11,7 +11,7 @@ import type {
   StoryTimelineScene,
 } from "./story-model";
 import { createStoryNodeEntryLookup, getStoryNodeEntries } from "./story-node-tree";
-import { createStoryNodeLookup, maybeValidateStory } from "./story-validation";
+import { maybeValidateStory } from "./story-validation";
 import {
   applyStoryChoiceState,
   applyStoryNodeState,
@@ -106,8 +106,8 @@ export function resolveStoryPath<
   options: ResolveStoryPathOptions<TData, TState> = {},
 ): ResolvedStoryPath<TData, TState> {
   const story = maybeValidateStory(input);
-  const nodeLookup = createStoryNodeLookup(story);
   const nodeEntries = getStoryNodeEntries(story);
+  const nodeLookup = new Map(nodeEntries.map((entry) => [entry.nodeId, entry.node] as const));
   const nodes: StoryNode<TData, TState>[] = [];
   const history: StoryHistoryEntry<TData, TState>[] = [];
   const routeChoiceIds = options.routeChoiceIds ?? [];
@@ -274,10 +274,10 @@ export function resolveStoryPath<
       choiceId: selectedChoice.id,
       data: nextNode.data,
     };
-    const nextHistory = [...history, nextHistoryEntry];
-    state = applyStoryNodeState(story, nextNode, nextHistory, choiceState, options.hooks);
+    history.push(nextHistoryEntry);
+    state = applyStoryNodeState(story, nextNode, history, choiceState, options.hooks);
     nodes.push(nextNode);
-    history.push(withHistoryState(nextHistoryEntry, state));
+    history[history.length - 1] = withHistoryState(nextHistoryEntry, state);
   }
 
   return createResolvedPath({

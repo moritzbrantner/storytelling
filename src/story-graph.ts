@@ -10,7 +10,7 @@ import type {
   StorySnapshot,
 } from "./story-model";
 import { getStoryNodeEntries } from "./story-node-tree";
-import { assertStoryDocument, createStoryNodeLookup, getStoryChoices } from "./story-validation";
+import { assertStoryDocument, getStoryChoices } from "./story-validation";
 import {
   applyStoryChoiceState,
   applyStoryNodeState,
@@ -81,8 +81,8 @@ export function compileStory<TData extends StoryNodeData, TState extends StorySt
   input: StoryDocument<TData, TState>,
 ): CompiledStory<TData, TState> {
   const story = assertStoryDocument(input);
-  const nodeLookup = createStoryNodeLookup(story);
   const nodeEntries = getStoryNodeEntries(story);
+  const nodeLookup = new Map(nodeEntries.map((entry) => [entry.nodeId, entry.node] as const));
   const compiledNodes = new Map<string, CompiledStoryNode<TData, TState>>();
   const edges: StoryGraphEdge<TData, TState>[] = [];
 

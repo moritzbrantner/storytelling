@@ -127,7 +127,7 @@ function AuthoringWorkbench() {
       </div>
 
       <div className="grid items-stretch gap-3 min-[760px]:grid-cols-3">
-        <div className="min-h-60 rounded-lg border border-white/15 bg-[#080c0c]/50 p-4 backdrop-blur-xl">
+        <div className="authoring-panel min-h-60 rounded-lg border border-white/15 bg-[#080c0c]/50 p-4 backdrop-blur-xl">
           <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-white/60">
             Diagnostics
           </span>
@@ -537,7 +537,8 @@ Transition ${getTransitionSummary(activeAutoscrollPreset.transition)}`;
                 key={`${activeExample.id}-${activePreset.id}`}
                 story={activeExample.story}
                 registry={storyRegistry}
-                defaultSnapshot={presetPath.snapshot}
+                snapshot={isLinearStory ? linearScrollPath.snapshot : undefined}
+                defaultSnapshot={isLinearStory ? undefined : presetPath.snapshot}
                 hooks={activeExample.id === "signal" ? signalStoryHooks : undefined}
                 onPathChange={setHistory}
               />
@@ -546,7 +547,8 @@ Transition ${getTransitionSummary(activeAutoscrollPreset.transition)}`;
                 key={`${activeExample.id}-${activePreset.id}`}
                 story={activeExample.story}
                 registry={storyRegistry}
-                defaultSnapshot={presetPath.snapshot}
+                snapshot={isLinearStory ? linearScrollPath.snapshot : undefined}
+                defaultSnapshot={isLinearStory ? undefined : presetPath.snapshot}
                 hooks={activeExample.id === "signal" ? signalStoryHooks : undefined}
                 transition={{ type: "fade", scrollUnits: 16 }}
                 onPathChange={setHistory}
