@@ -9,29 +9,28 @@ import type {
   StoryNode,
   StoryNodeData,
   StoryNodeTreeEntry,
-  StoryRuntimeState,
-  StoryStateSnapshot,
+  StoryState,
+  StorySnapshot,
   StoryTimelineScene,
-  StoryVariables,
 } from "./story-model";
 
 export type StoryRenderProps<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 > = {
-  story: StoryDocument<TData, TVars>;
-  node: StoryNode<TData, TVars>;
-  nodeEntry?: StoryNodeTreeEntry<TData, TVars>;
-  history: StoryHistoryEntry<TData, TVars>[];
-  path: ResolvedStoryPath<TData, TVars>;
-  state: StoryRuntimeState<TVars>;
-  snapshot: StoryStateSnapshot<TData, TVars>;
+  story: StoryDocument<TData, TState>;
+  node: StoryNode<TData, TState>;
+  nodeEntry?: StoryNodeTreeEntry<TData, TState>;
+  history: StoryHistoryEntry<TData, TState>[];
+  path: ResolvedStoryPath<TData, TState>;
+  state: TState;
+  snapshot: StorySnapshot<TData, TState>;
   currentIndex: number;
   progress: number;
   isEnding: boolean;
   canGoBack: boolean;
-  choices: StoryChoice<TData, TVars>[];
-  visibleChoices: StoryChoice<TData, TVars>[];
+  choices: StoryChoice<TData, TState>[];
+  visibleChoices: StoryChoice<TData, TState>[];
   choose: (choiceId: string) => void;
   goBack: () => void;
   restart: () => void;
@@ -39,45 +38,45 @@ export type StoryRenderProps<
 
 export type StoryStageComponent<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
-> = ComponentType<StoryRenderProps<TData, TVars>>;
+  TState extends StoryState = StoryState,
+> = ComponentType<StoryRenderProps<TData, TState>>;
 
 export type StoryRemotionSceneProps<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
-> = StoryRenderProps<TData, TVars> & {
+  TState extends StoryState = StoryState,
+> = StoryRenderProps<TData, TState> & {
   frame: number;
   absoluteFrame: number;
   durationInFrames: number;
   fps: number;
   sceneProgress: number;
-  timelineScene: StoryTimelineScene<TData, TVars>;
+  timelineScene: StoryTimelineScene<TData, TState>;
 };
 
 export type StoryRemotionSceneComponent<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
-> = ComponentType<StoryRemotionSceneProps<TData, TVars>>;
+  TState extends StoryState = StoryState,
+> = ComponentType<StoryRemotionSceneProps<TData, TState>>;
 
 export type StoryThreeSceneProps<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
-> = StoryRenderProps<TData, TVars> & {
+  TState extends StoryState = StoryState,
+> = StoryRenderProps<TData, TState> & {
   stageProps?: Record<string, unknown>;
 };
 
 export type StoryThreeSceneComponent<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
-> = ComponentType<StoryThreeSceneProps<TData, TVars>>;
+  TState extends StoryState = StoryState,
+> = ComponentType<StoryThreeSceneProps<TData, TState>>;
 
 export type StoryRendererRegistry<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 > = {
-  web?: Record<string, StoryStageComponent<TData, TVars>>;
-  remotion?: Record<string, StoryRemotionSceneComponent<TData, TVars>>;
-  three?: Record<string, StoryThreeSceneComponent<TData, TVars>>;
+  web?: Record<string, StoryStageComponent<TData, TState>>;
+  remotion?: Record<string, StoryRemotionSceneComponent<TData, TState>>;
+  three?: Record<string, StoryThreeSceneComponent<TData, TState>>;
 };
 
 export type StoryContentBlockMap = {

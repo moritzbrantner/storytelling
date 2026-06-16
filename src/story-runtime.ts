@@ -10,10 +10,9 @@ import type {
   StoryLabels,
   StoryNodeTreeEntry,
   StoryNodeData,
-  StoryRuntimeState,
+  StoryState,
   StoryStateHooks,
-  StoryStateSnapshot,
-  StoryVariables,
+  StorySnapshot,
 } from "./story-model";
 import type { StoryRenderProps } from "./story-render-types";
 import { createStoryPathState, type StoryPathState } from "./story-state";
@@ -21,23 +20,23 @@ import { useStoryPathState, type UseStoryPathStateOptions } from "./use-story-pa
 import { defineStory, getStoryNode, isStoryEnding } from "./story-validation";
 import { createStoryNodeEntryLookup, getStoryNodeEntries } from "./story-node-tree";
 import {
-  createDefaultStoryRuntimeState,
+  createDefaultStoryState,
   createStorySnapshot,
   getVisibleStoryChoices,
 } from "./story-state-engine";
 
 export type CreateStoryRenderPropsInput<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 > = {
-  story: StoryDocument<TData, TVars>;
-  path: ResolvedStoryPath<TData, TVars>;
-  nodeEntry?: StoryNodeTreeEntry<TData, TVars>;
-  history?: StoryHistoryEntry<TData, TVars>[];
+  story: StoryDocument<TData, TState>;
+  path: ResolvedStoryPath<TData, TState>;
+  nodeEntry?: StoryNodeTreeEntry<TData, TState>;
+  history?: StoryHistoryEntry<TData, TState>[];
   currentIndex?: number;
   progress?: number;
-  choices?: StoryChoice<TData, TVars>[];
-  visibleChoices?: StoryChoice<TData, TVars>[];
+  choices?: StoryChoice<TData, TState>[];
+  visibleChoices?: StoryChoice<TData, TState>[];
   canGoBack?: boolean;
   choose?: (choiceId: string) => void;
   goBack?: () => void;
@@ -50,49 +49,41 @@ export type StoryRuntimeLabels = Required<
 
 export type UseStoryRuntimeOptions<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
-> = Omit<UseStoryPathStateOptions<TData, TVars>, "onChoiceIdsChange"> & {
-  snapshot?: StoryStateSnapshot<TData, TVars>;
-  defaultSnapshot?: StoryStateSnapshot<TData, TVars>;
-  defaultState?: StoryRuntimeState<TVars>;
-  hooks?: StoryStateHooks<TData, TVars>;
+  TState extends StoryState = StoryState,
+> = UseStoryPathStateOptions<TData, TState> & {
+  snapshot?: StorySnapshot<TData, TState>;
+  defaultSnapshot?: StorySnapshot<TData, TState>;
+  defaultState?: TState;
+  hooks?: StoryStateHooks<TData, TState>;
   onSnapshotChange?: (
-    snapshot: StoryStateSnapshot<TData, TVars>,
-    state: StoryPathState<TData, TVars>,
+    snapshot: StorySnapshot<TData, TState>,
+    state: StoryPathState<TData, TState>,
   ) => void;
-  /** @deprecated Use defaultSnapshot instead. */
-  initialChoiceIds?: string[];
-  /** @deprecated Use defaultSnapshot instead. */
-  defaultChoiceIds?: string[];
   onChoice?: (
-    choice: StoryChoice<TData, TVars>,
-    history: StoryHistoryEntry<TData, TVars>[],
+    choice: StoryChoice<TData, TState>,
+    history: StoryHistoryEntry<TData, TState>[],
   ) => void;
-  /** @deprecated Use onSnapshotChange instead. */
-  onChoiceIdsChange?: (choiceIds: string[], state: StoryPathState<TData, TVars>) => void;
-  progress?: (state: StoryPathState<TData, TVars>) => number;
+  progress?: (state: StoryPathState<TData, TState>) => number;
 };
 
 export type UseStoryRuntimeResult<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 > = {
-  story: StoryDocument<TData, TVars>;
-  state: StoryPathState<TData, TVars>;
-  renderProps: StoryRenderProps<TData, TVars>;
+  story: StoryDocument<TData, TState>;
+  state: StoryPathState<TData, TState>;
+  renderProps: StoryRenderProps<TData, TState>;
   labels: StoryRuntimeLabels;
-  choices: StoryChoice<TData, TVars>[];
-  visibleChoices: StoryChoice<TData, TVars>[];
+  choices: StoryChoice<TData, TState>[];
+  visibleChoices: StoryChoice<TData, TState>[];
   progress: number;
   canGoBack: boolean;
   choose: (choiceId: string) => void;
   goBack: () => void;
   restart: () => void;
-  snapshot: StoryStateSnapshot<TData, TVars>;
-  setSnapshot: (snapshot: StoryStateSnapshot<TData, TVars>) => void;
-  setRuntimeState: (state: StoryRuntimeState<TVars>) => void;
-  /** @deprecated Use setSnapshot instead. */
-  setChoiceIds: (choiceIds: string[]) => void;
+  snapshot: StorySnapshot<TData, TState>;
+  setSnapshot: (snapshot: StorySnapshot<TData, TState>) => void;
+  setRuntimeState: (state: TState) => void;
 };
 
 export function getHistoryChoiceIds<TData extends StoryNodeData>(
@@ -103,17 +94,15 @@ export function getHistoryChoiceIds<TData extends StoryNodeData>(
 
 export function buildPathFromHistory<
   TData extends StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 >(
-  story: StoryDocument<TData, TVars>,
-  history: StoryHistoryEntry<TData, TVars>[],
-): ResolvedStoryPath<TData, TVars> {
+  story: StoryDocument<TData, TState>,
+  history: StoryHistoryEntry<TData, TState>[],
+): ResolvedStoryPath<TData, TState> {
   const nodes = history.map((entry) => getStoryNode(story, entry.nodeId));
   const currentNode = nodes[nodes.length - 1] ?? getStoryNode(story, story.openingNodeId);
   const state =
-    history[history.length - 1]?.state ??
-    story.initialState ??
-    createDefaultStoryRuntimeState<TVars>();
+    history[history.length - 1]?.state ?? story.initialState ?? createDefaultStoryState<TState>();
 
   return {
     nodes,
@@ -127,16 +116,14 @@ export function buildPathFromHistory<
 
 export function createStoryPathStateFromHistory<
   TData extends StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 >(
-  story: StoryDocument<TData, TVars>,
-  history: StoryHistoryEntry<TData, TVars>[],
-  choiceIds: string[] = getHistoryChoiceIds(history),
-): StoryPathState<TData, TVars> {
+  story: StoryDocument<TData, TState>,
+  history: StoryHistoryEntry<TData, TState>[],
+): StoryPathState<TData, TState> {
   const path = buildPathFromHistory(story, history);
 
   return {
-    choiceIds,
     path,
     history,
     currentNode: path.currentNode,
@@ -148,7 +135,7 @@ export function createStoryPathStateFromHistory<
 
 export function createStoryRenderProps<
   TData extends StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 >({
   story,
   path,
@@ -162,7 +149,7 @@ export function createStoryRenderProps<
   choose = () => {},
   goBack = () => {},
   restart = () => {},
-}: CreateStoryRenderPropsInput<TData, TVars>): StoryRenderProps<TData, TVars> {
+}: CreateStoryRenderPropsInput<TData, TState>): StoryRenderProps<TData, TState> {
   return {
     story,
     node: path.currentNode,
@@ -197,19 +184,14 @@ function resolveStoryRuntimeLabels(labels: StoryLabels | undefined): StoryRuntim
 
 export function useStoryRuntime<
   TData extends StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 >(
-  input: StoryDocument<TData, TVars>,
-  options: UseStoryRuntimeOptions<TData, TVars> = {},
-): UseStoryRuntimeResult<TData, TVars> {
+  input: StoryDocument<TData, TState>,
+  options: UseStoryRuntimeOptions<TData, TState> = {},
+): UseStoryRuntimeResult<TData, TState> {
   const story = useMemo(() => defineStory(input), [input]);
-  const resolvedDefaultChoiceIds = options.defaultChoiceIds ?? options.initialChoiceIds ?? [];
-  const autoAdvanceLinearNodes =
-    options.autoAdvanceLinearNodes ?? resolvedDefaultChoiceIds.length > 0;
   const pathState = useStoryPathState(story, {
     ...options,
-    defaultChoiceIds: resolvedDefaultChoiceIds,
-    autoAdvanceLinearNodes,
   });
   const labels = useMemo(() => resolveStoryRuntimeLabels(story.labels), [story.labels]);
   const progress =
@@ -222,12 +204,12 @@ export function useStoryRuntime<
     );
     if (!choice) return;
 
-    const nextChoiceIds = [...pathState.choiceIds, choice.id];
     const nextState = createStoryPathState(story, {
-      choiceIds: nextChoiceIds,
+      snapshot: pathState.snapshot,
+      choose: choice.id,
       defaultState: options.defaultState,
       hooks: options.hooks,
-      autoAdvanceLinearNodes,
+      autoAdvanceLinearNodes: options.autoAdvanceLinearNodes,
     });
 
     pathState.choose(choiceId);
@@ -263,6 +245,5 @@ export function useStoryRuntime<
     snapshot: pathState.snapshot,
     setSnapshot: pathState.setSnapshot,
     setRuntimeState: pathState.setRuntimeState,
-    setChoiceIds: pathState.setChoiceIds,
   };
 }

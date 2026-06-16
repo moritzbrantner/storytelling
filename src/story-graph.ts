@@ -5,10 +5,9 @@ import type {
   StoryHistoryEntry,
   StoryNode,
   StoryNodeData,
-  StoryRuntimeState,
+  StoryState,
   StoryStateHooks,
-  StoryStateSnapshot,
-  StoryVariables,
+  StorySnapshot,
 } from "./story-model";
 import { getStoryNodeEntries } from "./story-node-tree";
 import { assertStoryDocument, createStoryNodeLookup, getStoryChoices } from "./story-validation";
@@ -16,19 +15,19 @@ import {
   applyStoryChoiceState,
   applyStoryNodeState,
   canEnterStoryNode,
-  createInitialStoryRuntimeState,
+  createInitialStoryState,
   createStorySnapshot,
   getSelectableStoryChoices,
 } from "./story-state-engine";
 
 export type StoryGraphEdge<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 > = {
   id: string;
-  source: StoryNode<TData, TVars>;
-  target: StoryNode<TData, TVars>;
-  choice: StoryChoice<TData, TVars>;
+  source: StoryNode<TData, TState>;
+  target: StoryNode<TData, TState>;
+  choice: StoryChoice<TData, TState>;
   kind: "choice" | "next";
   disabled: boolean;
   conditional: boolean;
@@ -36,56 +35,56 @@ export type StoryGraphEdge<
 
 export type CompiledStoryNode<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 > = {
-  node: StoryNode<TData, TVars>;
-  incoming: StoryGraphEdge<TData, TVars>[];
-  outgoing: StoryGraphEdge<TData, TVars>[];
+  node: StoryNode<TData, TState>;
+  incoming: StoryGraphEdge<TData, TState>[];
+  outgoing: StoryGraphEdge<TData, TState>[];
 };
 
 export type CompiledStory<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 > = {
-  story: StoryDocument<TData, TVars>;
-  openingNode: StoryNode<TData, TVars>;
-  nodeLookup: ReadonlyMap<string, StoryNode<TData, TVars>>;
-  nodes: CompiledStoryNode<TData, TVars>[];
-  edges: StoryGraphEdge<TData, TVars>[];
+  story: StoryDocument<TData, TState>;
+  openingNode: StoryNode<TData, TState>;
+  nodeLookup: ReadonlyMap<string, StoryNode<TData, TState>>;
+  nodes: CompiledStoryNode<TData, TState>[];
+  edges: StoryGraphEdge<TData, TState>[];
 };
 
 export type EnumerateStoryPathsOptions<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 > = {
   includeDisabledChoices?: boolean;
-  defaultState?: StoryRuntimeState<TVars>;
-  hooks?: StoryStateHooks<TData, TVars>;
+  defaultState?: TState;
+  hooks?: StoryStateHooks<TData, TState>;
   maxDepth?: number;
   maxPaths?: number;
 };
 
 export type EnumeratedStoryPath<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
-> = ResolvedStoryPath<TData, TVars> & {
+  TState extends StoryState = StoryState,
+> = ResolvedStoryPath<TData, TState> & {
   choiceIds: string[];
-  state: StoryRuntimeState<TVars>;
-  snapshot: StoryStateSnapshot<TData, TVars>;
+  state: TState;
+  snapshot: StorySnapshot<TData, TState>;
 };
 
 function getChoiceKind<TData extends StoryNodeData>(node: StoryNode<TData>) {
   return node.choices && node.choices.length > 0 ? "choice" : "next";
 }
 
-export function compileStory<TData extends StoryNodeData>(
-  input: StoryDocument<TData>,
-): CompiledStory<TData> {
+export function compileStory<TData extends StoryNodeData, TState extends StoryState = StoryState>(
+  input: StoryDocument<TData, TState>,
+): CompiledStory<TData, TState> {
   const story = assertStoryDocument(input);
   const nodeLookup = createStoryNodeLookup(story);
   const nodeEntries = getStoryNodeEntries(story);
-  const compiledNodes = new Map<string, CompiledStoryNode<TData>>();
-  const edges: StoryGraphEdge<TData>[] = [];
+  const compiledNodes = new Map<string, CompiledStoryNode<TData, TState>>();
+  const edges: StoryGraphEdge<TData, TState>[] = [];
 
   for (const { node } of nodeEntries) {
     compiledNodes.set(node.id, {
@@ -102,21 +101,14 @@ export function compileStory<TData extends StoryNodeData>(
       const target = nodeLookup.get(choice.target);
       if (!target) continue;
 
-      const edge: StoryGraphEdge<TData> = {
+      const edge: StoryGraphEdge<TData, TState> = {
         id: `${source.id}:${choice.id}`,
         source,
         target,
         choice,
         kind,
         disabled: Boolean(choice.disabled),
-        conditional: Boolean(
-          choice.hidden ||
-          choice.isVisible ||
-          choice.isEnabled ||
-          choice.reduceState ||
-          target.canEnter ||
-          target.reduceState,
-        ),
+        conditional: Boolean(choice.hidden),
       };
 
       edges.push(edge);
@@ -134,32 +126,41 @@ export function compileStory<TData extends StoryNodeData>(
   };
 }
 
-export function getStoryBranches<TData extends StoryNodeData>(compiledStory: CompiledStory<TData>) {
+export function getStoryBranches<
+  TData extends StoryNodeData,
+  TState extends StoryState = StoryState,
+>(compiledStory: CompiledStory<TData, TState>) {
   return compiledStory.nodes
     .filter((entry) => entry.outgoing.filter((edge) => !edge.disabled).length > 1)
     .map((entry) => entry.node);
 }
 
-export function getStoryEndings<TData extends StoryNodeData>(compiledStory: CompiledStory<TData>) {
+export function getStoryEndings<
+  TData extends StoryNodeData,
+  TState extends StoryState = StoryState,
+>(compiledStory: CompiledStory<TData, TState>) {
   return compiledStory.nodes
     .filter((entry) => entry.outgoing.length === 0)
     .map((entry) => entry.node);
 }
 
-export function enumerateStoryPaths<TData extends StoryNodeData>(
-  input: StoryDocument<TData>,
-  options: EnumerateStoryPathsOptions<TData> = {},
-): EnumeratedStoryPath<TData>[] {
+export function enumerateStoryPaths<
+  TData extends StoryNodeData,
+  TState extends StoryState = StoryState,
+>(
+  input: StoryDocument<TData, TState>,
+  options: EnumerateStoryPathsOptions<TData, TState> = {},
+): EnumeratedStoryPath<TData, TState>[] {
   const compiledStory = compileStory(input);
   const nodeEntries = new Map(compiledStory.nodes.map((entry) => [entry.node.id, entry] as const));
   const maxDepth = options.maxDepth ?? compiledStory.nodes.length;
   const maxPaths = options.maxPaths ?? 1000;
-  const paths: EnumeratedStoryPath<TData>[] = [];
+  const paths: EnumeratedStoryPath<TData, TState>[] = [];
   const openingState = applyStoryNodeState(
     compiledStory.story,
     compiledStory.openingNode,
     [],
-    createInitialStoryRuntimeState(compiledStory.story, {
+    createInitialStoryState(compiledStory.story, {
       defaultState: options.defaultState,
       hooks: options.hooks,
     }),
@@ -167,11 +168,11 @@ export function enumerateStoryPaths<TData extends StoryNodeData>(
   );
 
   const visit = (
-    node: StoryNode<TData>,
-    nodes: StoryNode<TData>[],
-    history: StoryHistoryEntry<TData>[],
+    node: StoryNode<TData, TState>,
+    nodes: StoryNode<TData, TState>[],
+    history: StoryHistoryEntry<TData, TState>[],
     choiceIds: string[],
-    state: StoryRuntimeState,
+    state: TState,
   ) => {
     if (paths.length >= maxPaths) return;
 

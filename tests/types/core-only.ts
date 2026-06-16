@@ -7,9 +7,9 @@ import {
   enumerateStoryPaths,
   getStoryBranches,
   getStoryEndings,
-  parseStoryPath,
+  parseStorySnapshot,
   resolveStoryPath,
-  serializeStoryPath,
+  serializeStorySnapshot,
   validateStoryDocument,
   type StoryDocument,
 } from "@moritzbrantner/storytelling/core";
@@ -38,10 +38,10 @@ const compiled = compileStory(story);
 const branches = getStoryBranches(compiled);
 const endings = getStoryEndings(compiled);
 const paths = enumerateStoryPaths(story);
-const resolved = resolveStoryPath(story, { choiceIds: ["finish"] });
-const state = createStoryPathState(story, { choiceIds: ["finish"] });
-const encoded = serializeStoryPath(state);
-const decoded = parseStoryPath(encoded);
+const resolved = resolveStoryPath(story, { routeChoiceIds: ["finish"] });
+const state = createStoryPathState(story, { routeChoiceIds: ["finish"] });
+const encoded = serializeStorySnapshot(state);
+const decoded = parseStorySnapshot(encoded);
 const report = analyzeStory(story);
 const patched = applyStoryPatch(story, {
   type: "update-node",

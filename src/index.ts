@@ -39,8 +39,8 @@ export {
 } from "./story-graph";
 export {
   createStorySnapshot,
-  createDefaultStoryRuntimeState,
-  cloneStoryRuntimeState,
+  createDefaultStoryState,
+  cloneStoryState,
   getVisibleStoryChoices,
   getSelectableStoryChoices,
   applyStoryChoiceState,
@@ -50,14 +50,13 @@ export {
 export {
   createStoryPathState,
   parseStorySnapshot,
-  parseStoryPath,
   serializeStorySnapshot,
-  serializeStoryPath,
   type CreateStoryPathStateOptions,
   type StoryPathState,
 } from "./story-state";
 export {
   analyzeStory,
+  analyzeStoryDraft,
   getStoryReachability,
   type AnalyzeStoryOptions,
   type StoryAuthoringIssue,
@@ -82,7 +81,6 @@ export {
   buildPathFromHistory,
   createStoryPathStateFromHistory,
   createStoryRenderProps,
-  getHistoryChoiceIds,
   useStoryRuntime,
   type CreateStoryRenderPropsInput,
   type StoryRuntimeLabels,
@@ -157,7 +155,12 @@ export {
 } from "./story-scroll-timeline";
 export { StoryStageFrame, type StoryStageFrameProps } from "./story-stage-frame";
 export { StoryMinimap, type StoryMinimapItem, type StoryMinimapProps } from "./story-minimap";
-export { storyDocumentJsonSchema, type StoryDocumentJsonSchema } from "./schema";
+export {
+  createStoryDocumentJsonSchema,
+  storyDocumentJsonSchema,
+  type CreateStoryDocumentJsonSchemaOptions,
+  type StoryDocumentJsonSchema,
+} from "./schema";
 export type {
   ResolvedStoryPath,
   StoryChoice,
@@ -167,6 +170,8 @@ export type {
   StoryContentBlock,
   StoryDefaults,
   StoryDocument,
+  StoryDraft,
+  StoryDraftNode,
   StoryEmbedBlock,
   StoryHistoryEntry,
   StoryLabels,
@@ -174,20 +179,22 @@ export type {
   StoryMediaTextTrack,
   StoryNode,
   StoryNodeData,
-  StoryRuntimeState,
+  StoryState,
   StoryStateHooks,
   StoryStatePredicate,
   StoryStatePredicateContext,
   StoryStateReducer,
   StoryStateReducerContext,
-  StoryStateSnapshot,
+  StorySnapshot,
   StoryTableBlock,
   StoryNodeTreeEntry,
   StoryStageDescriptor,
   StoryTimeline,
   StoryTimelineScene,
   StoryTransition,
-  StoryVariables,
+  StoryJsonObject,
+  StoryJsonPrimitive,
+  StoryJsonValue,
 } from "./story-model";
 export type {
   StoryContentRenderer,

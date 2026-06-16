@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
@@ -62,6 +62,7 @@ function scrollScrollerViewport(viewport: HTMLElement, scrollTop: number) {
 }
 
 afterEach(() => {
+  cleanup();
   vi.useRealTimers();
   vi.restoreAllMocks();
   vi.resetModules();
@@ -69,7 +70,7 @@ afterEach(() => {
 });
 
 describe("repository hardening", () => {
-  test("warns for strict validation issues by default and errors in strict mode", () => {
+  test("reports strict validation issues by default", () => {
     const strictDraft: StoryDocument = {
       id: " ",
       title: " ",
@@ -93,10 +94,7 @@ describe("repository hardening", () => {
       ],
     };
 
-    expect(validateStoryDocument(strictDraft).map((issue) => issue.code)).toEqual([]);
-    expect(
-      validateStoryDocument(strictDraft, { mode: "strict" }).map((issue) => issue.code),
-    ).toEqual(
+    expect(validateStoryDocument(strictDraft).map((issue) => issue.code)).toEqual(
       expect.arrayContaining([
         "blank-story-id",
         "blank-story-title",
@@ -110,12 +108,15 @@ describe("repository hardening", () => {
         "blank-choice-label",
       ]),
     );
-    expect(() => defineStory(strictDraft, { mode: "strict" })).toThrow("must not be blank");
+    expect(
+      validateStoryDocument(strictDraft, { mode: "compat" }).map((issue) => issue.code),
+    ).not.toContain("blank-story-id");
+    expect(() => defineStory(strictDraft)).toThrow("must not be blank");
 
     const report = analyzeStory(strictDraft);
     expect(report.issues).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ code: "node-has-next-and-choices", severity: "warning" }),
+        expect.objectContaining({ code: "node-has-next-and-choices", severity: "error" }),
       ]),
     );
     expect(analyzeStory(strictDraft, { validationMode: "strict" }).issues).toEqual(
@@ -174,13 +175,13 @@ describe("repository hardening", () => {
   });
 
   test("records consumed, unconsumed, and invalid path choice ids", () => {
-    const resolved = resolveStoryPath(branchStory, { choiceIds: ["go", "unused"] });
+    const resolved = resolveStoryPath(branchStory, { routeChoiceIds: ["go", "unused"] });
 
     expect(resolved.consumedChoiceIds).toEqual(["go"]);
     expect(resolved.unconsumedChoiceIds).toEqual(["unused"]);
     expect(resolved.stoppedReason).toBe("invalid-choice");
 
-    const invalid = resolveStoryPath(branchStory, { choiceIds: ["missing"] });
+    const invalid = resolveStoryPath(branchStory, { routeChoiceIds: ["missing"] });
     expect(invalid.consumedChoiceIds).toEqual([]);
     expect(invalid.unconsumedChoiceIds).toEqual(["missing"]);
     expect(invalid.stoppedReason).toBe("invalid-choice");
@@ -203,18 +204,19 @@ describe("repository hardening", () => {
 
     function StopAtProbe() {
       const state = useStoryPathState(branchStory, {
-        choiceIds: ["go"],
+        defaultSnapshot: resolveStoryPath(branchStory, { routeChoiceIds: ["go"] }).snapshot,
         stopAt: "end",
       });
 
       return <p>Stopped {state.currentNode.id}</p>;
     }
 
-    render(<LinearProbe />);
+    const linear = render(<LinearProbe />);
     expect(screen.getByText("Node c")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Go back" }));
     expect(await screen.findByText("Node b")).toBeTruthy();
     expect(screen.getByText("Stop b")).toBeTruthy();
+    linear.unmount();
 
     render(<StopAtProbe />);
     expect(screen.getByText("Stopped end")).toBeTruthy();

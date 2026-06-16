@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Major Changes
+
+- Make `StoryDocument` pure JSON data with strict validation by default.
+  Executable behavior now lives in `StoryStateHooks`, runtime state is an
+  application-defined JSON object, interactive APIs are snapshot-controlled, and
+  static route helpers use `routeChoiceIds`. Removed legacy choice-id URL and
+  controlled-runtime APIs.
+
+## 0.5.0 - 2026-06-10
+
 ### Minor Changes
 
 - Add nested story scenes with `StoryNode.children`, depth-first path

@@ -3,7 +3,7 @@ import type {
   StoryDocument,
   StoryNode,
   StoryNodeData,
-  StoryVariables,
+  StoryState,
 } from "./story-model";
 import {
   createStoryNodeLookup as createTreeStoryNodeLookup,
@@ -47,6 +47,8 @@ export type StoryValidationIssueCode =
   | "invalid-callout-block"
   | "invalid-markdown-block"
   | "invalid-story-snapshot"
+  | "invalid-story-state"
+  | "non-serializable-story-field"
   | "missing-choice-target"
   | "missing-next-target"
   | "story-cycle";
@@ -55,6 +57,7 @@ export type StoryValidationMode = "compat" | "strict";
 
 export type StoryValidationOptions = {
   mode?: StoryValidationMode;
+  contentBlocks?: Record<string, unknown>;
 };
 
 export type StoryValidationIssue = {
@@ -92,7 +95,7 @@ function addIssue(
 const STRICT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
 
 function isStrictMode(options: StoryValidationOptions | undefined) {
-  return options?.mode === "strict";
+  return options?.mode !== "compat";
 }
 
 function isBlankString(value: string) {
@@ -107,7 +110,21 @@ function isValidFrameDuration(value: number | undefined, min: number) {
   return value === undefined || (Number.isFinite(value) && Number.isInteger(value) && value >= min);
 }
 
-function isValidContentBlock(block: unknown) {
+function isJsonValue(value: unknown): boolean {
+  if (value === null) return true;
+  if (typeof value === "string" || typeof value === "boolean") return true;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (Array.isArray(value)) return value.every(isJsonValue);
+  if (value && typeof value === "object") return Object.values(value).every(isJsonValue);
+
+  return false;
+}
+
+function isJsonObject(value: unknown) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value) && isJsonValue(value);
+}
+
+function isValidContentBlock(block: unknown, extensions: Record<string, unknown> = {}) {
   if (!block || typeof block !== "object") {
     return false;
   }
@@ -205,7 +222,7 @@ function isValidContentBlock(block: unknown) {
     case "markdown":
       return typeof record.markdown === "string";
     default:
-      return false;
+      return typeof record.type === "string" && extensions[record.type] !== undefined;
   }
 }
 
@@ -232,15 +249,15 @@ function getInvalidContentIssueCode(block: unknown): StoryValidationIssueCode {
 
 export function createStoryNodeLookup<
   TData extends StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
->(story: StoryDocument<TData, TVars>) {
+  TState extends StoryState = StoryState,
+>(story: StoryDocument<TData, TState>) {
   return createTreeStoryNodeLookup(story);
 }
 
-export function getStoryNode<
-  TData extends StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
->(story: StoryDocument<TData, TVars>, nodeId: string) {
+export function getStoryNode<TData extends StoryNodeData, TState extends StoryState = StoryState>(
+  story: StoryDocument<TData, TState>,
+  nodeId: string,
+) {
   const node = createStoryNodeLookup(story).get(nodeId);
 
   if (!node) {
@@ -252,8 +269,11 @@ export function getStoryNode<
 
 export function getStoryChoices<
   TData extends StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
->(story: StoryDocument<TData, TVars>, node: StoryNode<TData, TVars>): StoryChoice<TData, TVars>[] {
+  TState extends StoryState = StoryState,
+>(
+  story: StoryDocument<TData, TState>,
+  node: StoryNode<TData, TState>,
+): StoryChoice<TData, TState>[] {
   if (node.choices && node.choices.length > 0) {
     return node.choices;
   }
@@ -273,20 +293,29 @@ export function getStoryChoices<
   ];
 }
 
-export function isStoryEnding<
-  TData extends StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
->(story: StoryDocument<TData, TVars>, node: StoryNode<TData, TVars>) {
+export function isStoryEnding<TData extends StoryNodeData, TState extends StoryState = StoryState>(
+  story: StoryDocument<TData, TState>,
+  node: StoryNode<TData, TState>,
+) {
   return getStoryChoices(story, node).length === 0;
 }
 
 export function validateStoryDocument<
   TData extends StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
->(story: StoryDocument<TData, TVars>, options: StoryValidationOptions = {}) {
+  TState extends StoryState = StoryState,
+>(story: StoryDocument<TData, TState>, options: StoryValidationOptions = {}) {
   const issues: StoryValidationIssue[] = [];
   const storyId = getStoryId(story);
   const strict = isStrictMode(options);
+
+  if (story.initialState !== undefined && !isJsonObject(story.initialState)) {
+    addIssue(issues, {
+      code: "invalid-story-state",
+      message: `Story "${storyId}" initialState must be a JSON object.`,
+      path: "initialState",
+      storyId,
+    });
+  }
 
   if (story.id.length === 0) {
     addIssue(issues, {
@@ -404,6 +433,18 @@ export function validateStoryDocument<
       });
     }
 
+    for (const field of ["canEnter", "reduceState"]) {
+      if (typeof (node as Record<string, unknown>)[field] === "function") {
+        addIssue(issues, {
+          code: "non-serializable-story-field",
+          message: `Story node "${node.id}" must not contain function field "${field}".`,
+          path: `${nodePath}.${field}`,
+          storyId,
+          nodeId: node.id,
+        });
+      }
+    }
+
     if (strict && !isValidFrameDuration(node.durationInFrames, 1)) {
       addIssue(issues, {
         code: "invalid-node-duration",
@@ -440,7 +481,7 @@ export function validateStoryDocument<
 
     if (strict) {
       for (const [contentIndex, block] of (node.content ?? []).entries()) {
-        if (!isValidContentBlock(block)) {
+        if (!isValidContentBlock(block, options.contentBlocks)) {
           const code = getInvalidContentIssueCode(block);
           addIssue(issues, {
             code,
@@ -538,6 +579,19 @@ export function validateStoryDocument<
           choiceId: choice.id,
         });
       }
+
+      for (const field of ["isVisible", "isEnabled", "reduceState"]) {
+        if (typeof (choice as Record<string, unknown>)[field] === "function") {
+          addIssue(issues, {
+            code: "non-serializable-story-field",
+            message: `Choice "${choice.id}" on "${node.id}" must not contain function field "${field}".`,
+            path: `${choicePath}.${field}`,
+            storyId,
+            nodeId: node.id,
+            choiceId: choice.id,
+          });
+        }
+      }
     }
   });
 
@@ -585,8 +639,8 @@ export function validateStoryDocument<
 
 export function assertStoryDocument<
   TData extends StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
->(story: StoryDocument<TData, TVars>, options: StoryValidationOptions = {}) {
+  TState extends StoryState = StoryState,
+>(story: StoryDocument<TData, TState>, options: StoryValidationOptions = {}) {
   const issues = validateStoryDocument(story, options);
 
   if (issues.length > 0) {
@@ -596,17 +650,17 @@ export function assertStoryDocument<
   return story;
 }
 
-export function validateStory<
-  TData extends StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
->(story: StoryDocument<TData, TVars>, options: StoryValidationOptions = {}) {
+export function validateStory<TData extends StoryNodeData, TState extends StoryState = StoryState>(
+  story: StoryDocument<TData, TState>,
+  options: StoryValidationOptions = {},
+) {
   return assertStoryDocument(story, options);
 }
 
-export function defineStory<
-  TData extends StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
->(story: StoryDocument<TData, TVars>, options: StoryValidationOptions = {}) {
+export function defineStory<TData extends StoryNodeData, TState extends StoryState = StoryState>(
+  story: StoryDocument<TData, TState>,
+  options: StoryValidationOptions = {},
+) {
   return validateStory(story, options);
 }
 
@@ -663,8 +717,8 @@ function collectStoryGraphCycles<TData extends StoryNodeData>(
 
 export function maybeValidateStory<
   TData extends StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
->(story: StoryDocument<TData, TVars>) {
+  TState extends StoryState = StoryState,
+>(story: StoryDocument<TData, TState>) {
   if (isDevelopment) {
     assertStoryDocument(story);
   }

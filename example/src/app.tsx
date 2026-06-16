@@ -15,6 +15,7 @@ import {
   authoringDraftStory,
   autoscrollLabScenes,
   motionLabScenes,
+  signalStoryHooks,
   storyRegistry,
   type SignalStoryData,
 } from "./story";
@@ -248,10 +249,11 @@ function ExampleLab({ onOpenCreator }: { onOpenCreator: () => void }) {
   const presetPath = useMemo(
     () =>
       resolveStoryPath(activeExample.story, {
-        choiceIds: activePreset.choiceIds,
+        routeChoiceIds: activePreset.choiceIds,
         autoAdvanceLinearNodes: activePreset.choiceIds.length > 0,
+        hooks: activeExample.id === "signal" ? signalStoryHooks : undefined,
       }),
-    [activeExample.story, activePreset.choiceIds],
+    [activeExample.id, activeExample.story, activePreset.choiceIds],
   );
   const linearScrollPath = useMemo(
     () =>
@@ -535,7 +537,8 @@ Transition ${getTransitionSummary(activeAutoscrollPreset.transition)}`;
                 key={`${activeExample.id}-${activePreset.id}`}
                 story={activeExample.story}
                 registry={storyRegistry}
-                initialChoiceIds={activePreset.choiceIds}
+                defaultSnapshot={presetPath.snapshot}
+                hooks={activeExample.id === "signal" ? signalStoryHooks : undefined}
                 onPathChange={setHistory}
               />
             ) : (
@@ -543,7 +546,8 @@ Transition ${getTransitionSummary(activeAutoscrollPreset.transition)}`;
                 key={`${activeExample.id}-${activePreset.id}`}
                 story={activeExample.story}
                 registry={storyRegistry}
-                pathChoiceIds={activePreset.choiceIds}
+                defaultSnapshot={presetPath.snapshot}
+                hooks={activeExample.id === "signal" ? signalStoryHooks : undefined}
                 transition={{ type: "fade", scrollUnits: 16 }}
                 onPathChange={setHistory}
                 onActiveIndexChange={setScrollerActiveIndex}

@@ -2,15 +2,24 @@ name: Full Benchmarks
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 4 * * 1"
   push:
     branches:
       - main
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "bench/**"
+      - "package.json"
+      - "bun.lock"
+      - ".github/workflows/benchmark-full.yml"
 
 permissions:
   contents: read
   packages: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   benchmark:

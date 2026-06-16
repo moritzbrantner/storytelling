@@ -4,12 +4,11 @@ import type {
   StoryHistoryEntry,
   StoryNode,
   StoryNodeData,
-  StoryRuntimeState,
+  StoryState,
   StoryStateHooks,
-  StoryStateSnapshot,
+  StorySnapshot,
   StoryTimeline,
   StoryTimelineScene,
-  StoryVariables,
 } from "./story-model";
 import { createStoryNodeEntryLookup, getStoryNodeEntries } from "./story-node-tree";
 import { createStoryNodeLookup, maybeValidateStory } from "./story-validation";
@@ -17,7 +16,7 @@ import {
   applyStoryChoiceState,
   applyStoryNodeState,
   canEnterStoryNode,
-  createInitialStoryRuntimeState,
+  createInitialStoryState,
   createStorySnapshot,
   getSelectableStoryChoices,
   getVisibleStoryChoices,
@@ -29,14 +28,13 @@ const DEFAULT_FPS = 30;
 
 export type ResolveStoryPathOptions<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 > = {
-  snapshot?: StoryStateSnapshot<TData, TVars>;
-  defaultState?: StoryRuntimeState<TVars>;
-  hooks?: StoryStateHooks<TData, TVars>;
+  snapshot?: StorySnapshot<TData, TState>;
+  defaultState?: TState;
+  hooks?: StoryStateHooks<TData, TState>;
   choose?: string;
-  /** @deprecated Use snapshot plus choose instead. */
-  choiceIds?: string[];
+  routeChoiceIds?: string[];
   autoAdvanceLinearNodes?: boolean;
   stopAt?: string;
   maxSteps?: number;
@@ -44,29 +42,28 @@ export type ResolveStoryPathOptions<
 
 export type BuildStoryTimelineOptions<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 > = {
-  snapshot?: StoryStateSnapshot<TData, TVars>;
-  defaultState?: StoryRuntimeState<TVars>;
-  hooks?: StoryStateHooks<TData, TVars>;
-  /** @deprecated Use snapshot instead. */
-  choiceIds?: string[];
+  snapshot?: StorySnapshot<TData, TState>;
+  defaultState?: TState;
+  hooks?: StoryStateHooks<TData, TState>;
+  routeChoiceIds?: string[];
   fps?: number;
   defaultDurationInFrames?: number;
   transitionInFrames?: number;
 };
 
-function withHistoryState<TData extends StoryNodeData, TVars extends StoryVariables>(
-  entry: StoryHistoryEntry<TData, TVars>,
-  state: StoryRuntimeState<TVars>,
-): StoryHistoryEntry<TData, TVars> {
+function withHistoryState<TData extends StoryNodeData, TState extends StoryState>(
+  entry: StoryHistoryEntry<TData, TState>,
+  state: TState,
+): StoryHistoryEntry<TData, TState> {
   return {
     ...entry,
     state,
   };
 }
 
-function createResolvedPath<TData extends StoryNodeData, TVars extends StoryVariables>({
+function createResolvedPath<TData extends StoryNodeData, TState extends StoryState>({
   nodes,
   history,
   currentNode,
@@ -77,16 +74,16 @@ function createResolvedPath<TData extends StoryNodeData, TVars extends StoryVari
   consumedChoiceIds,
   unconsumedChoiceIds,
 }: {
-  nodes: StoryNode<TData, TVars>[];
-  history: StoryHistoryEntry<TData, TVars>[];
-  currentNode: StoryNode<TData, TVars>;
+  nodes: StoryNode<TData, TState>[];
+  history: StoryHistoryEntry<TData, TState>[];
+  currentNode: StoryNode<TData, TState>;
   completed: boolean;
-  state: StoryRuntimeState<TVars>;
-  stoppedReason?: ResolvedStoryPath<TData, TVars>["stoppedReason"];
+  state: TState;
+  stoppedReason?: ResolvedStoryPath<TData, TState>["stoppedReason"];
   stoppedAt?: string;
   consumedChoiceIds?: string[];
   unconsumedChoiceIds?: string[];
-}): ResolvedStoryPath<TData, TVars> {
+}): ResolvedStoryPath<TData, TState> {
   return {
     nodes,
     history,
@@ -103,24 +100,24 @@ function createResolvedPath<TData extends StoryNodeData, TVars extends StoryVari
 
 export function resolveStoryPath<
   TData extends StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 >(
-  input: StoryDocument<TData, TVars>,
-  options: ResolveStoryPathOptions<TData, TVars> = {},
-): ResolvedStoryPath<TData, TVars> {
+  input: StoryDocument<TData, TState>,
+  options: ResolveStoryPathOptions<TData, TState> = {},
+): ResolvedStoryPath<TData, TState> {
   const story = maybeValidateStory(input);
   const nodeLookup = createStoryNodeLookup(story);
   const nodeEntries = getStoryNodeEntries(story);
-  const nodes: StoryNode<TData, TVars>[] = [];
-  const history: StoryHistoryEntry<TData, TVars>[] = [];
-  const choiceIds = options.choiceIds ?? [];
+  const nodes: StoryNode<TData, TState>[] = [];
+  const history: StoryHistoryEntry<TData, TState>[] = [];
+  const routeChoiceIds = options.routeChoiceIds ?? [];
   const consumedChoiceIds: string[] = [];
   const autoAdvanceLinearNodes = options.autoAdvanceLinearNodes ?? false;
   const maxSteps = options.maxSteps ?? nodeEntries.length * 2;
   let currentNode = nodeLookup.get(options.snapshot?.nodeId ?? story.openingNodeId)!;
   let state =
     options.snapshot?.state ??
-    createInitialStoryRuntimeState(story, {
+    createInitialStoryState(story, {
       defaultState: options.defaultState,
       hooks: options.hooks,
     });
@@ -154,7 +151,7 @@ export function resolveStoryPath<
         state,
         stoppedAt: options.stopAt,
         consumedChoiceIds,
-        unconsumedChoiceIds: choiceIds.slice(choiceIndex),
+        unconsumedChoiceIds: routeChoiceIds.slice(choiceIndex),
         stoppedReason: "stop-at",
       });
     }
@@ -182,13 +179,13 @@ export function resolveStoryPath<
         completed: true,
         state,
         consumedChoiceIds,
-        unconsumedChoiceIds: choiceIds.slice(choiceIndex),
+        unconsumedChoiceIds: routeChoiceIds.slice(choiceIndex),
         stoppedReason:
-          choiceIndex < choiceIds.length || pendingChoose ? "invalid-choice" : "ending",
+          choiceIndex < routeChoiceIds.length || pendingChoose ? "invalid-choice" : "ending",
       });
     }
 
-    const requestedChoiceId = pendingChoose ?? choiceIds[choiceIndex];
+    const requestedChoiceId = pendingChoose ?? routeChoiceIds[choiceIndex];
     let selectedChoice =
       requestedChoiceId !== undefined
         ? selectableChoices.find((choice) => choice.id === requestedChoiceId)
@@ -202,7 +199,7 @@ export function resolveStoryPath<
         completed: false,
         state,
         consumedChoiceIds,
-        unconsumedChoiceIds: choiceIds.slice(choiceIndex),
+        unconsumedChoiceIds: routeChoiceIds.slice(choiceIndex),
         stoppedReason: "invalid-choice",
       });
     }
@@ -219,12 +216,15 @@ export function resolveStoryPath<
         completed: false,
         state,
         consumedChoiceIds,
-        unconsumedChoiceIds: choiceIds.slice(choiceIndex),
+        unconsumedChoiceIds: routeChoiceIds.slice(choiceIndex),
         stoppedReason: "awaiting-choice",
       });
     }
 
-    if (requestedChoiceId === selectedChoice.id && choiceIds[choiceIndex] === selectedChoice.id) {
+    if (
+      requestedChoiceId === selectedChoice.id &&
+      routeChoiceIds[choiceIndex] === selectedChoice.id
+    ) {
       consumedChoiceIds.push(selectedChoice.id);
       choiceIndex += 1;
     }
@@ -242,7 +242,7 @@ export function resolveStoryPath<
         completed: false,
         state,
         consumedChoiceIds,
-        unconsumedChoiceIds: choiceIds.slice(choiceIndex),
+        unconsumedChoiceIds: routeChoiceIds.slice(choiceIndex),
         stoppedReason: "invalid-choice",
       });
     }
@@ -263,7 +263,7 @@ export function resolveStoryPath<
         completed: false,
         state,
         consumedChoiceIds,
-        unconsumedChoiceIds: choiceIds.slice(choiceIndex),
+        unconsumedChoiceIds: routeChoiceIds.slice(choiceIndex),
         stoppedReason: "blocked-by-condition",
       });
     }
@@ -287,23 +287,23 @@ export function resolveStoryPath<
     completed: false,
     state,
     consumedChoiceIds,
-    unconsumedChoiceIds: choiceIds.slice(choiceIndex),
+    unconsumedChoiceIds: routeChoiceIds.slice(choiceIndex),
     stoppedReason: "max-steps",
   });
 }
 
 export function buildStoryTimeline<
   TData extends StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 >(
-  story: StoryDocument<TData, TVars>,
-  options: BuildStoryTimelineOptions<TData, TVars> = {},
-): StoryTimeline<TData, TVars> {
+  story: StoryDocument<TData, TState>,
+  options: BuildStoryTimelineOptions<TData, TState> = {},
+): StoryTimeline<TData, TState> {
   const path = resolveStoryPath(story, {
     snapshot: options.snapshot,
     defaultState: options.defaultState,
     hooks: options.hooks,
-    choiceIds: options.choiceIds,
+    routeChoiceIds: options.routeChoiceIds,
     autoAdvanceLinearNodes: true,
   });
   const nodeEntryLookup = createStoryNodeEntryLookup(story);
@@ -318,7 +318,7 @@ export function buildStoryTimeline<
     DEFAULT_TRANSITION_IN_FRAMES;
   let cursor = 0;
 
-  const scenes: StoryTimelineScene<TData, TVars>[] = path.nodes.map((node, index) => {
+  const scenes: StoryTimelineScene<TData, TState>[] = path.nodes.map((node, index) => {
     const durationInFrames = node.durationInFrames ?? defaultDurationInFrames;
     const transitionInFrames = node.transition?.durationInFrames ?? defaultTransitionInFrames;
     const history = path.history.slice(0, index + 1);

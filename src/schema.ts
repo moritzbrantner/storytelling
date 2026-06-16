@@ -238,23 +238,7 @@ const storyChoiceSchema = {
 
 const runtimeStateSchema = {
   type: "object",
-  additionalProperties: false,
-  required: ["variables", "score", "inventory", "flags"],
-  properties: {
-    variables: {
-      type: "object",
-      additionalProperties: true,
-    },
-    score: { type: "number" },
-    inventory: {
-      type: "array",
-      items: { type: "string" },
-    },
-    flags: {
-      type: "object",
-      additionalProperties: { type: "boolean" },
-    },
-  },
+  additionalProperties: true,
 } satisfies JsonSchema;
 
 const storyStageDescriptorSchema = {
@@ -285,95 +269,119 @@ const storyTransitionSchema = {
 
 const storyNodeSchema = { $ref: "#/$defs/storyNode" } satisfies JsonSchema;
 
-export const storyDocumentJsonSchema = {
-  $schema: "https://json-schema.org/draft/2020-12/schema",
-  $id: "https://moritzbrantner.github.io/storytelling/story-document.schema.json",
-  title: "StoryDocument",
-  type: "object",
-  additionalProperties: false,
-  required: ["id", "title", "openingNodeId", "nodes"],
-  properties: {
-    id: { type: "string" },
-    title: { type: "string" },
-    subtitle: { type: "string" },
-    description: { type: "string" },
-    openingNodeId: { type: "string" },
-    nodes: {
-      type: "array",
-      minItems: 1,
-      items: storyNodeSchema,
+export type CreateStoryDocumentJsonSchemaOptions = {
+  contentBlocks?: Record<string, JsonSchema>;
+};
+
+function createContentBlockSchema(options: CreateStoryDocumentJsonSchemaOptions = {}) {
+  const extensionSchemas = Object.entries(options.contentBlocks ?? {}).map(([type, schema]) => ({
+    allOf: [{ type: "object", required: ["type"], properties: { type: { const: type } } }, schema],
+  }));
+
+  if (extensionSchemas.length === 0) {
+    return contentBlockSchema;
+  }
+
+  return {
+    oneOf: [...(contentBlockSchema.oneOf as JsonSchema[]), ...extensionSchemas],
+  } satisfies JsonSchema;
+}
+
+export function createStoryDocumentJsonSchema(options: CreateStoryDocumentJsonSchemaOptions = {}) {
+  const resolvedContentBlockSchema = createContentBlockSchema(options);
+
+  return {
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    $id: "https://moritzbrantner.github.io/storytelling/story-document.schema.json",
+    title: "StoryDocument",
+    type: "object",
+    additionalProperties: false,
+    required: ["id", "title", "openingNodeId", "nodes"],
+    properties: {
+      id: { type: "string" },
+      title: { type: "string" },
+      subtitle: { type: "string" },
+      description: { type: "string" },
+      openingNodeId: { type: "string" },
+      nodes: {
+        type: "array",
+        minItems: 1,
+        items: storyNodeSchema,
+      },
+      defaults: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          durationInFrames: {
+            type: "integer",
+            minimum: 1,
+          },
+          transitionInFrames: {
+            type: "integer",
+            minimum: 0,
+          },
+          stage: storyStageDescriptorSchema,
+        },
+      },
+      labels: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          back: { type: "string" },
+          restart: { type: "string" },
+          continue: { type: "string" },
+          choosePrompt: { type: "string" },
+          endingPrompt: { type: "string" },
+          completedBranch: { type: "string" },
+          scrollerLabel: { type: "string" },
+          minimapLabel: { type: "string" },
+        },
+      },
+      initialState: runtimeStateSchema,
     },
-    defaults: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        durationInFrames: {
-          type: "integer",
-          minimum: 1,
+    $defs: {
+      storyNode: {
+        type: "object",
+        additionalProperties: false,
+        required: ["id", "title"],
+        properties: {
+          id: { type: "string" },
+          title: { type: "string" },
+          eyebrow: { type: "string" },
+          content: {
+            type: "array",
+            items: resolvedContentBlockSchema,
+          },
+          prompt: { type: "string" },
+          data: {
+            type: "object",
+            additionalProperties: true,
+          },
+          next: { type: "string" },
+          choices: {
+            type: "array",
+            items: storyChoiceSchema,
+          },
+          children: {
+            type: "array",
+            items: { $ref: "#/$defs/storyNode" },
+          },
+          durationInFrames: {
+            type: "integer",
+            minimum: 1,
+          },
+          scrollUnits: {
+            type: "number",
+            exclusiveMinimum: 0,
+          },
+          transition: storyTransitionSchema,
+          stage: storyStageDescriptorSchema,
         },
-        transitionInFrames: {
-          type: "integer",
-          minimum: 0,
-        },
-        stage: storyStageDescriptorSchema,
       },
     },
-    labels: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        back: { type: "string" },
-        restart: { type: "string" },
-        continue: { type: "string" },
-        choosePrompt: { type: "string" },
-        endingPrompt: { type: "string" },
-        completedBranch: { type: "string" },
-        scrollerLabel: { type: "string" },
-        minimapLabel: { type: "string" },
-      },
-    },
-    initialState: runtimeStateSchema,
-  },
-  $defs: {
-    storyNode: {
-      type: "object",
-      additionalProperties: false,
-      required: ["id", "title"],
-      properties: {
-        id: { type: "string" },
-        title: { type: "string" },
-        eyebrow: { type: "string" },
-        content: {
-          type: "array",
-          items: contentBlockSchema,
-        },
-        prompt: { type: "string" },
-        data: {
-          type: "object",
-          additionalProperties: true,
-        },
-        next: { type: "string" },
-        choices: {
-          type: "array",
-          items: storyChoiceSchema,
-        },
-        children: {
-          type: "array",
-          items: { $ref: "#/$defs/storyNode" },
-        },
-        durationInFrames: {
-          type: "integer",
-          minimum: 1,
-        },
-        scrollUnits: {
-          type: "number",
-          exclusiveMinimum: 0,
-        },
-        transition: storyTransitionSchema,
-        stage: storyStageDescriptorSchema,
-      },
-    },
-  },
-} satisfies JsonSchema;
+  } satisfies JsonSchema;
+}
+
+export const storyDocumentJsonSchema = createStoryDocumentJsonSchema();
 
 export type StoryDocumentJsonSchema = typeof storyDocumentJsonSchema;

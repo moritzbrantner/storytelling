@@ -27,10 +27,9 @@ import type {
   StoryDocument,
   StoryHistoryEntry,
   StoryNodeData,
-  StoryRuntimeState,
+  StoryState,
   StoryStateHooks,
-  StoryStateSnapshot,
-  StoryVariables,
+  StorySnapshot,
 } from "./story-model";
 import type { StoryRendererRegistry, StoryRenderProps } from "./story-render-types";
 import type { StoryPathState } from "./story-state";
@@ -39,14 +38,14 @@ export type StoryPlayerLayout = "split" | "stacked" | "stage-only";
 
 export type StoryPlayerSlots<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 > = {
-  stage?: (props: StoryRenderProps<TData, TVars>) => ReactNode;
-  header?: (props: StoryRenderProps<TData, TVars>) => ReactNode;
-  controls?: (props: StoryRenderProps<TData, TVars>) => ReactNode;
-  actions?: (props: StoryRenderProps<TData, TVars>) => ReactNode;
-  progress?: (props: StoryRenderProps<TData, TVars>) => ReactNode;
-  trail?: (props: StoryRenderProps<TData, TVars>) => ReactNode;
+  stage?: (props: StoryRenderProps<TData, TState>) => ReactNode;
+  header?: (props: StoryRenderProps<TData, TState>) => ReactNode;
+  controls?: (props: StoryRenderProps<TData, TState>) => ReactNode;
+  actions?: (props: StoryRenderProps<TData, TState>) => ReactNode;
+  progress?: (props: StoryRenderProps<TData, TState>) => ReactNode;
+  trail?: (props: StoryRenderProps<TData, TState>) => ReactNode;
 };
 
 export type StoryPlayerModules = {
@@ -59,42 +58,34 @@ export type StoryPlayerModules = {
 
 export type StoryPlayerProps<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 > = {
-  story: StoryDocument<TData, TVars>;
-  registry?: StoryRendererRegistry<TData, TVars>;
-  snapshot?: StoryStateSnapshot<TData, TVars>;
-  defaultSnapshot?: StoryStateSnapshot<TData, TVars>;
-  defaultState?: StoryRuntimeState<TVars>;
-  hooks?: StoryStateHooks<TData, TVars>;
-  /** @deprecated Use defaultSnapshot instead. */
-  initialChoiceIds?: string[];
-  /** @deprecated Use defaultSnapshot instead. */
-  defaultChoiceIds?: string[];
-  /** @deprecated Use snapshot instead. */
-  choiceIds?: string[];
+  story: StoryDocument<TData, TState>;
+  registry?: StoryRendererRegistry<TData, TState>;
+  snapshot?: StorySnapshot<TData, TState>;
+  defaultSnapshot?: StorySnapshot<TData, TState>;
+  defaultState?: TState;
+  hooks?: StoryStateHooks<TData, TState>;
   layout?: StoryPlayerLayout;
   className?: string;
   ariaLabel?: string;
-  renderStage?: (props: StoryRenderProps<TData, TVars>) => ReactNode;
-  renderHeader?: (props: StoryRenderProps<TData, TVars>) => ReactNode;
-  renderControls?: (props: StoryRenderProps<TData, TVars>) => ReactNode;
-  renderActions?: (props: StoryRenderProps<TData, TVars>) => ReactNode;
-  renderProgress?: (props: StoryRenderProps<TData, TVars>) => ReactNode;
-  renderTrail?: (props: StoryRenderProps<TData, TVars>) => ReactNode;
-  slots?: StoryPlayerSlots<TData, TVars>;
+  renderStage?: (props: StoryRenderProps<TData, TState>) => ReactNode;
+  renderHeader?: (props: StoryRenderProps<TData, TState>) => ReactNode;
+  renderControls?: (props: StoryRenderProps<TData, TState>) => ReactNode;
+  renderActions?: (props: StoryRenderProps<TData, TState>) => ReactNode;
+  renderProgress?: (props: StoryRenderProps<TData, TState>) => ReactNode;
+  renderTrail?: (props: StoryRenderProps<TData, TState>) => ReactNode;
+  slots?: StoryPlayerSlots<TData, TState>;
   modules?: StoryPlayerModules;
   onChoice?: (
-    choice: StoryChoice<TData, TVars>,
-    history: StoryHistoryEntry<TData, TVars>[],
+    choice: StoryChoice<TData, TState>,
+    history: StoryHistoryEntry<TData, TState>[],
   ) => void;
-  onPathChange?: (history: StoryHistoryEntry<TData, TVars>[]) => void;
+  onPathChange?: (history: StoryHistoryEntry<TData, TState>[]) => void;
   onSnapshotChange?: (
-    snapshot: StoryStateSnapshot<TData, TVars>,
-    state: StoryPathState<TData, TVars>,
+    snapshot: StorySnapshot<TData, TState>,
+    state: StoryPathState<TData, TState>,
   ) => void;
-  /** @deprecated Use onSnapshotChange instead. */
-  onChoiceIdsChange?: (choiceIds: string[], state: StoryPathState<TData, TVars>) => void;
 };
 
 export {
@@ -113,7 +104,7 @@ export {
 
 export function StoryPlayer<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 >({
   story: input,
   registry,
@@ -121,9 +112,6 @@ export function StoryPlayer<
   defaultSnapshot,
   defaultState,
   hooks,
-  initialChoiceIds = [],
-  defaultChoiceIds,
-  choiceIds,
   layout = "split",
   className,
   ariaLabel,
@@ -138,22 +126,15 @@ export function StoryPlayer<
   onChoice,
   onPathChange,
   onSnapshotChange,
-  onChoiceIdsChange,
-}: StoryPlayerProps<TData, TVars>) {
+}: StoryPlayerProps<TData, TState>) {
   const runtime = useStoryRuntime(input, {
     snapshot,
     defaultSnapshot,
     defaultState,
     hooks,
-    initialChoiceIds,
-    defaultChoiceIds,
-    choiceIds,
-    autoAdvanceLinearNodes:
-      choiceIds === undefined ? (defaultChoiceIds ?? initialChoiceIds).length > 0 : false,
     onChoice,
     onPathChange,
     onSnapshotChange,
-    onChoiceIdsChange,
   });
   const { story, renderProps, labels } = runtime;
   const headingRef = useRef<HTMLHeadingElement | null>(null);

@@ -3,6 +3,7 @@ import {
   defineStory,
   type StoryDocument,
   type StoryScrollScene,
+  type StoryStateHooks,
 } from "@moritzbrantner/storytelling";
 
 import { MotionLabScene, SignalStage } from "./story-renderers";
@@ -20,6 +21,9 @@ export type SignalStoryData = {
 
 export type SignalStoryVars = {
   route: string | null;
+  channelOpen?: boolean;
+  inventory?: string[];
+  score?: number;
 };
 
 export type MotionLabSceneData = {
@@ -49,10 +53,9 @@ export const signalStory = defineStory<SignalStoryData, SignalStoryVars>({
     transitionInFrames: 16,
   },
   initialState: {
-    variables: { route: null },
+    route: null,
     score: 0,
     inventory: [],
-    flags: {},
   },
   nodes: [
     {
@@ -85,7 +88,7 @@ export const signalStory = defineStory<SignalStoryData, SignalStoryVars>({
           type: "callout",
           tone: "info",
           title: "Simulation state",
-          content: "Each route updates score, flags, and inventory in the story snapshot.",
+          content: "Each route updates app-defined JSON state in the story snapshot.",
         },
         {
           type: "table",
@@ -115,7 +118,7 @@ export const signalStory = defineStory<SignalStoryData, SignalStoryVars>({
           type: "code",
           filename: "routing-rule.ts",
           language: "ts",
-          code: "state.flags.channelOpen && state.score >= 10",
+          code: "state.channelOpen && state.score >= 10",
         },
         {
           type: "markdown",
@@ -128,36 +131,18 @@ export const signalStory = defineStory<SignalStoryData, SignalStoryVars>({
           label: "Answer the pulse",
           description: "Open a voice channel before the signal fades.",
           target: "pilot",
-          reduceState: ({ state }) => ({
-            ...state,
-            variables: { ...state.variables, route: "voice" },
-            flags: { ...state.flags, channelOpen: true },
-            score: state.score + 10,
-          }),
         },
         {
           id: "trace",
           label: "Trace the source",
           description: "Hold transmission and triangulate the coordinates.",
           target: "harbor",
-          reduceState: ({ state }) => ({
-            ...state,
-            variables: { ...state.variables, route: "trace" },
-            inventory: [...state.inventory, "triangulation"],
-            score: state.score + 7,
-          }),
         },
         {
           id: "archive",
           label: "Check the archive",
           description: "Compare the pattern against old expedition logs.",
           target: "archive",
-          reduceState: ({ state }) => ({
-            ...state,
-            variables: { ...state.variables, route: "archive" },
-            inventory: [...state.inventory, "archive-match"],
-            score: state.score + 4,
-          }),
         },
       ],
     },
@@ -351,6 +336,36 @@ export const signalStory = defineStory<SignalStoryData, SignalStoryVars>({
     },
   ],
 });
+
+export const signalStoryHooks: StoryStateHooks<SignalStoryData, SignalStoryVars> = {
+  applyChoice: ({ choice, state }) => {
+    switch (choice?.id) {
+      case "answer":
+        return {
+          ...state,
+          route: "voice",
+          channelOpen: true,
+          score: (state.score ?? 0) + 10,
+        };
+      case "trace":
+        return {
+          ...state,
+          route: "trace",
+          inventory: [...(state.inventory ?? []), "triangulation"],
+          score: (state.score ?? 0) + 7,
+        };
+      case "archive":
+        return {
+          ...state,
+          route: "archive",
+          inventory: [...(state.inventory ?? []), "archive-match"],
+          score: (state.score ?? 0) + 4,
+        };
+      default:
+        return state;
+    }
+  },
+};
 
 export const extendedRelayStory = defineStory<SignalStoryData>({
   id: "observatory-relay-extended",

@@ -2,6 +2,8 @@ import type {
   StoryChoice,
   StoryContentBlock,
   StoryDocument,
+  StoryDraft,
+  StoryDraftNode,
   StoryNode,
   StoryNodeData,
 } from "./story-model";
@@ -41,6 +43,51 @@ export function createStoryNode<TData extends StoryNodeData = StoryNodeData>(
   input: Pick<StoryNode<TData>, "id" | "title"> & Partial<StoryNode<TData>>,
 ): StoryNode<TData> {
   return { ...input };
+}
+
+function normalizeDraftNode<TData extends StoryNodeData>(
+  node: StoryDraftNode<TData>,
+): StoryNode<TData> {
+  return {
+    id: node.id ?? "",
+    title: node.title ?? "",
+    eyebrow: node.eyebrow,
+    content: node.content,
+    prompt: node.prompt,
+    data: node.data,
+    next: node.next,
+    choices: node.choices as StoryChoice<TData>[] | undefined,
+    children: node.children?.map(normalizeDraftNode),
+    durationInFrames: node.durationInFrames,
+    scrollUnits: node.scrollUnits,
+    transition: node.transition,
+    stage: node.stage,
+  };
+}
+
+function normalizePatchTarget<TData extends StoryNodeData>(
+  story: StoryDocument<TData> | StoryDraft<TData>,
+): StoryDocument<TData> {
+  if (
+    typeof story.id === "string" &&
+    typeof story.title === "string" &&
+    typeof story.openingNodeId === "string" &&
+    Array.isArray(story.nodes)
+  ) {
+    return story as StoryDocument<TData>;
+  }
+
+  return {
+    id: story.id ?? "",
+    title: story.title ?? "",
+    subtitle: story.subtitle,
+    description: story.description,
+    openingNodeId: story.openingNodeId ?? "",
+    nodes: (story.nodes ?? []).map((node) => normalizeDraftNode(node)),
+    defaults: story.defaults,
+    labels: story.labels,
+    initialState: story.initialState,
+  };
 }
 
 function clampInsertIndex(index: number | undefined, length: number) {
@@ -111,7 +158,9 @@ function updateNode<TData extends StoryNodeData>(
 ): StoryDocument<TData> {
   const result = updateNodeList(story.nodes, nodeId, updater);
 
-  if (!result.found && options.onMissing !== "ignore") {
+  if (!result.found) {
+    if (options.onMissing === "ignore") return story;
+
     throw new Error(`Story "${story.id}" does not contain node "${nodeId}".`);
   }
 
@@ -291,7 +340,11 @@ function applySingleStoryPatch<TData extends StoryNodeData>(
     case "add-node": {
       const result = insertNodeInTree(story.nodes, patch.node, patch.index, patch.parentNodeId);
 
-      if (!result.inserted && options.onMissing !== "ignore") {
+      if (!result.inserted && options.onMissing === "ignore") {
+        return story;
+      }
+
+      if (!result.inserted) {
         throw new Error(
           `Story "${story.id}" does not contain parent node "${patch.parentNodeId}".`,
         );
@@ -576,14 +629,25 @@ function applySingleStoryPatch<TData extends StoryNodeData>(
 export function applyStoryPatch<TData extends StoryNodeData>(
   story: StoryDocument<TData>,
   patch: StoryPatch<TData> | StoryPatch<TData>[],
+  options?: ApplyStoryPatchOptions,
+): StoryDocument<TData>;
+export function applyStoryPatch<TData extends StoryNodeData>(
+  story: StoryDraft<TData>,
+  patch: StoryPatch<TData> | StoryPatch<TData>[],
+  options?: ApplyStoryPatchOptions,
+): StoryDraft<TData>;
+export function applyStoryPatch<TData extends StoryNodeData>(
+  story: StoryDocument<TData> | StoryDraft<TData>,
+  patch: StoryPatch<TData> | StoryPatch<TData>[],
   options: ApplyStoryPatchOptions = {},
 ): StoryDocument<TData> {
   const resolvedOptions = { onMissing: "throw" as const, ...options };
   const patches = Array.isArray(patch) ? patch : [patch];
+  const patchTarget = normalizePatchTarget(story);
   const nextStory = patches.reduce(
     (currentStory, currentPatch) =>
       applySingleStoryPatch(currentStory, currentPatch, resolvedOptions),
-    story,
+    patchTarget,
   );
 
   return resolvedOptions.validate

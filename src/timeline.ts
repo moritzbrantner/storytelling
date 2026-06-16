@@ -57,7 +57,7 @@ export type StoryTimelineWorkbenchExtension<TData extends StoryNodeData = StoryN
 };
 
 export type StoryToTimelineDocumentOptions = {
-  choiceIds?: string[];
+  routeChoiceIds?: string[];
   fps?: number;
   trackId?: string;
   trackLabel?: string;
@@ -96,7 +96,7 @@ export function storyToTimelineEditorDocument<TData extends StoryNodeData>(
 ): StoryTimelineDocument<TData> {
   const fps = resolveTimelineFps(options.fps);
   const timeline = buildStoryTimeline(story, {
-    choiceIds: options.choiceIds,
+    routeChoiceIds: options.routeChoiceIds,
     fps,
   });
   const trackId = options.trackId ?? "story-scenes";

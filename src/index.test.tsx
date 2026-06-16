@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
@@ -14,7 +14,7 @@ import {
   assertStoryDocument,
   buildStoryTimeline,
   compileStory,
-  createDefaultStoryRuntimeState,
+  createDefaultStoryState,
   createStoryContentRendererRegistry,
   createStoryRendererRegistry,
   createStoryNode,
@@ -25,10 +25,8 @@ import {
   getStoryNode,
   getStoryNodeEntries,
   parseStorySnapshot,
-  parseStoryPath,
   resolveStoryPath,
   serializeStorySnapshot,
-  serializeStoryPath,
   storyDocumentJsonSchema,
   useStoryPathState,
   useStoryRuntime,
@@ -386,6 +384,7 @@ const longBranchStory = defineStory<FixtureData>({
 });
 
 afterEach(() => {
+  cleanup();
   vi.useRealTimers();
   vi.restoreAllMocks();
   vi.resetModules();
@@ -1190,7 +1189,6 @@ describe("@moritzbrantner/storytelling", () => {
               id: "continue",
               label: "Continue",
               target: "end",
-              isVisible: () => true,
             },
           ],
         },
@@ -1204,16 +1202,9 @@ describe("@moritzbrantner/storytelling", () => {
     const report = analyzeStory(richStory, { wordsPerMinute: 10 });
 
     expect(report.valid).toBe(true);
-    expect(report.metrics.conditionalEdgeCount).toBe(1);
+    expect(report.metrics.conditionalEdgeCount).toBe(0);
     expect(report.metrics.estimatedReadingMinutes).toBeGreaterThan(1);
-    expect(report.issues).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: "state-hooks-not-evaluated",
-          severity: "warning",
-        }),
-      ]),
-    );
+    expect(report.issues).toEqual([]);
   });
 
   test("analyzes nested story authoring metrics and diagnostics", () => {
@@ -1397,6 +1388,19 @@ describe("@moritzbrantner/storytelling", () => {
     expect(() =>
       applyStoryPatch(story, { type: "set-opening-node", nodeId: "missing" }, { validate: true }),
     ).toThrow("references missing opening node");
+
+    const draftPatched = applyStoryPatch(
+      { id: "draft", title: "Draft" },
+      {
+        type: "add-node",
+        node: { id: "draft-node", title: "Draft node" },
+      },
+    );
+
+    expect(draftPatched.nodes?.[0]?.id).toBe("draft-node");
+    expect(() => defineStory(draftPatched as StoryDocument<FixtureData>)).toThrow(
+      "opening node id",
+    );
   });
 
   test("moves nodes, choices, and content blocks without mutating the source story", () => {
@@ -1542,33 +1546,24 @@ describe("@moritzbrantner/storytelling", () => {
     ).toThrow("Cannot move story node");
   });
 
-  test("serializes and parses story path choice ids", () => {
-    const serialized = serializeStoryPath(["answer", "trace/with spaces"]);
-
-    expect(serialized).toBe("choice=answer&choice=trace%2Fwith+spaces");
-    expect(parseStoryPath(`?${serialized}`)).toEqual(["answer", "trace/with spaces"]);
-    expect(parseStoryPath("answer,trace")).toEqual(["answer", "trace"]);
-  });
-
   test("resolves branching, linear auto-advance, disabled choices, stopAt, and maxSteps", () => {
-    expect(resolveStoryPath(story, { choiceIds: ["trace"] }).nodes.map((node) => node.id)).toEqual([
-      "wake",
-      "trace-node",
-    ]);
+    expect(
+      resolveStoryPath(story, { routeChoiceIds: ["trace"] }).nodes.map((node) => node.id),
+    ).toEqual(["wake", "trace-node"]);
 
     expect(
       resolveStoryPath(story, {
-        choiceIds: ["answer"],
+        routeChoiceIds: ["answer"],
         autoAdvanceLinearNodes: true,
       }).nodes.map((node) => node.id),
     ).toEqual(["wake", "answer-node", "pilot-ending"]);
 
-    const disabled = resolveStoryPath(story, { choiceIds: ["locked"] });
+    const disabled = resolveStoryPath(story, { routeChoiceIds: ["locked"] });
     expect(disabled.completed).toBe(false);
     expect(disabled.currentNode.id).toBe("wake");
 
     const stopped = resolveStoryPath(story, {
-      choiceIds: ["answer"],
+      routeChoiceIds: ["answer"],
       autoAdvanceLinearNodes: true,
       stopAt: "answer-node",
     });
@@ -1576,7 +1571,7 @@ describe("@moritzbrantner/storytelling", () => {
     expect(stopped.nodes.map((node) => node.id)).toEqual(["wake", "answer-node"]);
 
     const maxSteps = resolveStoryPath(story, {
-      choiceIds: ["answer"],
+      routeChoiceIds: ["answer"],
       autoAdvanceLinearNodes: true,
       maxSteps: 1,
     });
@@ -1586,7 +1581,7 @@ describe("@moritzbrantner/storytelling", () => {
 
   test("resolves long branching story paths with intermediate sequence nodes and control points", () => {
     const stabilize = resolveStoryPath(longBranchStory, {
-      choiceIds: ["answer-pilot", "stabilize-route"],
+      routeChoiceIds: ["answer-pilot", "stabilize-route"],
       autoAdvanceLinearNodes: true,
     });
 
@@ -1602,7 +1597,7 @@ describe("@moritzbrantner/storytelling", () => {
     ]);
 
     const traceRoute = resolveStoryPath(longBranchStory, {
-      choiceIds: ["trace-source", "send-team"],
+      routeChoiceIds: ["trace-source", "send-team"],
       autoAdvanceLinearNodes: true,
     });
     expect(traceRoute.nodes.map((node) => node.id)).toEqual([
@@ -1616,7 +1611,7 @@ describe("@moritzbrantner/storytelling", () => {
     ]);
 
     const stopped = resolveStoryPath(longBranchStory, {
-      choiceIds: ["answer-pilot", "stabilize-route"],
+      routeChoiceIds: ["answer-pilot", "stabilize-route"],
       autoAdvanceLinearNodes: true,
       stopAt: "pilot-decision",
     });
@@ -1629,7 +1624,7 @@ describe("@moritzbrantner/storytelling", () => {
     ]);
 
     const maxSteps = resolveStoryPath(longBranchStory, {
-      choiceIds: ["answer-pilot", "stabilize-route"],
+      routeChoiceIds: ["answer-pilot", "stabilize-route"],
       autoAdvanceLinearNodes: true,
       maxSteps: 3,
     });
@@ -1701,7 +1696,7 @@ describe("@moritzbrantner/storytelling", () => {
     ).toEqual(["chapter"]);
     expect(
       resolveStoryPath(choiceParentStory, {
-        choiceIds: ["skip"],
+        routeChoiceIds: ["skip"],
         autoAdvanceLinearNodes: true,
       }).nodes.map((node) => node.id),
     ).toEqual(["chapter", "ending"]);
@@ -1724,7 +1719,7 @@ describe("@moritzbrantner/storytelling", () => {
 
   test("builds deterministic timelines with starts, ends, transitions, and total duration", () => {
     const timeline = buildStoryTimeline(story, {
-      choiceIds: ["answer"],
+      routeChoiceIds: ["answer"],
       defaultDurationInFrames: 100,
       transitionInFrames: 10,
     });
@@ -1742,7 +1737,7 @@ describe("@moritzbrantner/storytelling", () => {
 
   test("builds long branching timelines while preserving sequence order and frame layout", () => {
     const timeline = buildStoryTimeline(longBranchStory, {
-      choiceIds: ["answer-pilot", "stabilize-route"],
+      routeChoiceIds: ["answer-pilot", "stabilize-route"],
       defaultDurationInFrames: 100,
       transitionInFrames: 12,
     });
@@ -1842,24 +1837,24 @@ describe("@moritzbrantner/storytelling", () => {
     expect(await screen.findByText("Finish the nested story.")).toBeTruthy();
   });
 
-  test("supports controlled StoryPlayer choice ids", async () => {
-    const onChoiceIdsChange = vi.fn();
+  test("supports controlled StoryPlayer snapshots", async () => {
+    const onSnapshotChange = vi.fn();
+    const openingSnapshot = resolveStoryPath(story).snapshot;
     const { rerender } = render(
-      <StoryPlayer story={story} choiceIds={[]} onChoiceIdsChange={onChoiceIdsChange} />,
+      <StoryPlayer story={story} snapshot={openingSnapshot} onSnapshotChange={onSnapshotChange} />,
     );
 
     fireEvent.click(screen.getByRole("button", { name: /Trace the source/ }));
 
-    expect(onChoiceIdsChange).toHaveBeenCalledWith(
-      ["trace"],
+    expect(onSnapshotChange).toHaveBeenCalledWith(
+      expect.objectContaining({ nodeId: "trace-node" }),
       expect.objectContaining({
-        choiceIds: ["trace"],
         currentNode: expect.objectContaining({ id: "trace-node" }),
       }),
     );
     expect(screen.getByText("A low signal reaches the tower.")).toBeTruthy();
 
-    rerender(<StoryPlayer story={story} choiceIds={["trace"]} />);
+    rerender(<StoryPlayer story={story} snapshot={onSnapshotChange.mock.calls[0][0]} />);
 
     expect(
       await screen.findByText("The signal comes from a cove nobody has charted in decades."),
@@ -2016,24 +2011,30 @@ describe("@moritzbrantner/storytelling", () => {
 
   test("provides headless story path state for custom editor controls", async () => {
     function PathStateProbe({
-      choiceIds,
-      defaultChoiceIds,
-      onChoiceIdsChange,
+      snapshot,
+      defaultSnapshot,
+      onSnapshotChange,
     }: {
-      choiceIds?: string[];
-      defaultChoiceIds?: string[];
-      onChoiceIdsChange?: (choiceIds: string[], state: StoryPathState<FixtureData>) => void;
+      snapshot?: ReturnType<typeof resolveStoryPath<FixtureData>>["snapshot"];
+      defaultSnapshot?: ReturnType<typeof resolveStoryPath<FixtureData>>["snapshot"];
+      onSnapshotChange?: (
+        snapshot: ReturnType<typeof resolveStoryPath<FixtureData>>["snapshot"],
+        state: StoryPathState<FixtureData>,
+      ) => void;
     }) {
       const state = useStoryPathState(story, {
-        choiceIds,
-        defaultChoiceIds,
-        onChoiceIdsChange,
+        snapshot,
+        defaultSnapshot,
+        onSnapshotChange,
       });
+      const historyChoiceIds = state.history.flatMap((entry) =>
+        entry.choiceId ? [entry.choiceId] : [],
+      );
 
       return (
         <div>
           <p>Node {state.currentNode.id}</p>
-          <p>Choice ids {state.choiceIds.join(",") || "none"}</p>
+          <p>Choice ids {historyChoiceIds.join(",") || "none"}</p>
           <button type="button" onClick={() => state.choose("trace")}>
             Choose trace
           </button>
@@ -2046,15 +2047,24 @@ describe("@moritzbrantner/storytelling", () => {
           <button type="button" onClick={state.restart}>
             Restart
           </button>
-          <button type="button" onClick={() => state.setChoiceIds(["answer"])}>
+          <button
+            type="button"
+            onClick={() =>
+              state.setSnapshot(resolveStoryPath(story, { routeChoiceIds: ["answer"] }).snapshot)
+            }
+          >
             Set answer
           </button>
         </div>
       );
     }
 
-    const onChoiceIdsChange = vi.fn();
-    const { unmount } = render(<PathStateProbe defaultChoiceIds={["trace"]} />);
+    const onSnapshotChange = vi.fn();
+    const { unmount } = render(
+      <PathStateProbe
+        defaultSnapshot={resolveStoryPath(story, { routeChoiceIds: ["trace"] }).snapshot}
+      />,
+    );
 
     expect(screen.getByText("Node trace-node")).toBeTruthy();
     expect(screen.getByText("Choice ids trace")).toBeTruthy();
@@ -2073,21 +2083,26 @@ describe("@moritzbrantner/storytelling", () => {
 
     unmount();
     const controlled = render(
-      <PathStateProbe choiceIds={[]} onChoiceIdsChange={onChoiceIdsChange} />,
+      <PathStateProbe
+        snapshot={resolveStoryPath(story).snapshot}
+        onSnapshotChange={onSnapshotChange}
+      />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Choose trace" }));
 
-    expect(onChoiceIdsChange).toHaveBeenCalledWith(
-      ["trace"],
+    expect(onSnapshotChange).toHaveBeenCalledWith(
+      expect.objectContaining({ nodeId: "trace-node" }),
       expect.objectContaining({
-        choiceIds: ["trace"],
         currentNode: expect.objectContaining({ id: "trace-node" }),
       }),
     );
     expect(screen.getByText("Node wake")).toBeTruthy();
 
     controlled.rerender(
-      <PathStateProbe choiceIds={["trace"]} onChoiceIdsChange={onChoiceIdsChange} />,
+      <PathStateProbe
+        snapshot={onSnapshotChange.mock.calls[0][0]}
+        onSnapshotChange={onSnapshotChange}
+      />,
     );
     expect(await screen.findByText("Node trace-node")).toBeTruthy();
   });
@@ -2141,7 +2156,15 @@ describe("@moritzbrantner/storytelling", () => {
   });
 
   test("allows StoryScroller branch reselection by default after scrolling back", async () => {
-    const { container } = render(<StoryScroller story={story} pathChoiceIds={["answer"]} />);
+    const { container } = render(
+      <StoryScroller
+        story={story}
+        defaultSnapshot={
+          resolveStoryPath(story, { routeChoiceIds: ["answer"], autoAdvanceLinearNodes: true })
+            .snapshot
+        }
+      />,
+    );
     const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
 
     expect(viewport).toBeTruthy();
@@ -2158,13 +2181,16 @@ describe("@moritzbrantner/storytelling", () => {
   });
 
   test("can disable StoryScroller branch reselection after scrolling back", async () => {
-    const onChoiceIdsChange = vi.fn();
+    const onSnapshotChange = vi.fn();
     const { container } = render(
       <StoryScroller
         story={story}
-        pathChoiceIds={["answer"]}
+        defaultSnapshot={
+          resolveStoryPath(story, { routeChoiceIds: ["answer"], autoAdvanceLinearNodes: true })
+            .snapshot
+        }
         allowBranchReselection={false}
-        onChoiceIdsChange={onChoiceIdsChange}
+        onSnapshotChange={onSnapshotChange}
       />,
     );
     const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
@@ -2183,7 +2209,7 @@ describe("@moritzbrantner/storytelling", () => {
     screen.getByRole("region", { name: "Signal in the fog" }).focus();
     fireEvent.keyDown(window, { key: "2" });
 
-    expect(onChoiceIdsChange).not.toHaveBeenCalled();
+    expect(onSnapshotChange).not.toHaveBeenCalled();
     expect(
       screen.queryByText("The signal comes from a cove nobody has charted in decades."),
     ).toBeNull();
@@ -2232,11 +2258,15 @@ describe("@moritzbrantner/storytelling", () => {
     expect(await screen.findByText("Nested scene chapter-scene-a depth 1")).toBeTruthy();
   });
 
-  test("supports controlled StoryScroller choice ids", async () => {
-    const onChoiceIdsChange = vi.fn();
+  test("supports controlled StoryScroller snapshots", async () => {
+    const onSnapshotChange = vi.fn();
 
     const { container } = render(
-      <StoryScroller story={story} choiceIds={[]} onChoiceIdsChange={onChoiceIdsChange} />,
+      <StoryScroller
+        story={story}
+        snapshot={resolveStoryPath(story).snapshot}
+        onSnapshotChange={onSnapshotChange}
+      />,
     );
     const viewport = container.querySelector<HTMLElement>("[data-story-scroller-viewport]");
 
@@ -2246,10 +2276,9 @@ describe("@moritzbrantner/storytelling", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Answer immediately/ }));
 
-    expect(onChoiceIdsChange).toHaveBeenCalledWith(
-      ["answer"],
+    expect(onSnapshotChange).toHaveBeenCalledWith(
+      expect.objectContaining({ nodeId: "pilot-ending" }),
       expect.objectContaining({
-        choiceIds: ["answer"],
         currentNode: expect.objectContaining({ id: "pilot-ending" }),
       }),
     );
@@ -2379,7 +2408,13 @@ describe("@moritzbrantner/storytelling", () => {
 
   test("renders compound StoryScroller canvas, overlays, menu, and minimap", async () => {
     const { container } = render(
-      <StoryScroller.Root story={story} pathChoiceIds={["answer"]}>
+      <StoryScroller.Root
+        story={story}
+        defaultSnapshot={
+          resolveStoryPath(story, { routeChoiceIds: ["answer"], autoAdvanceLinearNodes: true })
+            .snapshot
+        }
+      >
         <StoryScroller.Layout className="compound-grid">
           <StoryScroller.Canvas />
           <StoryScroller.Menu ariaLabel="Compound menu" />
@@ -2431,7 +2466,13 @@ describe("@moritzbrantner/storytelling", () => {
 
   test("restarts from a compound StoryScroller ending overlay", async () => {
     const { container } = render(
-      <StoryScroller.Root story={story} pathChoiceIds={["answer"]}>
+      <StoryScroller.Root
+        story={story}
+        defaultSnapshot={
+          resolveStoryPath(story, { routeChoiceIds: ["answer"], autoAdvanceLinearNodes: true })
+            .snapshot
+        }
+      >
         <StoryScroller.Canvas />
       </StoryScroller.Root>,
     );
@@ -2455,14 +2496,17 @@ describe("@moritzbrantner/storytelling", () => {
     function ControllerProbe() {
       const controller = useStoryScrollerController<FixtureData>({
         story,
-        pathChoiceIds: ["answer"],
+        defaultSnapshot: resolveStoryPath(story, {
+          routeChoiceIds: ["answer"],
+          autoAdvanceLinearNodes: true,
+        }).snapshot,
       });
 
       return (
         <StoryScroller.Root controller={controller}>
           <p>
-            Controller hook {controller.mode} items {controller.items.length} choices{" "}
-            {controller.choiceIds.join(",")}
+            Controller hook {controller.mode} items {controller.items.length} history{" "}
+            {controller.history.length}
           </p>
           <StoryScroller.Canvas>
             <SceneProbe />
@@ -2473,9 +2517,7 @@ describe("@moritzbrantner/storytelling", () => {
 
     render(<ControllerProbe />);
 
-    expect(
-      screen.getByText(/Controller hook story items 3 choices answer,answer-node__continue/),
-    ).toBeTruthy();
+    expect(screen.getByText(/Controller hook story items 3 history 3/)).toBeTruthy();
     expect(screen.getByText("Scene hook node wake")).toBeTruthy();
   });
 
@@ -2671,8 +2713,8 @@ describe("@moritzbrantner/storytelling", () => {
   });
 
   test("resolves stateful stories with snapshots, reducers, and conditions", () => {
-    type Vars = { route: string | null };
-    const statefulStory = defineStory<FixtureData, Vars>({
+    type State = { route: string | null; hasKey?: boolean; inventory?: string[]; score?: number };
+    const statefulStory = defineStory<FixtureData, State>({
       id: "stateful",
       title: "Stateful",
       openingNodeId: "start",
@@ -2686,13 +2728,6 @@ describe("@moritzbrantner/storytelling", () => {
               id: "take-key",
               label: "Take key",
               target: "locked",
-              reduceState: ({ state }) => ({
-                ...state,
-                variables: { ...state.variables, route: "key" },
-                inventory: [...state.inventory, "key"],
-                flags: { ...state.flags, hasKey: true },
-                score: state.score + 5,
-              }),
             },
             { id: "blocked", label: "Blocked", target: "locked" },
             { id: "hidden", label: "Hidden", target: "locked", hidden: true },
@@ -2702,24 +2737,41 @@ describe("@moritzbrantner/storytelling", () => {
           id: "locked",
           title: "Locked",
           data: { tone: "warm" },
-          canEnter: ({ state }) => state.flags.hasKey === true,
-          reduceState: ({ state }) => ({ ...state, score: state.score + 1 }),
         },
       ],
     });
-    const defaultState = createDefaultStoryRuntimeState<Vars>({ route: null });
-    const opening = resolveStoryPath(statefulStory, { defaultState });
+    const defaultState = createDefaultStoryState<State>({ route: null, inventory: [], score: 0 });
+    const hooks = {
+      canEnterNode: ({ node, state }: { node: { id: string }; state: State }) =>
+        node.id !== "locked" || state.hasKey === true,
+      applyChoice: ({ choice, state }: { choice?: { id: string }; state: State }) =>
+        choice?.id === "take-key"
+          ? {
+              ...state,
+              route: "key",
+              hasKey: true,
+              inventory: [...(state.inventory ?? []), "key"],
+              score: (state.score ?? 0) + 5,
+            }
+          : state,
+      applyNode: ({ node, state }: { node: { id: string }; state: State }) =>
+        node.id === "locked" ? { ...state, score: (state.score ?? 0) + 1 } : state,
+    };
+    const opening = resolveStoryPath(statefulStory, { defaultState, hooks });
     const blocked = resolveStoryPath(statefulStory, {
       snapshot: opening.snapshot,
       choose: "blocked",
+      hooks,
     });
     const hidden = resolveStoryPath(statefulStory, {
       snapshot: opening.snapshot,
       choose: "hidden",
+      hooks,
     });
     const unlocked = resolveStoryPath(statefulStory, {
       snapshot: opening.snapshot,
       choose: "take-key",
+      hooks,
     });
     const encoded = serializeStorySnapshot(unlocked.snapshot);
 
@@ -3476,7 +3528,7 @@ describe("@moritzbrantner/storytelling", () => {
         custom: CustomStage,
       },
     });
-    const path = resolveStoryPath(story, { choiceIds: ["trace"] });
+    const path = resolveStoryPath(story, { routeChoiceIds: ["trace"] });
     const traceNode = path.currentNode;
     const renderProps: StoryRenderProps<FixtureData> = {
       story,
@@ -3518,7 +3570,7 @@ describe("@moritzbrantner/storytelling", () => {
     const { applyTimelineTimingsToStory, storyToTimelineEditorDocument } =
       await import("./timeline");
     const workflowDocument = storyToWorkflowDocument(story);
-    const timelineDocument = storyToTimelineEditorDocument(story, { choiceIds: ["answer"] });
+    const timelineDocument = storyToTimelineEditorDocument(story, { routeChoiceIds: ["answer"] });
     const nestedWorkflowDocument = storyToWorkflowDocument(nestedStory);
     const nestedTimelineDocument = storyToTimelineEditorDocument(nestedStory);
 
@@ -3563,10 +3615,12 @@ describe("@moritzbrantner/storytelling", () => {
       { includeDiagnostics: true },
     );
     const branchTimelineDocument = storyToTimelineEditorDocument(story, {
-      choiceIds: ["answer"],
+      routeChoiceIds: ["answer"],
       includeBranchMarkers: true,
     });
-    const defaultTimelineDocument = storyToTimelineEditorDocument(story, { choiceIds: ["answer"] });
+    const defaultTimelineDocument = storyToTimelineEditorDocument(story, {
+      routeChoiceIds: ["answer"],
+    });
 
     expect(positionedWorkflowDocument.nodes.find((node) => node.id === "wake")).toMatchObject({
       x: 11,
@@ -3637,7 +3691,7 @@ describe("@moritzbrantner/storytelling", () => {
     const { getStoryCompositionProps } = await import("./remotion");
     const composition = getStoryCompositionProps(story, {
       id: "signal-answer",
-      choiceIds: ["answer"],
+      routeChoiceIds: ["answer"],
       fps: 24,
       width: 1280,
       height: 720,
@@ -3653,7 +3707,7 @@ describe("@moritzbrantner/storytelling", () => {
       height: 720,
       durationInFrames: 290,
     });
-    expect(composition.defaultProps.choiceIds).toEqual(["answer"]);
+    expect(composition.defaultProps.routeChoiceIds).toEqual(["answer"]);
     expect(nestedComposition.durationInFrames).toBe(480);
   });
 
@@ -3663,7 +3717,7 @@ describe("@moritzbrantner/storytelling", () => {
     const { StoryRemotionComposition, getStoryCompositionProps } = await import("./remotion");
     const composition = getStoryCompositionProps(story, {
       id: "signal-video",
-      choiceIds: ["answer"],
+      routeChoiceIds: ["answer"],
       fps: 30,
       width: 1920,
       height: 1080,
@@ -3679,7 +3733,7 @@ describe("@moritzbrantner/storytelling", () => {
     expect(isValidElement(element)).toBe(true);
     expect(composition.defaultProps).toEqual({
       story,
-      choiceIds: ["answer"],
+      routeChoiceIds: ["answer"],
       layout: { fps: 30, width: 1920, height: 1080 },
     });
     expect("registry" in composition.defaultProps).toBe(false);
@@ -3722,7 +3776,7 @@ describe("@moritzbrantner/storytelling", () => {
     render(
       <StoryRemotionComposition
         story={remotionStory}
-        choiceIds={["trace"]}
+        routeChoiceIds={["trace"]}
         registry={registry}
         layout={{ fps: 24 }}
       />,

@@ -20,9 +20,9 @@ UI modules.
 
 ## Schema Export
 
-`@moritzbrantner/storytelling/schema` exports `storyDocumentJsonSchema`, a JSON
-schema for `StoryDocument`, nodes, choices, content blocks, stage descriptors,
-labels, defaults, and validation-compatible numeric constraints.
+`@moritzbrantner/storytelling/schema` exports `storyDocumentJsonSchema` and
+`createStoryDocumentJsonSchema(...)`, a closed portable baseline schema plus an
+extension helper for explicit custom content block schemas.
 
 ## Root Export
 
@@ -30,8 +30,8 @@ labels, defaults, and validation-compatible numeric constraints.
 - `validateStory(story, options?)` and `assertStoryDocument(story, options?)` throw `StoryValidationError` when invalid.
 - `validateStoryDocument(story, options?)` returns `StoryValidationIssue[]` without throwing.
 - `resolveStoryPath(story, options)` resolves the active node path from a
-  `StoryStateSnapshot`, optional `choose` choice id, and optional state hooks.
-  Legacy `choiceIds` input remains accepted for older callers.
+  `StorySnapshot`, optional `choose` choice id, and optional state hooks.
+  Static non-interactive routes use `routeChoiceIds`.
 - `buildStoryTimeline(story, options)` converts a resolved path into frame ranges.
 - `compileStory(story)` returns node and edge lookups for authoring tools.
 - `getStoryBranches(compiledStory)` returns nodes with multiple enabled outgoing choices.
@@ -40,19 +40,17 @@ labels, defaults, and validation-compatible numeric constraints.
   `getStoryNodeEntry(story, nodeId)` expose the flattened nested node tree with
   parent, ancestor, depth, index, and source-path metadata.
 - `enumerateStoryPaths(story, options)` returns every selectable path through an acyclic story.
-- `analyzeStory(story, options)` returns validation errors, authoring warnings, graph reachability, and story metrics for editor UIs.
+- `analyzeStoryDraft(story, options)` returns validation errors, authoring warnings, graph reachability, and story metrics for editor UIs. `analyzeStory` remains an alias.
 - `getStoryReachability(story)` returns reachable and unreachable node ids without requiring a full report.
 - `applyStoryPatch(story, patch, options)` applies immutable story-edit operations for editor drafts.
 - `createStoryNode(input)` creates a serializable story node object from required id/title fields plus optional node fields.
 - `serializeStorySnapshot(value)` and `parseStorySnapshot(input)` convert a
-  runtime snapshot to and from a `storyState=` query string. Legacy
-  `serializeStoryPath(value)` and `parseStoryPath(input)` remain available for
-  choice-id URLs.
+  runtime snapshot to and from a `storyState=` query string.
 - `createStoryPathState(story, options)` builds a reusable resolved path state object.
 - `useStoryPathState(story, options)` provides controlled or uncontrolled headless React path state for custom authoring UIs.
 - `useStoryRuntime(story, options)` provides reusable player-grade state, labels, actions, and `StoryRenderProps`.
-- `createStoryRenderProps(...)`, `buildPathFromHistory(...)`,
-  `getHistoryChoiceIds(...)`, and `createStoryPathStateFromHistory(...)`
+- `createStoryRenderProps(...)`, `buildPathFromHistory(...)`, and
+  `createStoryPathStateFromHistory(...)`
   expose shared runtime helpers for custom adapters.
 - `StoryPlayer` renders focused branching playback. Use grouped `slots` to
   replace stage, header, controls, actions, progress, and trail modules, and
@@ -69,32 +67,30 @@ labels, defaults, and validation-compatible numeric constraints.
 
 ### Validation Modes
 
-- Validation defaults to `mode: "compat"` for existing documents.
-- Pass `{ mode: "strict" }` to `defineStory`, `validateStory`,
-  `assertStoryDocument`, or `validateStoryDocument` to reject blank strings,
-  invalid ids, nodes that declare both `next` and `choices`, invalid content
-  blocks, and invalid numeric durations.
+- Validation defaults to strict published-document rules.
+- Pass `{ mode: "compat" }` only for legacy importers that need lenient
+  validation while they migrate.
+- Strict validation rejects blank strings, invalid ids, nodes that declare both
+  `next` and `choices`, invalid content blocks, invalid numeric durations,
+  non-object `initialState`, and function-bearing document fields.
 - Strict ids must match `/^[A-Za-z0-9][A-Za-z0-9._:-]*$/`.
 - Strict numeric constraints are `durationInFrames >= 1`,
   `transition.durationInFrames >= 0`, and `scrollUnits > 0`.
-- `analyzeStory(story)` reports strict-only validation problems as warnings.
-  Use `analyzeStory(story, { validationMode: "strict" })` to report them as
-  errors.
+- `analyzeStoryDraft(story)` reports strict validation problems as authoring
+  errors without throwing.
 
 ### Path State
 
-- `StoryRuntimeState` contains `variables`, `score`, `inventory`, and `flags`.
-- `StoryStateSnapshot` stores the current node id, history, runtime state, and
+- `StoryState` is an application-defined JSON object. Empty state defaults to `{}`.
+- `StorySnapshot` stores the current node id, history, runtime state, and
   stopped reason. It is the preferred controlled runtime value for players and
   scrollers.
-- `StoryChoice` supports static `hidden` and function hooks:
-  `isVisible`, `isEnabled`, and `reduceState`.
-- `StoryNode` supports `canEnter` and `reduceState`.
+- `StoryChoice` supports static `hidden` and `disabled`.
 - `StoryStateHooks` can provide document-level `createInitialState`,
   `canEnterNode`, `isChoiceVisible`, `isChoiceEnabled`, `applyChoice`, and
   `applyNode` hooks.
-- Reducers run in this order: choice reducer, global choice reducer, target
-  node reducer, global node reducer.
+- Reducers run in this order: global choice reducer, then global node reducer
+  for the target node.
 - If a target node cannot be entered, resolution stops with
   `blocked-by-condition`.
 - `StoryNode.children` nests serializable story scenes under a parent node.
@@ -202,7 +198,7 @@ labels, defaults, and validation-compatible numeric constraints.
 
 ### Authoring Fixes
 
-- `analyzeStory(story, { includeFixes: true })` adds `fixes` to safe,
+- `analyzeStoryDraft(story, { includeFixes: true })` adds `fixes` to safe,
   deterministic diagnostics.
 - Initial fixes cover removing unreachable nodes, adding placeholder paragraph
   content to reachable empty nodes, removing disabled-only empty branch choices,
@@ -293,7 +289,8 @@ labels, defaults, and validation-compatible numeric constraints.
 - Nested story scenes are emitted in flattened path order, and timeline item
   data includes `nodeEntry` hierarchy metadata.
 - `createStoryTimelineExtension()` returns a lightweight extension descriptor for story scene items.
-- `storyToTimelineEditorDocument` accepts `includeBranchMarkers` to add branch and ending markers alongside scene markers.
+- `storyToTimelineEditorDocument` accepts `routeChoiceIds` and
+  `includeBranchMarkers` to add branch and ending markers alongside scene markers.
 - Timeline `fps` must be finite and greater than `0`.
 - When multiple timeline items target the same node, the last matching item
   determines that node's duration.
@@ -307,7 +304,7 @@ labels, defaults, and validation-compatible numeric constraints.
   to `0..1`.
 - `getStoryCompositionProps()` returns props that can be spread into Remotion's
   `<Composition>` together with `component={StoryRemotionComposition}`.
-- Keep `defaultProps` JSON-serializable. `story`, `choiceIds`, and `layout` are
+- Keep `defaultProps` JSON-serializable. `story`, `routeChoiceIds`, and `layout` are
   safe; custom renderer `registry` objects contain functions and must be
   imported inside the Remotion bundle instead of being passed through
   `defaultProps` or renderer `inputProps`.

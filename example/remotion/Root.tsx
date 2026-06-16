@@ -10,7 +10,7 @@ import { storyVideo } from "./story-video";
 
 const composition = getStoryCompositionProps(storyVideo.story, {
   id: "observatory-relay",
-  choiceIds: storyVideo.choiceIds,
+  routeChoiceIds: storyVideo.routeChoiceIds,
   fps: 30,
   width: 1920,
   height: 1080,

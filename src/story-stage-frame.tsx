@@ -4,7 +4,7 @@ import { cn } from "@moritzbrantner/ui";
 
 import { StoryContent } from "./story-content";
 import { getStoryRendererKey } from "./story-render-registry";
-import type { StoryNodeData, StoryVariables } from "./story-model";
+import type { StoryNodeData, StoryState } from "./story-model";
 import type {
   StoryRendererRegistry,
   StoryRenderProps,
@@ -13,19 +13,21 @@ import type {
 
 export type StoryStageFrameProps<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
-> = StoryRenderProps<TData, TVars> & {
-  registry?: StoryRendererRegistry<TData, TVars>;
+  TState extends StoryState = StoryState,
+> = StoryRenderProps<TData, TState> & {
+  registry?: StoryRendererRegistry<TData, TState>;
   className?: string;
 };
 
 export function StoryStageFrame<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
->(props: StoryStageFrameProps<TData, TVars>) {
+  TState extends StoryState = StoryState,
+>(props: StoryStageFrameProps<TData, TState>) {
   const { node, registry, className } = props;
   const rendererKey = getStoryRendererKey(node);
-  const CustomStage = registry?.web?.[rendererKey] as StoryStageComponent<TData, TVars> | undefined;
+  const CustomStage = registry?.web?.[rendererKey] as
+    | StoryStageComponent<TData, TState>
+    | undefined;
 
   if (CustomStage) {
     return <CustomStage {...props} />;

@@ -93,11 +93,11 @@ describe("Remotion story helpers", () => {
       height: 1080,
       defaultProps: {
         story: remotionStory,
-        choiceIds: [],
+        routeChoiceIds: [],
         layout: { width: 1920, height: 1080 },
       },
     });
-    expect(getStoryCompositionProps(remotionStory, { choiceIds: ["left"] }).id).toBe(
+    expect(getStoryCompositionProps(remotionStory, { routeChoiceIds: ["left"] }).id).toBe(
       "remotion-story-left",
     );
     expect(getStoryCompositionProps(remotionStory, { fps: undefined }).fps).toBeGreaterThan(0);
@@ -206,7 +206,7 @@ describe("Remotion story helpers", () => {
       },
       history: [],
       path: {} as never,
-      state: { variables: {}, flags: {}, inventory: [], score: 0 },
+      state: {},
       snapshot: {} as never,
       currentIndex: 1,
       progress: 0.5,
@@ -257,7 +257,7 @@ describe("Remotion story helpers", () => {
     const { rerender } = render(
       <StoryRemotionComposition
         story={remotionStory}
-        choiceIds={["left"]}
+        routeChoiceIds={["left"]}
         layout={{ fps: undefined }}
       />,
     );
@@ -270,7 +270,7 @@ describe("Remotion story helpers", () => {
     rerender(
       <StoryRemotionComposition
         story={remotionStory}
-        choiceIds={["right"]}
+        routeChoiceIds={["right"]}
         registry={{ remotion: { other: () => <div>Other renderer</div> } }}
       />,
     );

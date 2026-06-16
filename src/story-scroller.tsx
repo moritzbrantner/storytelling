@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -29,7 +30,6 @@ import {
   buildPathFromHistory,
   createStoryPathStateFromHistory,
   createStoryRenderProps,
-  getHistoryChoiceIds,
   type StoryRuntimeLabels,
 } from "./story-runtime";
 import { StoryMinimap as StoryMinimapView } from "./story-minimap";
@@ -42,9 +42,9 @@ import type {
   StoryHistoryEntry,
   StoryNodeData,
   StoryNodeTreeEntry,
-  StoryRuntimeState,
+  StoryState,
   StoryStateHooks,
-  StoryStateSnapshot,
+  StorySnapshot,
 } from "./story-model";
 import type { StoryRendererRegistry, StoryRenderProps } from "./story-render-types";
 import type { StoryPathState } from "./story-state";
@@ -107,7 +107,6 @@ export type StoryScrollerController<
   activeIndex: number;
   sceneProgress: number;
   scrollTarget?: StoryScrollTarget;
-  choiceIds: string[];
   labels: StoryRuntimeLabels;
   allowBranchReselection?: boolean;
   scrollToScene: (index: number) => void;
@@ -143,23 +142,15 @@ export type StoryScrollerStoryRootProps<TData extends StoryNodeData = StoryNodeD
   story: StoryDocument<TData>;
   scenes?: never;
   registry?: StoryRendererRegistry<TData>;
-  snapshot?: StoryStateSnapshot<TData>;
-  defaultSnapshot?: StoryStateSnapshot<TData>;
-  defaultState?: StoryRuntimeState;
+  snapshot?: StorySnapshot<TData>;
+  defaultSnapshot?: StorySnapshot<TData>;
+  defaultState?: StoryState;
   hooks?: StoryStateHooks<TData>;
-  /** @deprecated Use defaultSnapshot instead. */
-  pathChoiceIds?: string[];
-  /** @deprecated Use defaultSnapshot instead. */
-  defaultChoiceIds?: string[];
-  /** @deprecated Use snapshot instead. */
-  choiceIds?: string[];
   allowBranchReselection?: boolean;
   children?: ReactNode;
   onChoice?: (choice: StoryChoice, history: StoryHistoryEntry<TData>[]) => void;
   onPathChange?: (history: StoryHistoryEntry<TData>[]) => void;
-  onSnapshotChange?: (snapshot: StoryStateSnapshot<TData>, state: StoryPathState<TData>) => void;
-  /** @deprecated Use onSnapshotChange instead. */
-  onChoiceIdsChange?: (choiceIds: string[], state: StoryPathState<TData>) => void;
+  onSnapshotChange?: (snapshot: StorySnapshot<TData>, state: StoryPathState<TData>) => void;
   onActiveIndexChange?: (index: number) => void;
   onSceneProgressChange?: (value: number) => void;
 };
@@ -172,15 +163,11 @@ export type StoryScrollerScenesRootProps<TSceneData = unknown> = {
   defaultSnapshot?: never;
   defaultState?: never;
   hooks?: never;
-  pathChoiceIds?: never;
-  defaultChoiceIds?: never;
-  choiceIds?: never;
   allowBranchReselection?: never;
   children?: ReactNode;
   onChoice?: never;
   onPathChange?: never;
   onSnapshotChange?: never;
-  onChoiceIdsChange?: never;
   onActiveIndexChange?: (index: number) => void;
   onSceneProgressChange?: (value: number) => void;
 };
@@ -249,16 +236,10 @@ export type StoryScrollerProps<
   story?: StoryDocument<TData>;
   scenes?: StoryScrollScene<TSceneData>[];
   registry?: StoryRendererRegistry<TData>;
-  snapshot?: StoryStateSnapshot<TData>;
-  defaultSnapshot?: StoryStateSnapshot<TData>;
-  defaultState?: StoryRuntimeState;
+  snapshot?: StorySnapshot<TData>;
+  defaultSnapshot?: StorySnapshot<TData>;
+  defaultState?: StoryState;
   hooks?: StoryStateHooks<TData>;
-  /** @deprecated Use defaultSnapshot instead. */
-  pathChoiceIds?: string[];
-  /** @deprecated Use defaultSnapshot instead. */
-  defaultChoiceIds?: string[];
-  /** @deprecated Use snapshot instead. */
-  choiceIds?: string[];
   allowBranchReselection?: boolean;
   className?: string;
   viewportClassName?: string;
@@ -273,9 +254,7 @@ export type StoryScrollerProps<
   modules?: StoryScrollerModules;
   onChoice?: (choice: StoryChoice, history: StoryHistoryEntry<TData>[]) => void;
   onPathChange?: (history: StoryHistoryEntry<TData>[]) => void;
-  onSnapshotChange?: (snapshot: StoryStateSnapshot<TData>, state: StoryPathState<TData>) => void;
-  /** @deprecated Use onSnapshotChange instead. */
-  onChoiceIdsChange?: (choiceIds: string[], state: StoryPathState<TData>) => void;
+  onSnapshotChange?: (snapshot: StorySnapshot<TData>, state: StoryPathState<TData>) => void;
   onActiveIndexChange?: (index: number) => void;
   onSceneProgressChange?: (value: number) => void;
 };
@@ -299,9 +278,8 @@ const StoryScrollerSceneContext = createContext<StoryScrollerSceneContextValue |
 
 function resolveInitialHistory<TData extends StoryNodeData>(
   story: StoryDocument<TData>,
-  choiceIds: string[],
-  snapshot?: StoryStateSnapshot<TData>,
-  defaultState?: StoryRuntimeState,
+  snapshot?: StorySnapshot<TData>,
+  defaultState?: StoryState,
   hooks?: StoryStateHooks<TData>,
 ) {
   if (snapshot) {
@@ -309,7 +287,6 @@ function resolveInitialHistory<TData extends StoryNodeData>(
   }
 
   return resolveStoryPath(story, {
-    choiceIds,
     defaultState,
     hooks,
     autoAdvanceLinearNodes: true,
@@ -444,7 +421,6 @@ function useCustomSceneScrollerController<TSceneData>(
     activeIndex,
     sceneProgress,
     scrollTarget,
-    choiceIds: [],
     labels: resolveStoryScrollerLabels(undefined),
     allowBranchReselection: true,
     scrollToScene,
@@ -465,43 +441,20 @@ function useStoryDocumentScrollerController<TData extends StoryNodeData>(
     defaultSnapshot,
     defaultState,
     hooks,
-    pathChoiceIds = [],
-    defaultChoiceIds,
-    choiceIds,
     allowBranchReselection = true,
     onChoice,
     onPathChange,
     onSnapshotChange,
-    onChoiceIdsChange,
     onActiveIndexChange,
     onSceneProgressChange,
   } = options;
   const story = useMemo(() => validateStory(input), [input]);
   const labels = useMemo(() => resolveStoryScrollerLabels(story.labels), [story.labels]);
-  const resolvedDefaultChoiceIds = defaultChoiceIds ?? pathChoiceIds;
-  const resolvedDefaultSnapshot = defaultSnapshot;
-  const defaultChoiceKey = resolvedDefaultChoiceIds.join("|");
-  const controlledChoiceKey = choiceIds?.join("|") ?? "";
-  const isChoiceIdsControlled = choiceIds !== undefined;
+  const defaultSnapshotRef = useRef(defaultSnapshot);
   const isSnapshotControlled = snapshot !== undefined;
   const initialHistory = useMemo(
-    () =>
-      resolveInitialHistory(
-        story,
-        choiceIds ?? resolvedDefaultChoiceIds,
-        snapshot ?? resolvedDefaultSnapshot,
-        defaultState,
-        hooks,
-      ),
-    [
-      controlledChoiceKey,
-      defaultChoiceKey,
-      defaultState,
-      hooks,
-      resolvedDefaultSnapshot,
-      snapshot,
-      story,
-    ],
+    () => resolveInitialHistory(story, snapshot ?? defaultSnapshotRef.current, defaultState, hooks),
+    [defaultState, hooks, snapshot, story],
   );
   const nodeEntryLookup = useMemo(() => createStoryNodeEntryLookup(story), [story]);
   const [history, setHistory] = useState<StoryHistoryEntry<TData>[]>(() => initialHistory);
@@ -534,7 +487,6 @@ function useStoryDocumentScrollerController<TData extends StoryNodeData>(
       );
       if (!choice) return;
 
-      const nextChoiceIds = [...getHistoryChoiceIds(history.slice(0, index + 1)), choice.id];
       const nextPath = resolveStoryPath(story, {
         snapshot: createStoryPathStateFromHistory(story, history.slice(0, index + 1)).snapshot,
         choose: choice.id,
@@ -545,30 +497,21 @@ function useStoryDocumentScrollerController<TData extends StoryNodeData>(
       const nextHistory = nextPath.history;
       const nextActiveIndex = Math.min(index + 1, nextHistory.length - 1);
 
-      if (!isChoiceIdsControlled && !isSnapshotControlled) {
+      if (!isSnapshotControlled) {
         setHistory(nextHistory);
       }
 
       scrollToScene(nextActiveIndex);
       onChoice?.(choice, nextHistory);
-      onChoiceIdsChange?.(
-        nextChoiceIds,
-        createStoryPathStateFromHistory(story, nextHistory, nextChoiceIds),
-      );
-      onSnapshotChange?.(
-        nextPath.snapshot,
-        createStoryPathStateFromHistory(story, nextHistory, nextChoiceIds),
-      );
+      onSnapshotChange?.(nextPath.snapshot, createStoryPathStateFromHistory(story, nextHistory));
     },
     [
       allowBranchReselection,
       defaultState,
       hooks,
       history,
-      isChoiceIdsControlled,
       isSnapshotControlled,
       onChoice,
-      onChoiceIdsChange,
       onSnapshotChange,
       scrollToScene,
       story,
@@ -583,23 +526,13 @@ function useStoryDocumentScrollerController<TData extends StoryNodeData>(
     });
     const nextHistory = nextPath.history;
 
-    if (!isChoiceIdsControlled && !isSnapshotControlled) {
+    if (!isSnapshotControlled) {
       setHistory(nextHistory);
     }
 
     scrollToScene(0);
-    onChoiceIdsChange?.([], createStoryPathStateFromHistory(story, nextHistory, []));
-    onSnapshotChange?.(nextPath.snapshot, createStoryPathStateFromHistory(story, nextHistory, []));
-  }, [
-    defaultState,
-    hooks,
-    isChoiceIdsControlled,
-    isSnapshotControlled,
-    onChoiceIdsChange,
-    onSnapshotChange,
-    scrollToScene,
-    story,
-  ]);
+    onSnapshotChange?.(nextPath.snapshot, createStoryPathStateFromHistory(story, nextHistory));
+  }, [defaultState, hooks, isSnapshotControlled, onSnapshotChange, scrollToScene, story]);
 
   const scenes = useMemo<StoryScrollScene[]>(
     () =>
@@ -647,7 +580,6 @@ function useStoryDocumentScrollerController<TData extends StoryNodeData>(
     activeIndex,
     sceneProgress,
     scrollTarget,
-    choiceIds: isChoiceIdsControlled ? (choiceIds ?? []) : getHistoryChoiceIds(history),
     labels,
     allowBranchReselection,
     scrollToScene,
@@ -1120,9 +1052,10 @@ function StoryScrollerFacade<TData extends StoryNodeData = StoryNodeData, TScene
   story,
   scenes,
   registry,
-  pathChoiceIds = [],
-  defaultChoiceIds,
-  choiceIds,
+  snapshot,
+  defaultSnapshot,
+  defaultState,
+  hooks,
   allowBranchReselection,
   className,
   viewportClassName,
@@ -1137,7 +1070,7 @@ function StoryScrollerFacade<TData extends StoryNodeData = StoryNodeData, TScene
   modules,
   onChoice,
   onPathChange,
-  onChoiceIdsChange,
+  onSnapshotChange,
   onActiveIndexChange,
   onSceneProgressChange,
 }: StoryScrollerProps<TData, TSceneData>) {
@@ -1175,13 +1108,14 @@ function StoryScrollerFacade<TData extends StoryNodeData = StoryNodeData, TScene
     <StoryScrollerRoot
       story={story}
       registry={registry}
-      pathChoiceIds={pathChoiceIds}
-      defaultChoiceIds={defaultChoiceIds}
-      choiceIds={choiceIds}
+      snapshot={snapshot}
+      defaultSnapshot={defaultSnapshot}
+      defaultState={defaultState}
+      hooks={hooks}
       allowBranchReselection={allowBranchReselection}
       onChoice={onChoice}
       onPathChange={onPathChange}
-      onChoiceIdsChange={onChoiceIdsChange}
+      onSnapshotChange={onSnapshotChange}
       onActiveIndexChange={onActiveIndexChange}
       onSceneProgressChange={onSceneProgressChange}
     >

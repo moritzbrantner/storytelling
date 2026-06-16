@@ -1,23 +1,23 @@
-import type { StoryNode, StoryNodeData, StoryVariables } from "./story-model";
+import type { StoryNode, StoryNodeData, StoryState } from "./story-model";
 import type { StoryRendererRegistry } from "./story-render-types";
 
 export function createStoryRendererRegistry<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
->(registry: StoryRendererRegistry<TData, TVars> = {}) {
+  TState extends StoryState = StoryState,
+>(registry: StoryRendererRegistry<TData, TState> = {}) {
   return registry;
 }
 
 export function getStoryRendererKey<
   TData extends StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
->(node: StoryNode<TData, TVars>) {
+  TState extends StoryState = StoryState,
+>(node: StoryNode<TData, TState>) {
   return node.stage?.renderer ?? node.stage?.variant ?? "default";
 }
 
 export function getStoryStageProps<
   TData extends StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
->(node: StoryNode<TData, TVars>) {
+  TState extends StoryState = StoryState,
+>(node: StoryNode<TData, TState>) {
   return node.stage?.props ?? {};
 }

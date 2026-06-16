@@ -28,7 +28,7 @@ export type StoryRemotionLayout = {
 
 export type StoryRemotionCompositionProps<TData extends StoryNodeData = StoryNodeData> = {
   story: StoryDocument<TData>;
-  choiceIds?: string[];
+  routeChoiceIds?: string[];
   registry?: StoryRendererRegistry<TData>;
   theme?: StoryTheme;
   layout?: StoryRemotionLayout;
@@ -36,7 +36,7 @@ export type StoryRemotionCompositionProps<TData extends StoryNodeData = StoryNod
 
 export type StoryCompositionOptions = {
   id?: string;
-  choiceIds?: string[];
+  routeChoiceIds?: string[];
   fps?: number;
   width?: number;
   height?: number;
@@ -63,12 +63,12 @@ export function getStoryCompositionProps<TData extends StoryNodeData>(
   options: StoryCompositionOptions = {},
 ) {
   const timeline = buildStoryTimeline(story, {
-    choiceIds: options.choiceIds,
+    routeChoiceIds: options.routeChoiceIds,
     fps: resolveRemotionFps(options.fps),
   });
   const id =
     options.id ??
-    `${story.id}-${options.choiceIds?.length ? options.choiceIds.join("-") : "default"}`;
+    `${story.id}-${options.routeChoiceIds?.length ? options.routeChoiceIds.join("-") : "default"}`;
 
   return {
     id,
@@ -78,7 +78,7 @@ export function getStoryCompositionProps<TData extends StoryNodeData>(
     durationInFrames: timeline.totalFrames,
     defaultProps: {
       story,
-      choiceIds: options.choiceIds ?? [],
+      routeChoiceIds: options.routeChoiceIds ?? [],
       layout: {
         fps: timeline.fps,
         width: options.width ?? 1920,
@@ -330,14 +330,17 @@ export function StoryRemotionSceneFrame<TData extends StoryNodeData = StoryNodeD
 
 export function StoryRemotionComposition<TData extends StoryNodeData = StoryNodeData>({
   story: input,
-  choiceIds = [],
+  routeChoiceIds = [],
   registry,
   theme,
   layout,
 }: StoryRemotionCompositionProps<TData>) {
   const story = validateStory(input);
   const absoluteFrame = useCurrentFrame();
-  const timeline = buildStoryTimeline(story, { choiceIds, fps: resolveRemotionFps(layout?.fps) });
+  const timeline = buildStoryTimeline(story, {
+    routeChoiceIds,
+    fps: resolveRemotionFps(layout?.fps),
+  });
 
   return (
     <AbsoluteFill>

@@ -7,9 +7,7 @@ import {
   compileStory,
   enumerateStoryPaths,
   getStoryChoices,
-  parseStoryPath,
   resolveStoryPath,
-  serializeStoryPath,
   validateStoryDocument,
 } from "../../src/core";
 import { getStoryNodeEntries } from "../../src/story-node-tree";
@@ -71,7 +69,7 @@ describe("story correctness properties", () => {
 
           for (const path of enumerateStoryPaths(story, { maxPaths: 250 })) {
             const resolved = resolveStoryPath(story, {
-              choiceIds: path.choiceIds,
+              routeChoiceIds: path.choiceIds,
               autoAdvanceLinearNodes: true,
             });
 
@@ -80,18 +78,6 @@ describe("story correctness properties", () => {
               path.nodes.map((node) => node.id),
             );
           }
-        },
-      ),
-      propertyOptions,
-    );
-  });
-
-  test("story path query strings round-trip choice ids", () => {
-    fc.assert(
-      fc.property(
-        fc.array(fc.stringMatching(/[A-Za-z0-9._:-]{1,12}/), { maxLength: 12 }),
-        (choiceIds) => {
-          expect(parseStoryPath(serializeStoryPath(choiceIds))).toEqual(choiceIds);
         },
       ),
       propertyOptions,
@@ -154,7 +140,7 @@ describe("story correctness properties", () => {
 
     expect(disabledChoiceId).toBeTruthy();
 
-    const resolved = resolveStoryPath(story, { choiceIds: [disabledChoiceId!] });
+    const resolved = resolveStoryPath(story, { routeChoiceIds: [disabledChoiceId!] });
     expect(resolved.completed).toBe(false);
     expect(resolved.stoppedReason).toBe("invalid-choice");
     expect(enumerateStoryPaths(story).map((path) => path.choiceIds)).not.toContainEqual([
@@ -242,12 +228,6 @@ describe("story correctness regressions", () => {
     ).toStrictEqual(story);
   });
 
-  test("story path parsing supports legacy and unknown query formats", () => {
-    expect(parseStoryPath("?choices=left,right,,third")).toEqual(["left", "right", "third"]);
-    expect(parseStoryPath("left%20choice,right")).toEqual(["left choice", "right"]);
-    expect(parseStoryPath("?other=value")).toEqual([]);
-  });
-
   test("story patch edge cases cover choices, opening nodes, and validation", () => {
     const story = createBranchingStory({ depth: 1, fanout: 2 });
     const moved = applyStoryPatch(story, {
@@ -314,7 +294,7 @@ describe("story correctness regressions", () => {
     };
     const report = analyzeStory(draft, { includeFixes: true, wordsPerMinute: 2 });
 
-    expect(report.valid).toBe(true);
+    expect(report.valid).toBe(false);
     expect(report.metrics.mediaBlockCount).toBe(3);
     expect(report.metrics.estimatedReadingMinutes).toBeGreaterThan(5);
     expect(report.issues).toEqual(

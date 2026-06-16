@@ -1,4 +1,11 @@
-import type { StoryChoice, StoryDocument, StoryNode, StoryNodeData } from "./story-model";
+import type {
+  StoryChoice,
+  StoryDocument,
+  StoryDraft,
+  StoryDraftNode,
+  StoryNode,
+  StoryNodeData,
+} from "./story-model";
 import type { StoryPatch } from "./story-edit";
 import {
   compileStory,
@@ -81,6 +88,42 @@ export type StoryAuthoringReport<TData extends StoryNodeData = StoryNodeData> = 
 
 const DEFAULT_MAX_PATHS = 1000;
 const DEFAULT_WORDS_PER_MINUTE = 220;
+
+function normalizeDraftNode<TData extends StoryNodeData>(
+  node: StoryDraftNode<TData>,
+): StoryNode<TData> {
+  return {
+    id: node.id ?? "",
+    title: node.title ?? "",
+    eyebrow: node.eyebrow,
+    content: node.content,
+    prompt: node.prompt,
+    data: node.data,
+    next: node.next,
+    choices: node.choices as StoryChoice<TData>[] | undefined,
+    children: node.children?.map(normalizeDraftNode),
+    durationInFrames: node.durationInFrames,
+    scrollUnits: node.scrollUnits,
+    transition: node.transition,
+    stage: node.stage,
+  };
+}
+
+function normalizeStoryDraft<TData extends StoryNodeData>(
+  draft: StoryDraft<TData> | StoryDocument<TData>,
+): StoryDocument<TData> {
+  return {
+    id: draft.id ?? "",
+    title: draft.title ?? "",
+    subtitle: draft.subtitle,
+    description: draft.description,
+    openingNodeId: draft.openingNodeId ?? "",
+    nodes: (draft.nodes ?? []).map((node) => normalizeDraftNode(node)),
+    defaults: draft.defaults,
+    labels: draft.labels,
+    initialState: draft.initialState,
+  };
+}
 
 function getIssueKey(issue: Pick<StoryValidationIssue, "code" | "path" | "nodeId" | "choiceId">) {
   return [issue.code, issue.path, issue.nodeId ?? "", issue.choiceId ?? ""].join("\0");
@@ -364,13 +407,14 @@ export function getStoryReachability<TData extends StoryNodeData>(story: StoryDo
   };
 }
 
-export function analyzeStory<TData extends StoryNodeData>(
-  story: StoryDocument<TData>,
+export function analyzeStoryDraft<TData extends StoryNodeData>(
+  draft: StoryDraft<TData> | StoryDocument<TData>,
   options: AnalyzeStoryOptions = {},
 ): StoryAuthoringReport<TData> {
+  const story = normalizeStoryDraft(draft);
   const maxPaths = options.maxPaths ?? DEFAULT_MAX_PATHS;
   const wordsPerMinute = options.wordsPerMinute ?? DEFAULT_WORDS_PER_MINUTE;
-  const validationMode = options.validationMode ?? "compat";
+  const validationMode = options.validationMode ?? "strict";
   const validationIssues = validateStoryDocument(story, { mode: validationMode });
   const issues: StoryAuthoringIssue[] = validationIssues.map((issue) =>
     withFixes(
@@ -379,7 +423,7 @@ export function analyzeStory<TData extends StoryNodeData>(
     ),
   );
 
-  if (!options.validationMode) {
+  if (options.validationMode === "compat") {
     const validationIssueKeys = new Set(validationIssues.map(getIssueKey));
     const strictWarnings = validateStoryDocument(story, { mode: "strict" }).filter(
       (issue) => !validationIssueKeys.has(getIssueKey(issue)),
@@ -571,3 +615,5 @@ export function analyzeStory<TData extends StoryNodeData>(
     branches,
   };
 }
+
+export const analyzeStory = analyzeStoryDraft;

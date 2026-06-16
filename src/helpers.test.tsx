@@ -4,7 +4,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   StoryProgress,
   buildPathFromHistory,
-  createDefaultStoryRuntimeState,
+  createDefaultStoryState,
   createStoryRenderProps,
   createStoryRendererRegistry,
   defineStory,
@@ -29,7 +29,7 @@ const helperStory: StoryDocument<FixtureData, Vars> = defineStory<FixtureData, V
     endingPrompt: "Ending label",
     completedBranch: "Completed label",
   },
-  initialState: createDefaultStoryRuntimeState<Vars>({ route: "initial" }),
+  initialState: createDefaultStoryState<Vars>({ route: "initial" }),
   nodes: [
     {
       id: "start",
@@ -86,7 +86,7 @@ describe("story helper coverage", () => {
 
   test("builds paths and render props from history defaults", () => {
     const emptyPath = buildPathFromHistory(helperStory, []);
-    const explicitState = createDefaultStoryRuntimeState<Vars>({ route: "history" });
+    const explicitState = createDefaultStoryState<Vars>({ route: "history" });
     const historyPath = buildPathFromHistory(helperStory, [
       { nodeId: "start", state: helperStory.initialState },
       { nodeId: "end", choiceId: "finish", state: explicitState },
@@ -94,9 +94,9 @@ describe("story helper coverage", () => {
     const renderProps = createStoryRenderProps({ story: helperStory, path: historyPath });
 
     expect(emptyPath.currentNode.id).toBe("start");
-    expect(emptyPath.state.variables.route).toBe("initial");
+    expect(emptyPath.state.route).toBe("initial");
     expect(historyPath.currentNode.id).toBe("end");
-    expect(historyPath.state.variables.route).toBe("history");
+    expect(historyPath.state.route).toBe("history");
     expect(renderProps.node.id).toBe("end");
     expect(renderProps.nodeEntry?.nodeId).toBe("end");
     expect(renderProps.currentIndex).toBe(1);

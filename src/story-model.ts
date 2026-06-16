@@ -1,67 +1,53 @@
-export type StoryNodeData = Record<string, unknown>;
-
-export type StoryVariableValue =
-  | string
-  | number
-  | boolean
-  | null
-  | string[]
-  | number[]
-  | Record<string, unknown>;
-
-export type StoryVariables = Record<string, StoryVariableValue>;
-
-export type StoryRuntimeState<TVars extends StoryVariables = StoryVariables> = {
-  variables: TVars;
-  score: number;
-  inventory: string[];
-  flags: Record<string, boolean>;
-};
+export type StoryJsonPrimitive = string | number | boolean | null;
+export type StoryJsonValue = StoryJsonPrimitive | StoryJsonValue[] | StoryJsonObject;
+export type StoryJsonObject = { [key: string]: StoryJsonValue };
+export type StoryNodeData = StoryJsonObject;
+export type StoryState = StoryJsonObject;
 
 export type StoryStatePredicateContext<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 > = {
-  story: StoryDocument<TData, TVars>;
-  node: StoryNode<TData, TVars>;
-  choice?: StoryChoice<TData, TVars>;
-  history: StoryHistoryEntry<TData, TVars>[];
-  state: StoryRuntimeState<TVars>;
+  story: StoryDocument<TData, TState>;
+  node: StoryNode<TData, TState>;
+  choice?: StoryChoice<TData, TState>;
+  history: StoryHistoryEntry<TData, TState>[];
+  state: TState;
 };
 
 export type StoryStateReducerContext<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
-> = StoryStatePredicateContext<TData, TVars> & {
-  previousState: StoryRuntimeState<TVars>;
+  TState extends StoryState = StoryState,
+> = StoryStatePredicateContext<TData, TState> & {
+  previousState: TState;
 };
 
 export type StoryStatePredicate<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 > = {
-  bivarianceHack(context: StoryStatePredicateContext<TData, TVars>): boolean;
+  bivarianceHack(context: StoryStatePredicateContext<TData, TState>): boolean;
 }["bivarianceHack"];
 
 export type StoryStateReducer<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 > = {
-  bivarianceHack(context: StoryStateReducerContext<TData, TVars>): StoryRuntimeState<TVars>;
+  bivarianceHack(context: StoryStateReducerContext<TData, TState>): TState;
 }["bivarianceHack"];
 
 export type StoryStateHooks<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 > = {
   createInitialState?: {
-    bivarianceHack(story: StoryDocument<TData, TVars>): StoryRuntimeState<TVars>;
+    bivarianceHack(story: StoryDocument<TData, TState>): TState;
   }["bivarianceHack"];
-  canEnterNode?: StoryStatePredicate<TData, TVars>;
-  isChoiceVisible?: StoryStatePredicate<TData, TVars>;
-  isChoiceEnabled?: StoryStatePredicate<TData, TVars>;
-  applyNode?: StoryStateReducer<TData, TVars>;
-  applyChoice?: StoryStateReducer<TData, TVars>;
+  canEnterNode?: StoryStatePredicate<TData, TState>;
+  isChoiceVisible?: StoryStatePredicate<TData, TState>;
+  isChoiceEnabled?: StoryStatePredicate<TData, TState>;
+  applyNode?: StoryStateReducer<TData, TState>;
+  applyChoice?: StoryStateReducer<TData, TState>;
 };
 
 export type StoryMediaTextTrack = {
@@ -145,8 +131,8 @@ export type StoryContentBlock =
   | StoryMarkdownBlock;
 
 export type StoryChoice<
-  TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  _TData extends StoryNodeData = StoryNodeData,
+  _TState extends StoryState = StoryState,
 > = {
   id: string;
   label: string;
@@ -154,9 +140,6 @@ export type StoryChoice<
   description?: string;
   disabled?: boolean;
   hidden?: boolean;
-  isVisible?: StoryStatePredicate<TData, TVars>;
-  isEnabled?: StoryStatePredicate<TData, TVars>;
-  reduceState?: StoryStateReducer<TData, TVars>;
 };
 
 export type StoryTransition = {
@@ -168,7 +151,7 @@ export type StoryTransition = {
 export type StoryStageDescriptor = {
   renderer?: string;
   variant?: "default" | "media" | "fullscreen" | "split";
-  props?: Record<string, unknown>;
+  props?: StoryJsonObject;
 };
 
 export type StoryDefaults = {
@@ -190,7 +173,7 @@ export type StoryLabels = {
 
 export type StoryNode<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 > = {
   id: string;
   title: string;
@@ -199,21 +182,19 @@ export type StoryNode<
   prompt?: string;
   data?: TData;
   next?: string;
-  choices?: StoryChoice<TData, TVars>[];
-  children?: StoryNode<TData, TVars>[];
+  choices?: StoryChoice<TData, TState>[];
+  children?: StoryNode<TData, TState>[];
   durationInFrames?: number;
   scrollUnits?: number;
   transition?: StoryTransition;
   stage?: StoryStageDescriptor;
-  canEnter?: StoryStatePredicate<TData, TVars>;
-  reduceState?: StoryStateReducer<TData, TVars>;
 };
 
 export type StoryNodeTreeEntry<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 > = {
-  node: StoryNode<TData, TVars>;
+  node: StoryNode<TData, TState>;
   nodeId: string;
   parentNodeId?: string;
   ancestorNodeIds: string[];
@@ -225,49 +206,63 @@ export type StoryNodeTreeEntry<
 
 export type StoryDocument<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 > = {
   id: string;
   title: string;
   subtitle?: string;
   description?: string;
   openingNodeId: string;
-  nodes: StoryNode<TData, TVars>[];
+  nodes: StoryNode<TData, TState>[];
   defaults?: StoryDefaults;
   labels?: StoryLabels;
-  initialState?: StoryRuntimeState<TVars>;
+  initialState?: TState;
+};
+
+export type StoryDraftNode<
+  TData extends StoryNodeData = StoryNodeData,
+  TState extends StoryState = StoryState,
+> = Partial<Omit<StoryNode<TData, TState>, "children">> & {
+  children?: StoryDraftNode<TData, TState>[];
+};
+
+export type StoryDraft<
+  TData extends StoryNodeData = StoryNodeData,
+  TState extends StoryState = StoryState,
+> = Partial<Omit<StoryDocument<TData, TState>, "nodes">> & {
+  nodes?: StoryDraftNode<TData, TState>[];
 };
 
 export type StoryHistoryEntry<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 > = {
   nodeId: string;
   choiceId?: string;
   data?: TData;
-  state?: StoryRuntimeState<TVars>;
+  state?: TState;
 };
 
-export type StoryStateSnapshot<
+export type StorySnapshot<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 > = {
   nodeId: string;
-  history: StoryHistoryEntry<TData, TVars>[];
-  state: StoryRuntimeState<TVars>;
-  stoppedReason?: ResolvedStoryPath<TData, TVars>["stoppedReason"];
+  history: StoryHistoryEntry<TData, TState>[];
+  state: TState;
+  stoppedReason?: ResolvedStoryPath<TData, TState>["stoppedReason"];
 };
 
 export type ResolvedStoryPath<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 > = {
-  nodes: StoryNode<TData, TVars>[];
-  history: StoryHistoryEntry<TData, TVars>[];
-  currentNode: StoryNode<TData, TVars>;
+  nodes: StoryNode<TData, TState>[];
+  history: StoryHistoryEntry<TData, TState>[];
+  currentNode: StoryNode<TData, TState>;
   completed: boolean;
-  state: StoryRuntimeState<TVars>;
-  snapshot: StoryStateSnapshot<TData, TVars>;
+  state: TState;
+  snapshot: StorySnapshot<TData, TState>;
   stoppedAt?: string;
   consumedChoiceIds?: string[];
   unconsumedChoiceIds?: string[];
@@ -282,28 +277,28 @@ export type ResolvedStoryPath<
 
 export type StoryTimelineScene<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 > = {
-  node: StoryNode<TData, TVars>;
-  nodeEntry?: StoryNodeTreeEntry<TData, TVars>;
+  node: StoryNode<TData, TState>;
+  nodeEntry?: StoryNodeTreeEntry<TData, TState>;
   startFrame: number;
   durationInFrames: number;
   endFrame: number;
   transitionInFrames: number;
   pathIndex: number;
-  history: StoryHistoryEntry<TData, TVars>[];
-  state: StoryRuntimeState<TVars>;
-  snapshot: StoryStateSnapshot<TData, TVars>;
+  history: StoryHistoryEntry<TData, TState>[];
+  state: TState;
+  snapshot: StorySnapshot<TData, TState>;
 };
 
 export type StoryTimeline<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 > = {
-  scenes: StoryTimelineScene<TData, TVars>[];
+  scenes: StoryTimelineScene<TData, TState>[];
   totalFrames: number;
   fps: number;
-  history: StoryHistoryEntry<TData, TVars>[];
-  state: StoryRuntimeState<TVars>;
-  snapshot: StoryStateSnapshot<TData, TVars>;
+  history: StoryHistoryEntry<TData, TState>[];
+  state: TState;
+  snapshot: StorySnapshot<TData, TState>;
 };

@@ -10,7 +10,7 @@ Three-friendly rendering helpers.
 - `resolveStoryPath(story, options)` / `buildStoryTimeline(story, options)`
 - `compileStory(story)` / `enumerateStoryPaths(story, options)`
 - `analyzeStory(story, options)` / `applyStoryPatch(story, patch, options)`
-- `serializeStoryPath(...)` / `parseStoryPath(...)`
+- `serializeStorySnapshot(...)` / `parseStorySnapshot(...)`
 - `@moritzbrantner/storytelling/core` for non-React validation, graph, path, authoring, and patch helpers
 - `@moritzbrantner/storytelling/schema` for `storyDocumentJsonSchema`
 - `useStoryRuntime(...)`, `StoryPlayer`, `StoryControls`, `StoryScroller`, `StoryScrollTimeline`, `StoryProgress`, and `StoryMinimap`
@@ -64,10 +64,14 @@ export const story = defineStory({
 });
 ```
 
-`validateStory()` rejects duplicate node ids, duplicate choice ids, missing
-targets, missing opening nodes, and cycles. `resolveStoryPath()` returns the
-current path for a set of selected choice ids, while `buildStoryTimeline()`
-converts that path into frame ranges for video-oriented renderers.
+`validateStory()` uses strict published-document validation by default and
+rejects blank fields, invalid ids, duplicate node ids, duplicate choice ids,
+missing targets, missing opening nodes, invalid content blocks, unsafe numeric
+durations, nodes with both `next` and `choices`, function-bearing document
+fields, and cycles. `resolveStoryPath()` returns the current path for a
+`StorySnapshot`, one `choose` action, or a static `routeChoiceIds` route, while
+`buildStoryTimeline()` converts that path into frame ranges for video-oriented
+renderers.
 
 Nested nodes play as a depth-first flattened sequence. A parent scene renders
 first, then its children render in order, and the final descendant falls through
@@ -105,20 +109,16 @@ import { validateStoryDocument } from "@moritzbrantner/storytelling";
 const issues = validateStoryDocument(story);
 ```
 
-Validation defaults to compatibility mode for existing documents. Pass
-`{ mode: "strict" }` to `defineStory()`, `validateStory()`,
-`assertStoryDocument()`, or `validateStoryDocument()` when an editor or release
-process should reject blank strings, invalid ids, nodes with both `next` and
-`choices`, invalid content blocks, and unsafe numeric durations. `analyzeStory()`
-reports those strict-only issues as authoring warnings by default.
+Pass `{ mode: "compat" }` only when a legacy importer needs lenient validation.
+New story documents should satisfy the default strict contract.
 
 Use `compileStory()` and `enumerateStoryPaths()` when an authoring UI needs graph
 metadata, branch lists, endings, or all selectable routes through a document.
 
 ### Authoring toolkit
 
-Use `analyzeStory()` when an editor needs validation errors, authoring warnings,
-reachability, and metrics without throwing on draft documents. Use
+Use `analyzeStoryDraft()` when an editor needs validation errors, authoring
+warnings, reachability, and metrics without throwing on draft documents. Use
 `applyStoryPatch()` for immutable story edits while an editor keeps temporary
 draft state. Patch operations throw for missing nodes or choices by default; pass
 `{ onMissing: "ignore" }` for legacy no-op behavior. Use `rename-node` to change
@@ -126,9 +126,9 @@ a node id so opening-node, `next`, and choice-target references are updated
 together.
 
 ```ts
-import { analyzeStory, applyStoryPatch } from "@moritzbrantner/storytelling";
+import { analyzeStoryDraft, applyStoryPatch } from "@moritzbrantner/storytelling";
 
-const report = analyzeStory(story);
+const report = analyzeStoryDraft(story);
 const draft = applyStoryPatch(story, {
   type: "add-choice",
   nodeId: "wake",
@@ -347,10 +347,10 @@ const [running, setRunning] = useState(true);
 />;
 ```
 
-Both `StoryPlayer` and story-backed `StoryScroller` support controlled choice
-state with `choiceIds`, `defaultChoiceIds`, and `onChoiceIdsChange`. Use
-`serializeStoryPath()` and `parseStoryPath()` to put the current path in a URL or
-share token. `resolveStoryPath()` also reports `consumedChoiceIds`,
+Both `StoryPlayer` and story-backed `StoryScroller` support controlled runtime
+state with `snapshot`, `defaultSnapshot`, and `onSnapshotChange`. Use
+`serializeStorySnapshot()` and `parseStorySnapshot()` to put the current runtime
+state in a URL or share token. `resolveStoryPath()` also reports `consumedChoiceIds`,
 `unconsumedChoiceIds`, and `stoppedReason` so editors can distinguish endings,
 awaiting choices, invalid choices, `stopAt`, and max-step limits. The headless
 `useStoryPathState()` hook accepts `stopAt`/`defaultStopAt`, which lets custom
@@ -501,7 +501,7 @@ import { story } from "./story";
 
 const composition = getStoryCompositionProps(story, {
   id: "story-video",
-  choiceIds: ["answer"],
+  routeChoiceIds: ["answer"],
   fps: 30,
   width: 1920,
   height: 1080,
@@ -514,7 +514,7 @@ function RemotionRoot() {
 registerRoot(RemotionRoot);
 ```
 
-Only pass JSON-serializable story data, choice ids, and layout values through
+Only pass JSON-serializable story data, route choice ids, and layout values through
 Remotion `defaultProps` or render `inputProps`. Do not put a custom renderer
 `registry` in `defaultProps`: registries contain React components/functions, and
 Remotion does not preserve functions or classes during rendering. Import custom
@@ -529,9 +529,12 @@ The Three entrypoint follows the same pattern and expects `three` and
 
 ```tsx
 import { StoryCanvasStage } from "@moritzbrantner/storytelling/three";
+import { useStoryRuntime } from "@moritzbrantner/storytelling";
 
 export function ThreeStory() {
-  return <StoryCanvasStage story={story} choiceIds={["trace"]} />;
+  const runtime = useStoryRuntime(story);
+
+  return <StoryCanvasStage {...runtime.renderProps} />;
 }
 ```
 
@@ -561,7 +564,7 @@ import { storyToTimelineEditorDocument } from "@moritzbrantner/storytelling/time
 import { storyToWorkflowDocument } from "@moritzbrantner/storytelling/workflow";
 
 const workflowDocument = storyToWorkflowDocument(story);
-const timelineDocument = storyToTimelineEditorDocument(story, { choiceIds: ["answer"] });
+const timelineDocument = storyToTimelineEditorDocument(story, { routeChoiceIds: ["answer"] });
 ```
 
 Use `storyToWorkflowDocument(story, { allowInvalid: true, includeDiagnostics: true })`

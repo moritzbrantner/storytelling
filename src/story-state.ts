@@ -4,55 +4,45 @@ import type {
   StoryHistoryEntry,
   StoryNode,
   StoryNodeData,
-  StoryRuntimeState,
+  StoryState,
   StoryStateHooks,
-  StoryStateSnapshot,
-  StoryVariables,
+  StorySnapshot,
 } from "./story-model";
 import { resolveStoryPath, type ResolveStoryPathOptions } from "./story-path";
 
 export type StoryPathState<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 > = {
-  choiceIds: string[];
-  path: ResolvedStoryPath<TData, TVars>;
-  history: StoryHistoryEntry<TData, TVars>[];
-  currentNode: StoryNode<TData, TVars>;
+  path: ResolvedStoryPath<TData, TState>;
+  history: StoryHistoryEntry<TData, TState>[];
+  currentNode: StoryNode<TData, TState>;
   completed: boolean;
-  state: StoryRuntimeState<TVars>;
-  snapshot: StoryStateSnapshot<TData, TVars>;
+  state: TState;
+  snapshot: StorySnapshot<TData, TState>;
 };
 
 export type CreateStoryPathStateOptions<
   TData extends StoryNodeData = StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
-> = Omit<ResolveStoryPathOptions<TData, TVars>, "choiceIds"> & {
-  snapshot?: StoryStateSnapshot<TData, TVars>;
-  defaultState?: StoryRuntimeState<TVars>;
-  hooks?: StoryStateHooks<TData, TVars>;
+  TState extends StoryState = StoryState,
+> = ResolveStoryPathOptions<TData, TState> & {
+  snapshot?: StorySnapshot<TData, TState>;
+  defaultState?: TState;
+  hooks?: StoryStateHooks<TData, TState>;
   choose?: string;
-  /** @deprecated Use snapshot plus choose instead. */
-  choiceIds?: string[];
+  routeChoiceIds?: string[];
 };
 
 export function createStoryPathState<
   TData extends StoryNodeData,
-  TVars extends StoryVariables = StoryVariables,
+  TState extends StoryState = StoryState,
 >(
-  story: StoryDocument<TData, TVars>,
-  options: CreateStoryPathStateOptions<TData, TVars> = {},
-): StoryPathState<TData, TVars> {
-  const requestedChoiceIds = options.choiceIds ?? [];
-  const path = resolveStoryPath(story, {
-    ...options,
-    choiceIds: requestedChoiceIds,
-  });
-  const choiceIds =
-    options.choiceIds ?? path.history.flatMap((entry) => (entry.choiceId ? [entry.choiceId] : []));
+  story: StoryDocument<TData, TState>,
+  options: CreateStoryPathStateOptions<TData, TState> = {},
+): StoryPathState<TData, TState> {
+  const path = resolveStoryPath(story, options);
 
   return {
-    choiceIds,
     path,
     history: path.history,
     currentNode: path.currentNode,
@@ -84,21 +74,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function isRuntimeState(value: unknown): value is StoryRuntimeState {
-  if (!isRecord(value)) return false;
+function isJsonValue(value: unknown): boolean {
+  if (value === null) return true;
+  if (typeof value === "string" || typeof value === "boolean") return true;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (Array.isArray(value)) return value.every(isJsonValue);
+  if (isRecord(value)) return Object.values(value).every(isJsonValue);
 
-  return (
-    isRecord(value.variables) &&
-    typeof value.score === "number" &&
-    Number.isFinite(value.score) &&
-    Array.isArray(value.inventory) &&
-    value.inventory.every((item) => typeof item === "string") &&
-    isRecord(value.flags) &&
-    Object.values(value.flags).every((item) => typeof item === "boolean")
-  );
+  return false;
 }
 
-function isStorySnapshot(value: unknown): value is StoryStateSnapshot {
+function isStoryState(value: unknown): value is StoryState {
+  return isRecord(value) && Object.values(value).every(isJsonValue);
+}
+
+function isStorySnapshot(value: unknown): value is StorySnapshot {
   if (!isRecord(value)) return false;
 
   return (
@@ -110,12 +100,12 @@ function isStorySnapshot(value: unknown): value is StoryStateSnapshot {
         typeof entry.nodeId === "string" &&
         (entry.choiceId === undefined || typeof entry.choiceId === "string"),
     ) &&
-    isRuntimeState(value.state)
+    isStoryState(value.state)
   );
 }
 
 export function serializeStorySnapshot(
-  snapshot: StoryStateSnapshot | Pick<StoryPathState, "snapshot">,
+  snapshot: StorySnapshot | Pick<StoryPathState, "snapshot">,
 ): string {
   const value = "snapshot" in snapshot ? snapshot.snapshot : snapshot;
   const params = new URLSearchParams();
@@ -125,7 +115,7 @@ export function serializeStorySnapshot(
   return params.toString();
 }
 
-export function parseStorySnapshot(input: string): StoryStateSnapshot | undefined {
+export function parseStorySnapshot(input: string): StorySnapshot | undefined {
   try {
     const normalizedInput = input.startsWith("?") ? input.slice(1) : input;
     const params = new URLSearchParams(normalizedInput.includes("=") ? normalizedInput : "");
@@ -140,50 +130,4 @@ export function parseStorySnapshot(input: string): StoryStateSnapshot | undefine
   } catch {
     return undefined;
   }
-}
-
-/** @deprecated Use serializeStorySnapshot instead. */
-export function serializeStoryPath(value: string[] | Pick<StoryPathState, "choiceIds">): string {
-  const choiceIds = Array.isArray(value) ? value : value.choiceIds;
-  const params = new URLSearchParams();
-
-  for (const choiceId of choiceIds) {
-    params.append("choice", choiceId);
-  }
-
-  return params.toString();
-}
-
-/** @deprecated Use parseStorySnapshot instead. */
-export function parseStoryPath(input: string): string[] {
-  const normalizedInput = input.startsWith("?") ? input.slice(1) : input;
-
-  if (!normalizedInput) {
-    return [];
-  }
-
-  const params = new URLSearchParams(normalizedInput);
-  const repeatedChoiceIds = params.getAll("choice");
-
-  if (repeatedChoiceIds.length > 0) {
-    return repeatedChoiceIds;
-  }
-
-  const legacyChoiceIds = params.get("choices");
-
-  if (legacyChoiceIds) {
-    return legacyChoiceIds
-      .split(",")
-      .map((choiceId) => choiceId.trim())
-      .filter(Boolean);
-  }
-
-  if (!normalizedInput.includes("=")) {
-    return normalizedInput
-      .split(",")
-      .map((choiceId) => decodeURIComponent(choiceId.trim()))
-      .filter(Boolean);
-  }
-
-  return [];
 }

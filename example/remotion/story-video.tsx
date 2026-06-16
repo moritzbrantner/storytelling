@@ -28,6 +28,6 @@ export const remotionRegistry: StoryRendererRegistry<SignalStoryData> =
 
 export const storyVideo = {
   story: signalStory,
-  choiceIds: ["answer"],
+  routeChoiceIds: ["answer"],
   registry: remotionRegistry,
 };
