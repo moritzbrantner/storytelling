@@ -7,7 +7,9 @@ import {
   analyzeStory,
   applyStoryPatch,
   defineStory,
+  parseStorySnapshot,
   resolveStoryPath,
+  serializeStorySnapshot,
   useStoryPathState,
   validateStoryDocument,
   type StoryDocument,
@@ -59,6 +61,14 @@ function setScrollerGeometry(viewport: HTMLElement, sceneCount: number) {
 function scrollScrollerViewport(viewport: HTMLElement, scrollTop: number) {
   viewport.scrollTop = scrollTop;
   fireEvent.scroll(viewport);
+}
+
+function encodeSnapshotPayload(value: unknown) {
+  return Buffer.from(JSON.stringify(value), "utf8")
+    .toString("base64")
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/, "");
 }
 
 afterEach(() => {
@@ -172,6 +182,87 @@ describe("repository hardening", () => {
         { onMissing: "ignore" },
       ),
     ).toStrictEqual(branchStory);
+  });
+
+  test("hardens story patches for missing nodes and unsupported operations", () => {
+    expect(() =>
+      applyStoryPatch(branchStory, {
+        type: "rename-node",
+        nodeId: "missing",
+        nextNodeId: "renamed",
+      }),
+    ).toThrow('does not contain node "missing"');
+    expect(
+      applyStoryPatch(
+        branchStory,
+        { type: "rename-node", nodeId: "missing", nextNodeId: "renamed" },
+        { onMissing: "ignore" },
+      ),
+    ).toStrictEqual(branchStory);
+
+    expect(() => applyStoryPatch(branchStory, { type: "remove-node", nodeId: "missing" })).toThrow(
+      'does not contain node "missing"',
+    );
+    expect(
+      applyStoryPatch(
+        branchStory,
+        { type: "remove-node", nodeId: "missing" },
+        { onMissing: "ignore" },
+      ),
+    ).toStrictEqual(branchStory);
+
+    const danglingReferences = applyStoryPatch(branchStory, {
+      type: "remove-node",
+      nodeId: "end",
+      removeReferences: false,
+    });
+
+    expect(danglingReferences.nodes[0]?.choices?.[0]?.target).toBe("end");
+    expect(applyStoryPatch(branchStory, { type: "unsupported-operation" } as never)).toStrictEqual(
+      branchStory,
+    );
+  });
+
+  test("rejects malformed serialized story snapshots", () => {
+    const nativeBuffer = Buffer;
+    const malformedPayloads = [
+      "",
+      "?other=value",
+      encodeSnapshotPayload(null),
+      encodeSnapshotPayload({ nodeId: 12, history: [], state: {} }),
+      encodeSnapshotPayload({ nodeId: "start", history: "bad", state: {} }),
+      encodeSnapshotPayload({
+        nodeId: "start",
+        history: [{ nodeId: "start", choiceId: 12 }],
+        state: {},
+      }),
+    ];
+
+    for (const payload of malformedPayloads) {
+      expect(parseStorySnapshot(payload)).toBeUndefined();
+    }
+
+    vi.spyOn(JSON, "parse").mockReturnValueOnce({
+      nodeId: "start",
+      history: [],
+      state: { invalid: Number.POSITIVE_INFINITY },
+    });
+    expect(parseStorySnapshot(encodeSnapshotPayload({}))).toBeUndefined();
+
+    vi.stubGlobal("Buffer", undefined);
+    vi.stubGlobal("btoa", (input: string) => nativeBuffer.from(input, "binary").toString("base64"));
+    vi.stubGlobal("atob", (input: string) => nativeBuffer.from(input, "base64").toString("binary"));
+
+    const browserEncoded = serializeStorySnapshot({
+      nodeId: "start",
+      history: [],
+      state: { route: "browser" },
+    });
+
+    expect(parseStorySnapshot(`?${browserEncoded}`)).toMatchObject({
+      nodeId: "start",
+      state: { route: "browser" },
+    });
   });
 
   test("records consumed, unconsumed, and invalid path choice ids", () => {
