@@ -20,7 +20,7 @@ jobs:
       pages: write
       id-token: write
       packages: read
-    uses: moritzbrantner/reusable-workflows/.github/workflows/deploy-pages.yml@workflow-standard-v1.2
+    uses: moritzbrantner/reusable-workflows/.github/workflows/deploy-pages.yml@workflow-standard-v1.3
     with:
       bun_version: 1.3.14
       install_command: bun install --frozen-lockfile
