@@ -96,7 +96,7 @@
     "@vitest/coverage-v8": "^4.1.8",
     "fast-check": "^4.8.0",
     "jsdom": "^26.1.0",
-    "oxfmt": "^0.46.0",
+    "oxfmt": "^0.56.0",
     "oxlint": "^1.67.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
