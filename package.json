@@ -63,7 +63,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "remotion": "^4.0.379",
-    "three": "^0.180.0"
+    "three": "^0.185.0"
   },
   "peerDependenciesMeta": {
     "@react-three/fiber": {
@@ -101,7 +101,7 @@
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "remotion": "^4.0.470",
-    "three": "^0.180.0",
+    "three": "^0.185.0",
     "tinybench": "^6.0.2",
     "tsup": "^8.5.1",
     "typescript": "6.0.2",
