@@ -24,7 +24,7 @@ describe("StoryPlayer compound composition", () => {
     render(
       <StoryPlayer.Root story={linearStory}>
         <StoryPlayer.Layout layout="stacked">
-          <StoryPlayer.Stage animate={false} render={({ node }) => <p>{node.title}</p>} />
+          <StoryPlayer.Stage render={({ node }) => <p>{node.title}</p>} />
           <StoryPlayer.Aside layout="stacked">
             <StoryPlayer.Transport />
             <StoryPlayer.Menu />
@@ -34,12 +34,12 @@ describe("StoryPlayer compound composition", () => {
     );
 
     expect(screen.getByText("Start")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Previous" }).hasAttribute("disabled")).toBe(true);
 
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     expect(screen.getByText("Middle")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Previous" })).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: "Previous" }).hasAttribute("disabled")).toBe(false);
     expect(screen.getByRole("navigation", { name: "Story menu" })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
@@ -51,9 +51,9 @@ describe("StoryPlayer compound composition", () => {
     vi.useFakeTimers();
 
     render(
-      <StoryPlayer.Root story={linearStory} autoplay={{ intervalMs: 50 }}>
+      <StoryPlayer.Root story={linearStory} autoplay={{ enabled: true, intervalMs: 50 }}>
         <StoryPlayer.Layout layout="stacked">
-          <StoryPlayer.Stage animate={false} render={({ node }) => <p>{node.title}</p>} />
+          <StoryPlayer.Stage render={({ node }) => <p>{node.title}</p>} />
           <StoryPlayer.PlayPause />
         </StoryPlayer.Layout>
       </StoryPlayer.Root>,
