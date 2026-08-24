@@ -6,6 +6,7 @@
     "paths": {
       "@moritzbrantner/storytelling": ["src/index.ts"],
       "@moritzbrantner/storytelling/core": ["src/core.ts"],
+      "@moritzbrantner/storytelling/react": ["src/react.ts"],
       "@moritzbrantner/storytelling/schema": ["src/schema.ts"],
       "@moritzbrantner/storytelling/remotion": ["src/remotion.tsx"],
       "@moritzbrantner/storytelling/three": ["src/three.tsx"],

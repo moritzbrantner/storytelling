@@ -12,6 +12,8 @@ for (const requiredFile of [
   "index.d.ts",
   "core.js",
   "core.d.ts",
+  "react.js",
+  "react.d.ts",
   "schema.js",
   "schema.d.ts",
   "remotion.js",
@@ -47,6 +49,10 @@ assert.equal(
   false,
   "core types must not expose React render props",
 );
+
+const react = await import(path.join(distRoot, "react.js"));
+assert.equal(typeof react.StoryPlayer, "function", "react export should include StoryPlayer");
+assert.equal(typeof react.useStoryPlayer, "function", "react export should include useStoryPlayer");
 
 const schema = await import(path.join(distRoot, "schema.js"));
 assert.equal(
@@ -105,6 +111,8 @@ for (const requiredFile of [
   "dist/index.d.ts",
   "dist/core.js",
   "dist/core.d.ts",
+  "dist/react.js",
+  "dist/react.d.ts",
   "dist/schema.js",
   "dist/schema.d.ts",
   "dist/remotion.js",
