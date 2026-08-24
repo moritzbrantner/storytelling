@@ -38,7 +38,7 @@ describe("StoryPlayer compound composition", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    expect(screen.getByText("Middle")).toBeTruthy();
+    expect(screen.getByText("Middle", { selector: "p" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Previous" }).hasAttribute("disabled")).toBe(false);
     expect(screen.getByRole("navigation", { name: "Story menu" })).toBeTruthy();
 
