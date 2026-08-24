@@ -315,11 +315,7 @@ function StoryPlayerStage<
   return <div className={cn("p-4 md:p-6", className)}>{content}</div>;
 }
 
-function StoryPlayerAside({
-  layout = "split",
-  className,
-  children,
-}: StoryPlayerAsideProps) {
+function StoryPlayerAside({ layout = "split", className, children }: StoryPlayerAsideProps) {
   if (layout === "stage-only") return null;
 
   return (
@@ -477,11 +473,7 @@ function StoryPlayerPlayPause({
   );
 }
 
-function StoryPlayerNext({
-  className,
-  children = "Next",
-  ariaLabel,
-}: StoryPlayerButtonProps) {
+function StoryPlayerNext({ className, children = "Next", ariaLabel }: StoryPlayerButtonProps) {
   const player = useStoryPlayer();
 
   return (
