@@ -1,0 +1,276 @@
+name: Decouple UI package
+
+on:
+  push:
+    branches:
+      - decouple-ui
+
+permissions:
+  contents: write
+
+jobs:
+  decouple:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: decouple-ui
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - name: Replace shared UI dependency
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          delete pkg.dependencies['@moritzbrantner/ui'];
+          fs.writeFileSync('package.json', `${JSON.stringify(pkg, null, 2)}\n`);
+
+          for (const entry of fs.readdirSync('src', { withFileTypes: true })) {
+            if (!entry.isFile() || !entry.name.endsWith('.tsx')) continue;
+            const file = path.join('src', entry.name);
+            const source = fs.readFileSync(file, 'utf8');
+            if (!source.includes('@moritzbrantner/ui')) continue;
+            fs.writeFileSync(file, source.replace('from "@moritzbrantner/ui";', 'from "./ui";'));
+          }
+
+          for (const file of ['example/src/app.tsx', 'example/src/story-creator.tsx']) {
+            const source = fs.readFileSync(file, 'utf8');
+            if (!source.includes('@moritzbrantner/ui')) throw new Error(`Expected UI import in ${file}`);
+            fs.writeFileSync(file, source.replace('from "@moritzbrantner/ui";', 'from "./ui";'));
+          }
+
+          const theme = `@import "tailwindcss";\n\n@theme inline {\n  --color-background: var(--background);\n  --color-foreground: var(--foreground);\n  --color-card: var(--card);\n  --color-card-foreground: var(--card-foreground);\n  --color-popover: var(--popover);\n  --color-popover-foreground: var(--popover-foreground);\n  --color-primary: var(--primary);\n  --color-primary-foreground: var(--primary-foreground);\n  --color-secondary: var(--secondary);\n  --color-secondary-foreground: var(--secondary-foreground);\n  --color-muted: var(--muted);\n  --color-muted-foreground: var(--muted-foreground);\n  --color-accent: var(--accent);\n  --color-accent-foreground: var(--accent-foreground);\n  --color-border: var(--border);\n  --color-input: var(--input);\n  --color-ring: var(--ring);\n}\n\n:root {\n  --background: #f6f7f8;\n  --foreground: #17211f;\n  --card: #ffffff;\n  --card-foreground: #17211f;\n  --popover: #ffffff;\n  --popover-foreground: #17211f;\n  --primary: #0a7c6f;\n  --primary-foreground: #ffffff;\n  --secondary: #e7ecea;\n  --secondary-foreground: #17211f;\n  --muted: #edf1ef;\n  --muted-foreground: #61706c;\n  --accent: #dce9e5;\n  --accent-foreground: #17211f;\n  --border: #d4dcd9;\n  --input: #c8d2ce;\n  --ring: #0a7c6f;\n}\n\n`;
+          let styles = fs.readFileSync('example/src/styles.css', 'utf8');
+          styles = styles.replace('@import "@moritzbrantner/ui/styles.css";\n\n', theme);
+          fs.writeFileSync('example/src/styles.css', styles);
+          NODE
+
+          cat > src/ui.tsx <<'EOF'
+          import type { ButtonHTMLAttributes } from "react";
+          import { twMerge } from "tailwind-merge";
+
+          type ClassValue = string | false | null | undefined;
+
+          export function cn(...values: ClassValue[]) {
+            return twMerge(values.filter(Boolean).join(" "));
+          }
+
+          export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+            size?: "default" | "sm";
+            variant?: "default" | "secondary" | "outline" | "ghost";
+          };
+
+          export function Button({ className, size = "default", variant = "default", ...props }: ButtonProps) {
+            return (
+              <button
+                className={cn(
+                  "inline-flex cursor-pointer items-center justify-center rounded-md border font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
+                  size === "sm" ? "h-8 px-3 text-sm" : "h-9 px-4 text-sm",
+                  variant === "default" && "border-primary bg-primary text-primary-foreground hover:opacity-90",
+                  variant === "secondary" && "border-secondary bg-secondary text-secondary-foreground hover:bg-secondary/80",
+                  variant === "outline" && "border-border bg-background text-foreground hover:bg-muted",
+                  variant === "ghost" && "border-transparent bg-transparent text-foreground hover:bg-muted",
+                  className,
+                )}
+                {...props}
+              />
+            );
+          }
+          EOF
+
+          cat > example/src/ui.tsx <<'EOF'
+          import {
+            Children,
+            cloneElement,
+            createContext,
+            isValidElement,
+            useContext,
+            type HTMLAttributes,
+            type InputHTMLAttributes,
+            type ReactElement,
+            type ReactNode,
+            type TextareaHTMLAttributes,
+          } from "react";
+
+          import { Button, cn } from "../../src/ui";
+
+          export { Button, cn };
+
+          type BadgeProps = HTMLAttributes<HTMLSpanElement> & {
+            variant?: "default" | "secondary" | "outline";
+          };
+
+          export function Badge({ className, variant = "default", ...props }: BadgeProps) {
+            return (
+              <span
+                className={cn(
+                  "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold",
+                  variant === "default" && "border-primary bg-primary text-primary-foreground",
+                  variant === "secondary" && "border-secondary bg-secondary text-secondary-foreground",
+                  variant === "outline" && "border-border bg-transparent text-foreground",
+                  className,
+                )}
+                {...props}
+              />
+            );
+          }
+
+          export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
+            return <div className={cn("rounded-lg border border-border bg-card text-card-foreground shadow-sm", className)} {...props} />;
+          }
+
+          export function CardHeader({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
+            return <div className={cn("grid gap-1.5 p-5 pb-0", className)} {...props} />;
+          }
+
+          export function CardTitle({ className, ...props }: HTMLAttributes<HTMLHeadingElement>) {
+            return <h3 className={cn("m-0 text-base font-semibold", className)} {...props} />;
+          }
+
+          export function CardContent({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
+            return <div className={cn("p-5", className)} {...props} />;
+          }
+
+          export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
+            return (
+              <input
+                className={cn(
+                  "h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20 disabled:opacity-50",
+                  className,
+                )}
+                {...props}
+              />
+            );
+          }
+
+          export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+            return (
+              <textarea
+                className={cn(
+                  "min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20 disabled:opacity-50",
+                  className,
+                )}
+                {...props}
+              />
+            );
+          }
+
+          export function LoadingState({ className, label = "Loading" }: { className?: string; label?: string }) {
+            return (
+              <div className={cn("grid place-items-center rounded-lg border border-border bg-card p-8 text-muted-foreground", className)} role="status">
+                <span>{label}</span>
+              </div>
+            );
+          }
+
+          export function ErrorState({ className, children }: { className?: string; children?: ReactNode }) {
+            return (
+              <div className={cn("grid place-items-center rounded-lg border border-[#d7826b] bg-[#fff5f1] p-8 text-[#7b2f1f]", className)} role="alert">
+                {children}
+              </div>
+            );
+          }
+
+          type ToggleGroupContextValue = {
+            onValueChange?: (value: string) => void;
+            value: string;
+          };
+
+          const ToggleGroupContext = createContext<ToggleGroupContextValue | null>(null);
+
+          type ToggleGroupProps = HTMLAttributes<HTMLDivElement> & {
+            onValueChange?: (value: string) => void;
+            type: "single";
+            value: string;
+          };
+
+          export function ToggleGroup({ className, onValueChange, type: _type, value, ...props }: ToggleGroupProps) {
+            return (
+              <ToggleGroupContext.Provider value={{ value, onValueChange }}>
+                <div className={cn("flex flex-wrap items-center gap-1", className)} role="group" {...props} />
+              </ToggleGroupContext.Provider>
+            );
+          }
+
+          type ToggleGroupItemProps = React.ButtonHTMLAttributes<HTMLButtonElement> & { value: string };
+
+          export function ToggleGroupItem({ className, onClick, value, ...props }: ToggleGroupItemProps) {
+            const context = useContext(ToggleGroupContext);
+            if (!context) throw new Error("ToggleGroupItem must be rendered inside ToggleGroup");
+            const active = context.value === value;
+
+            return (
+              <button
+                type="button"
+                aria-pressed={active}
+                className={cn(
+                  "h-8 rounded-md border px-3 text-sm font-medium transition-colors",
+                  active
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-transparent bg-transparent text-foreground hover:bg-muted",
+                  className,
+                )}
+                onClick={(event) => {
+                  onClick?.(event);
+                  if (!event.defaultPrevented) context.onValueChange?.(active ? "" : value);
+                }}
+                {...props}
+              />
+            );
+          }
+
+          export function TooltipProvider({ children }: { children?: ReactNode; delayDuration?: number }) {
+            return <>{children}</>;
+          }
+
+          export function Tooltip({ children }: { children?: ReactNode }) {
+            return <span className="group relative inline-flex">{children}</span>;
+          }
+
+          export function TooltipTrigger({ asChild, children }: { asChild?: boolean; children?: ReactNode }) {
+            if (asChild) {
+              const child = Children.only(children);
+              return isValidElement(child) ? cloneElement(child as ReactElement) : null;
+            }
+            return <button type="button">{children}</button>;
+          }
+
+          export function TooltipContent({
+            className,
+            children,
+            side: _side,
+            ...props
+          }: HTMLAttributes<HTMLSpanElement> & { side?: "top" | "right" | "bottom" | "left" }) {
+            return (
+              <span
+                className={cn(
+                  "pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs text-background shadow-lg group-hover:block group-focus-within:block",
+                  className,
+                )}
+                role="tooltip"
+                {...props}
+              >
+                {children}
+              </span>
+            );
+          }
+          EOF
+
+          bun add tailwind-merge
+
+          if grep -R --line-number --exclude=CHANGELOG.md '@moritzbrantner/ui' package.json bun.lock src example docs README.md scripts; then
+            echo 'Active @moritzbrantner/ui references remain' >&2
+            exit 1
+          fi
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/decouple-ui.yml
+          git add -A
+          git commit -m 'refactor: decouple storytelling from ui package'
+          git push origin HEAD:decouple-ui
