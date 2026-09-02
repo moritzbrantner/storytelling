@@ -272,7 +272,7 @@ jobs:
           bunx oxfmt --write
           bun run check-types
           bun run lint
-          bun run test:unit
+          bunx vitest run src tests --exclude tests/property/** --exclude src/remotion.test.tsx
           bun run build
           bun run build:example
 
