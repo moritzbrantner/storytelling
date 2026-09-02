@@ -90,6 +90,7 @@ jobs:
             createContext,
             isValidElement,
             useContext,
+            type ButtonHTMLAttributes,
             type HTMLAttributes,
             type InputHTMLAttributes,
             type ReactElement,
@@ -197,7 +198,7 @@ jobs:
             );
           }
 
-          type ToggleGroupItemProps = React.ButtonHTMLAttributes<HTMLButtonElement> & { value: string };
+          type ToggleGroupItemProps = ButtonHTMLAttributes<HTMLButtonElement> & { value: string };
 
           export function ToggleGroupItem({ className, onClick, value, ...props }: ToggleGroupItemProps) {
             const context = useContext(ToggleGroupContext);
@@ -263,10 +264,17 @@ jobs:
 
           bun add tailwind-merge
 
-          if grep -R --line-number --exclude=CHANGELOG.md '@moritzbrantner/ui' package.json bun.lock src example docs README.md scripts; then
-            echo 'Active @moritzbrantner/ui references remain' >&2
+          if grep -R --line-number --exclude=CHANGELOG.md '@moritzbrantner/ui' package.json src example docs README.md scripts; then
+            echo 'Direct @moritzbrantner/ui references remain' >&2
             exit 1
           fi
+
+          bunx oxfmt --write
+          bun run check-types
+          bun run lint
+          bun run test:unit
+          bun run build
+          bun run build:example
 
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
