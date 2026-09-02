@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 
 import { motion } from "motion/react";
 
-import { Button, cn } from "@moritzbrantner/ui";
+import { Button, cn } from "./ui";
 
 import type { StoryChoice, StoryDocument, StoryHistoryEntry, StoryNodeData } from "./story-model";
 import type { StoryRenderProps } from "./story-render-types";

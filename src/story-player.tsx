@@ -4,7 +4,7 @@ import { useEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
-import { cn } from "@moritzbrantner/ui";
+import { cn } from "./ui";
 
 import {
   StoryActionBar,

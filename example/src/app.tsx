@@ -45,7 +45,7 @@ import {
   ToggleGroup,
   ToggleGroupItem,
   cn,
-} from "@moritzbrantner/ui";
+} from "./ui";
 import { StoryCreatorPage } from "./story-creator";
 
 function StateSummary({ summary }: { summary: string }) {

@@ -4,7 +4,7 @@ import { useRef } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import type { Mesh } from "three";
 
-import { cn } from "@moritzbrantner/ui";
+import { cn } from "./ui";
 
 import { getStoryRendererKey, getStoryStageProps } from "./story-render-registry";
 import type { StoryNodeData } from "./story-model";

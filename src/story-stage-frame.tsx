@@ -1,6 +1,6 @@
 "use client";
 
-import { cn } from "@moritzbrantner/ui";
+import { cn } from "./ui";
 
 import { StoryContent } from "./story-content";
 import { getStoryRendererKey } from "./story-render-registry";

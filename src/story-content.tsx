@@ -2,7 +2,7 @@
 
 import { Fragment } from "react";
 
-import { cn } from "@moritzbrantner/ui";
+import { cn } from "./ui";
 
 import type { StoryChartBlock, StoryContentBlock, StoryMediaTextTrack } from "./story-model";
 import type {
