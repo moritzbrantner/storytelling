@@ -1,12 +1,12 @@
 {
   "core.validate.linear-1000": {
-    "p95Ms": 20
+    "medianMs": 12
   },
   "core.compile.linear-1000": {
-    "p95Ms": 20
+    "medianMs": 12
   },
   "core.resolve.linear-1000": {
-    "p95Ms": 15
+    "medianMs": 12
   },
   "core.timeline.linear-1000": {
     "p95Ms": 100
