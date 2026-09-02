@@ -9,7 +9,7 @@ export function cn(...values: ClassValue[]) {
 
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   size?: "default" | "sm";
-  variant?: "default" | "secondary" | "outline" | "ghost";
+  variant?: "default" | "secondary" | "outline" | "ghost" | "destructive";
 };
 
 export function Button({
@@ -29,6 +29,7 @@ export function Button({
           "border-secondary bg-secondary text-secondary-foreground hover:bg-secondary/80",
         variant === "outline" && "border-border bg-background text-foreground hover:bg-muted",
         variant === "ghost" && "border-transparent bg-transparent text-foreground hover:bg-muted",
+        variant === "destructive" && "border-red-700 bg-red-700 text-white hover:bg-red-800",
         className,
       )}
       {...props}
