@@ -154,7 +154,8 @@ export function ToggleGroupItem({ className, onClick, value, ...props }: ToggleG
   return (
     <button
       type="button"
-      aria-pressed={active}
+      role="radio"
+      aria-checked={active}
       className={cn(
         "h-8 rounded-md border px-3 text-sm font-medium transition-colors",
         active
