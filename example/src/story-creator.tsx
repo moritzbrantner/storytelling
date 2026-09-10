@@ -24,7 +24,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
   cn,
-} from "@moritzbrantner/ui";
+} from "./ui";
 
 import { storyRegistry, type SignalStoryData } from "./story";
 import {

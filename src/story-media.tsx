@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type ComponentPropsWithoutRef, type ReactNode } from "react";
 
-import { cn } from "@moritzbrantner/ui";
+import { cn } from "./ui";
 
 import type { StoryMediaTextTrack, StoryNodeData } from "./story-model";
 import type { StoryRenderProps, StoryStageComponent } from "./story-render-types";

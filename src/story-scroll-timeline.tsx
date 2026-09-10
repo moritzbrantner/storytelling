@@ -14,7 +14,7 @@ import {
 
 import { motion, useMotionValue, useReducedMotion, type MotionValue } from "motion/react";
 
-import { cn } from "@moritzbrantner/ui";
+import { cn } from "./ui";
 
 const isDevelopment = process.env.NODE_ENV !== "production";
 

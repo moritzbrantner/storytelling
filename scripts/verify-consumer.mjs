@@ -1,12 +1,26 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const packageJson = JSON.parse(readFileSync(path.join(packageRoot, "package.json"), "utf8"));
 const tempRoot = mkdtempSync(path.join(tmpdir(), "storytelling-consumer-"));
 let packageTarballPath;
+
+const exactPeer = (name) => {
+  const range = packageJson.peerDependencies?.[name];
+  const match = /^\^(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/.exec(range ?? "");
+
+  if (!match) {
+    throw new Error(
+      `Expected ${name} to use a simple caret peer range, received ${range ?? "missing"}`,
+    );
+  }
+
+  return `${name}@${match[1]}`;
+};
 
 try {
   const [packageMetadata] = JSON.parse(
@@ -38,11 +52,11 @@ try {
       "install",
       "--ignore-scripts",
       packageTarballPath,
-      "react@^19.0.0",
-      "react-dom@^19.0.0",
-      "remotion@^4.0.379",
-      "three@^0.180.0",
-      "@react-three/fiber@^9.4.0",
+      exactPeer("react"),
+      exactPeer("react-dom"),
+      exactPeer("remotion"),
+      exactPeer("three"),
+      exactPeer("@react-three/fiber"),
     ],
     {
       cwd: tempRoot,

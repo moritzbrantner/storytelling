@@ -1,4 +1,44 @@
-@import "@moritzbrantner/ui/styles.css";
+@import "tailwindcss";
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+:root {
+  --background: #f6f7f8;
+  --foreground: #17211f;
+  --card: #ffffff;
+  --card-foreground: #17211f;
+  --popover: #ffffff;
+  --popover-foreground: #17211f;
+  --primary: #0a7c6f;
+  --primary-foreground: #ffffff;
+  --secondary: #e7ecea;
+  --secondary-foreground: #17211f;
+  --muted: #edf1ef;
+  --muted-foreground: #61706c;
+  --accent: #dce9e5;
+  --accent-foreground: #17211f;
+  --border: #d4dcd9;
+  --input: #c8d2ce;
+  --ring: #0a7c6f;
+}
 
 @source "../../node_modules/@moritzbrantner/timeline-editor/dist/**/*.{js,mjs}";
 @source "../../src/**/*.{ts,tsx}";

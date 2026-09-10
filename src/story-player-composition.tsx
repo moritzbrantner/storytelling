@@ -12,7 +12,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { Button, cn } from "@moritzbrantner/ui";
+import { Button, cn } from "./ui";
 
 import type {
   StoryChoice,

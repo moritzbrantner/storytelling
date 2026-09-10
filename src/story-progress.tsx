@@ -2,7 +2,7 @@
 
 import { motion, useReducedMotion } from "motion/react";
 
-import { cn } from "@moritzbrantner/ui";
+import { cn } from "./ui";
 
 export type StoryProgressProps = {
   value: number;

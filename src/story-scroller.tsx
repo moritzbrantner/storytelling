@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { Button, cn } from "@moritzbrantner/ui";
+import { Button, cn } from "./ui";
 
 import { StoryChoicePanel, type StoryChoicePanelRenderProps } from "./story-choice";
 import {

@@ -245,9 +245,14 @@ describe("Remotion story helpers", () => {
       />,
     );
 
+    const accentProbe = document.createElement("div");
+    accentProbe.style.backgroundColor = "#123456";
+
     expect(screen.getByText("Opening")).toBeTruthy();
-    expect(screen.getAllByTestId("absolute-fill").at(-1)?.style.background).toContain("#123456");
-    expect(screen.getAllByTestId("absolute-fill").at(-1)?.style.fontFamily).toBe("Test Sans");
+    expect(screen.getAllByTestId("absolute-fill").at(-1)?.style.background).toContain(
+      accentProbe.style.backgroundColor,
+    );
+    expect(screen.getAllByTestId("absolute-fill").at(-1)?.style.fontFamily).toContain("Test Sans");
   });
 
   test("renders Remotion compositions through default and registry-miss paths", async () => {
