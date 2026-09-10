@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "profile": "repository-foundation-v1",
+  "tiers": {
+    "fast": ["lint", "typecheck", "build", "test:unit"],
+    "full": [
+      "lint",
+      "typecheck",
+      "build",
+      "test:unit",
+      "test:e2e",
+      "package:check",
+      "benchmark:smoke"
+    ]
+  },
+  "requiredCapabilities": ["lint", "typecheck", "build", "test:unit"],
+  "optionalCapabilities": ["test:e2e", "package:check", "benchmark:smoke"],
+  "capabilityCommands": {
+    "@moritzbrantner/storytelling": {
+      "package:check": [
+        "bash",
+        "-lc",
+        "bun run test:package && bun run test:consumer && bun run pack:dry"
+      ],
+      "benchmark:smoke": ["bun", "run", "perf:smoke"]
+    }
+  }
+}
