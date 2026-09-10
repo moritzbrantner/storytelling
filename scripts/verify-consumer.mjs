@@ -14,7 +14,9 @@ const exactPeer = (name) => {
   const match = /^\^(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/.exec(range ?? "");
 
   if (!match) {
-    throw new Error(`Expected ${name} to use a simple caret peer range, received ${range ?? "missing"}`);
+    throw new Error(
+      `Expected ${name} to use a simple caret peer range, received ${range ?? "missing"}`,
+    );
   }
 
   return `${name}@${match[1]}`;
