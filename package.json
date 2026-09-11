@@ -64,8 +64,8 @@
   },
   "peerDependencies": {
     "@react-three/fiber": "^9.4.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "react": ">=19.0.0 <19.3.0",
+    "react-dom": ">=19.0.0 <19.3.0",
     "remotion": "^4.0.379",
     "three": "^0.180.0"
   },
