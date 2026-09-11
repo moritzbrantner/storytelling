@@ -22,6 +22,8 @@ const exactPeer = (name) => {
   return `${name}@${match[1]}`;
 };
 
+const peerInstallPath = (name) => path.join(tempRoot, "node_modules", ...name.split("/"));
+
 try {
   const [packageMetadata] = JSON.parse(
     execFileSync("npm", ["pack", "--ignore-scripts", "--json"], {
@@ -96,46 +98,26 @@ try {
     stdio: "inherit",
   });
 
-  const coreOnlyRoot = mkdtempSync(path.join(tmpdir(), "storytelling-core-consumer-"));
-
-  try {
-    writeFileSync(
-      path.join(coreOnlyRoot, "package.json"),
-      JSON.stringify(
-        {
-          private: true,
-          type: "module",
-        },
-        null,
-        2,
-      ),
-      "utf8",
-    );
-
-    execFileSync("npm", ["install", "--ignore-scripts", "--legacy-peer-deps", packageTarballPath], {
-      cwd: coreOnlyRoot,
-      stdio: "inherit",
-    });
-
-    writeFileSync(
-      path.join(coreOnlyRoot, "verify-core.mjs"),
-      [
-        'import assert from "node:assert/strict";',
-        'import { defineStory, analyzeStory, applyStoryPatch } from "@moritzbrantner/storytelling/core";',
-        'assert.equal(typeof defineStory, "function");',
-        'assert.equal(typeof analyzeStory, "function");',
-        'assert.equal(typeof applyStoryPatch, "function");',
-      ].join("\n"),
-      "utf8",
-    );
-
-    execFileSync(process.execPath, ["verify-core.mjs"], {
-      cwd: coreOnlyRoot,
-      stdio: "inherit",
-    });
-  } finally {
-    rmSync(coreOnlyRoot, { recursive: true, force: true });
+  for (const peerName of Object.keys(packageJson.peerDependencies ?? {})) {
+    rmSync(peerInstallPath(peerName), { recursive: true, force: true });
   }
+
+  writeFileSync(
+    path.join(tempRoot, "verify-core.mjs"),
+    [
+      'import assert from "node:assert/strict";',
+      'import { defineStory, analyzeStory, applyStoryPatch } from "@moritzbrantner/storytelling/core";',
+      'assert.equal(typeof defineStory, "function");',
+      'assert.equal(typeof analyzeStory, "function");',
+      'assert.equal(typeof applyStoryPatch, "function");',
+    ].join("\n"),
+    "utf8",
+  );
+
+  execFileSync(process.execPath, ["verify-core.mjs"], {
+    cwd: tempRoot,
+    stdio: "inherit",
+  });
 
   console.log("@moritzbrantner/storytelling consumer imports verified");
 } finally {
