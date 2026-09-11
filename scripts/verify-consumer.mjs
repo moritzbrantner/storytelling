@@ -24,7 +24,17 @@ const exactPeer = (name) => {
   return `${name}@${match[1]}`;
 };
 
+const peerNames = Object.keys(packageJson.peerDependencies ?? {});
+const optionalPeerNames = peerNames.filter(
+  (name) => packageJson.peerDependenciesMeta?.[name]?.optional === true,
+);
+const requiredPeerNames = peerNames.filter((name) => !optionalPeerNames.includes(name));
 const peerInstallPath = (name) => path.join(tempRoot, "node_modules", ...name.split("/"));
+const removePeers = (names) => {
+  for (const name of names) {
+    rmSync(peerInstallPath(name), { recursive: true, force: true });
+  }
+};
 
 try {
   const [packageMetadata] = JSON.parse(
@@ -52,16 +62,7 @@ try {
 
   execFileSync(
     "npm",
-    [
-      "install",
-      "--ignore-scripts",
-      packageTarballPath,
-      exactPeer("react"),
-      exactPeer("react-dom"),
-      exactPeer("remotion"),
-      exactPeer("three"),
-      exactPeer("@react-three/fiber"),
-    ],
+    ["install", "--ignore-scripts", packageTarballPath, ...peerNames.map(exactPeer)],
     {
       cwd: tempRoot,
       stdio: "inherit",
@@ -100,9 +101,35 @@ try {
     stdio: "inherit",
   });
 
-  for (const peerName of Object.keys(packageJson.peerDependencies ?? {})) {
-    rmSync(peerInstallPath(peerName), { recursive: true, force: true });
-  }
+  removePeers(optionalPeerNames);
+
+  writeFileSync(
+    path.join(tempRoot, "verify-base.mjs"),
+    [
+      'import assert from "node:assert/strict";',
+      'import { defineStory, validateStory, StoryPlayer } from "@moritzbrantner/storytelling";',
+      'import { analyzeStory, applyStoryPatch } from "@moritzbrantner/storytelling/core";',
+      'import { storyDocumentJsonSchema } from "@moritzbrantner/storytelling/schema";',
+      'import { storyToWorkflowDocument } from "@moritzbrantner/storytelling/workflow";',
+      'import { storyToTimelineEditorDocument } from "@moritzbrantner/storytelling/timeline";',
+      'assert.equal(typeof defineStory, "function");',
+      'assert.equal(typeof validateStory, "function");',
+      'assert.equal(typeof StoryPlayer, "function");',
+      'assert.equal(typeof analyzeStory, "function");',
+      'assert.equal(typeof applyStoryPatch, "function");',
+      'assert.equal(typeof storyDocumentJsonSchema, "object");',
+      'assert.equal(typeof storyToWorkflowDocument, "function");',
+      'assert.equal(typeof storyToTimelineEditorDocument, "function");',
+    ].join("\n"),
+    "utf8",
+  );
+
+  execFileSync(process.execPath, ["verify-base.mjs"], {
+    cwd: tempRoot,
+    stdio: "inherit",
+  });
+
+  removePeers(requiredPeerNames);
 
   writeFileSync(
     path.join(tempRoot, "verify-core.mjs"),
