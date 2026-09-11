@@ -6,6 +6,18 @@ import { fileURLToPath } from "node:url";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const distRoot = path.join(packageRoot, "dist");
+const packageJson = JSON.parse(readFileSync(path.join(packageRoot, "package.json"), "utf8"));
+
+assert.equal(
+  packageJson.dependencies?.["@moritzbrantner/timeline-editor"],
+  undefined,
+  "timeline editor must not be a published runtime dependency",
+);
+assert.equal(
+  packageJson.devDependencies?.["@moritzbrantner/timeline-editor"],
+  "^1.0.0",
+  "timeline editor should remain available to the example app as a development dependency",
+);
 
 for (const requiredFile of [
   "index.js",
@@ -90,6 +102,12 @@ assert.equal(
   typeof timeline.storyToTimelineEditorDocument,
   "function",
   "timeline export should include storyToTimelineEditorDocument",
+);
+const timelineSource = readFileSync(path.join(distRoot, "timeline.js"), "utf8");
+assert.equal(
+  timelineSource.includes("@moritzbrantner/timeline-editor"),
+  false,
+  "timeline conversion bundle must remain independent of timeline-editor runtime code",
 );
 
 const pack = spawnSync("npm", ["pack", "--dry-run", "--ignore-scripts", "--json"], {
