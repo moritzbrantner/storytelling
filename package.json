@@ -81,11 +81,11 @@
     }
   },
   "dependencies": {
-    "@moritzbrantner/timeline-editor": "^1.0.0",
     "motion": "^12.40.0",
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
+    "@moritzbrantner/timeline-editor": "^1.0.0",
     "@playwright/test": "^1.60.0",
     "@react-three/fiber": "^9.6.1",
     "@tailwindcss/vite": "^4.3.0",
