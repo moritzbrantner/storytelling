@@ -11,11 +11,13 @@ let packageTarballPath;
 
 const exactPeer = (name) => {
   const range = packageJson.peerDependencies?.[name];
-  const match = /^\^(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/.exec(range ?? "");
+  const match = /^(?:\^|~|>=\s*)?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)(?:\s+<[^\s]+)?$/.exec(
+    range ?? "",
+  );
 
   if (!match) {
     throw new Error(
-      `Expected ${name} to use a simple caret peer range, received ${range ?? "missing"}`,
+      `Expected ${name} to expose a deterministic minimum peer version, received ${range ?? "missing"}`,
     );
   }
 
