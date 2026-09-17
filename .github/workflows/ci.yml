@@ -25,22 +25,53 @@ jobs:
       install_command: bun install --frozen-lockfile
       lint_command: bun run lint
       typecheck_command: bun run check-types
-      build_command: bun run build
       unit_test_command: bun run test:unit && bun run test:property && bun run test:coverage && bun run test:types
       timeout_minutes: 30
     secrets:
       GH_PACKAGES_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
 
-  integration-validation:
+  build-package:
+    name: Build or reuse package
+    needs: fast-validation
     permissions:
+      actions: read
       contents: read
       packages: read
-    uses: moritzbrantner/reusable-workflows/.github/workflows/integration-validation.yml@workflow-standard-v1.2
+    uses: moritzbrantner/reusable-workflows/.github/workflows/build-artifact.yml@544af51c921b09b4452b7346347ec9effa58f179
+    with:
+      source_sha: ${{ github.event.pull_request.head.sha || github.sha }}
+      artifact_key: storytelling-package-v1
+      node_version: "24"
+      bun_version: 1.3.14
+      cache_bun: true
+      bun_cache_dependency_path: bun.lock
+      setup_command: bun install --frozen-lockfile
+      build_command: bun run build
+      artifact_paths: dist
+      reuse_across_runs: true
+      artifact_retention_days: 7
+    secrets:
+      GH_PACKAGES_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
+
+  integration-validation:
+    needs: build-package
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+    uses: moritzbrantner/reusable-workflows/.github/workflows/integration-validation.yml@544af51c921b09b4452b7346347ec9effa58f179
     with:
       bun_version: 1.3.14
       install_command: bun install --frozen-lockfile
-      pre_command: bun run build
-      package_check_command: bun run size && bun run test:package && bun run test:consumer && bun run pack:dry
+      prebuilt_artifact_run_id: ${{ needs.build-package.outputs.producer_run_id }}
+      prebuilt_artifact_receipt_name: ${{ needs.build-package.outputs.receipt_artifact_name }}
+      prebuilt_artifact_name: ${{ needs.build-package.outputs.artifact_name }}
+      prebuilt_artifact_digest: ${{ needs.build-package.outputs.artifact_digest }}
+      prebuilt_source_sha: ${{ needs.build-package.outputs.source_sha }}
+      prebuilt_artifact_key: ${{ needs.build-package.outputs.artifact_key }}
+      prebuilt_identity_digest: ${{ needs.build-package.outputs.identity_digest }}
+      prebuilt_artifact_destination: dist
+      package_check_command: bun scripts/check-dist-size.mjs && bun run test:package && bun run test:consumer && bun run pack:dry
       timeout_minutes: 30
     secrets:
       GH_PACKAGES_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
