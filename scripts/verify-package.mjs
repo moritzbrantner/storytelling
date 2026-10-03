@@ -121,7 +121,8 @@ if (pack.error) {
 
 assert.equal(pack.status, 0, pack.stderr);
 
-const [packageMetadata] = JSON.parse(pack.stdout);
+// npm 10 runs `prepare` despite --ignore-scripts; its output precedes the JSON report.
+const [packageMetadata] = JSON.parse(pack.stdout.slice(pack.stdout.lastIndexOf("\n[") + 1));
 const packageFiles = new Set(packageMetadata.files.map((file) => file.path));
 
 for (const requiredFile of [

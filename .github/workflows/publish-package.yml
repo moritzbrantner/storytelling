@@ -31,4 +31,3 @@ jobs:
       cancel_in_progress: false
     secrets:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      GH_PACKAGES_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}

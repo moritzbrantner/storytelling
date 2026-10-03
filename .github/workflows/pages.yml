@@ -34,8 +34,6 @@ jobs:
       artifact_paths: example/dist
       reuse_across_runs: true
       artifact_retention_days: 7
-    secrets:
-      GH_PACKAGES_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
 
   deploy:
     needs: build-pages

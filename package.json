@@ -137,6 +137,8 @@
     "perf:compare": "bun scripts/compare-benchmarks.mjs --baseline bench/baselines/main.json --candidate bench/results/latest.json",
     "pack:dry": "npm pack --dry-run --ignore-scripts --json",
     "prepack": "bun run build",
+    "prepare": "bun install --frozen-lockfile --ignore-scripts && bun ./scripts/prepare-git-install.ts",
+    "verify:git-install": "bun ./scripts/verify-git-install.ts",
     "verify": "bun run lint && bun run check-types && bun run test:unit && bun run test:property && bun run test:coverage && bun run test:types && bun run build && bun run size && bun run build:example && bun run test:e2e && bun run test:package && bun run test:consumer && bun run pack:dry",
     "publish:package": "bun scripts/publish-if-new.mjs"
   }

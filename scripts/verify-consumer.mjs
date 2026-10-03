@@ -37,13 +37,13 @@ const removePeers = (names) => {
 };
 
 try {
-  const [packageMetadata] = JSON.parse(
-    execFileSync("npm", ["pack", "--ignore-scripts", "--json"], {
-      cwd: packageRoot,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "inherit"],
-    }),
-  );
+  // npm 10 runs `prepare` despite --ignore-scripts; its output precedes the JSON report.
+  const packOutput = execFileSync("npm", ["pack", "--ignore-scripts", "--json"], {
+    cwd: packageRoot,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "inherit"],
+  });
+  const [packageMetadata] = JSON.parse(packOutput.slice(packOutput.lastIndexOf("\n[") + 1));
 
   packageTarballPath = path.join(packageRoot, packageMetadata.filename);
 
