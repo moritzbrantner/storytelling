@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 // Proves that a commit-pinned git dependency on this package works through bun's real install
-// path: a scratch consumer depends on `git+file://<this repo>#<HEAD>` with the package in
+// path: a scratch consumer depends on the published GitHub source at HEAD with the package in
 // `trustedDependencies` (bun runs a dependency's lifecycle scripts only for trusted packages),
 // installs it, re-installs it with --frozen-lockfile, and every main/types/exports target of
 // the installed package must exist.
@@ -10,7 +10,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 // Export targets that a git install intentionally does not build.
 const gitInstallOmits = new Set<string>([]);
@@ -18,6 +18,20 @@ const gitInstallOmits = new Set<string>([]);
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const manifest = JSON.parse(readFileSync(path.join(packageRoot, "package.json"), "utf8"));
 const packageName: string = manifest.name;
+const peers: Record<string, string> = {};
+for (const [name, range] of Object.entries(manifest.peerDependencies ?? {})) {
+  if (manifest.peerDependenciesMeta?.[name]?.optional === true) {
+    continue;
+  }
+  const match = /^(?:\^|~|>=\s*)?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)(?:\s+<[^\s]+)?$/.exec(
+    String(range),
+  );
+  const version = match?.[1];
+  if (!version) {
+    throw new Error(`Expected a deterministic minimum peer version for ${name}: ${String(range)}`);
+  }
+  peers[name] = version;
+}
 const consumerDir = mkdtempSync(path.join(tmpdir(), "git-install-consumer-"));
 
 function run(args: string[]) {
@@ -35,13 +49,17 @@ function collectTargets(value: unknown, targets: string[]) {
 }
 
 try {
+  // Push candidate commits before this networked consumer acceptance check.
   const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: packageRoot }).toString().trim();
   writeFileSync(
     path.join(consumerDir, "package.json"),
     JSON.stringify({
       name: "git-install-consumer",
       private: true,
-      dependencies: { [packageName]: `git+${pathToFileURL(packageRoot).href}#${head}` },
+      dependencies: {
+        ...peers,
+        [packageName]: `git+https://github.com/moritzbrantner/storytelling.git#${head}`,
+      },
       trustedDependencies: [packageName],
     }),
   );
