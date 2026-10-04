@@ -33,7 +33,7 @@ if (packageRoot.split(path.sep).includes("node_modules")) {
       recursive: true,
       filter: (source) => !skipped.has(source),
     });
-    run(["install", "--frozen-lockfile", "--ignore-scripts"], buildRoot);
+    run(["install", "--frozen-lockfile", "--ignore-scripts", "--linker", "hoisted"], buildRoot);
     run(["run", "build"], buildRoot);
 
     for (const output of buildOutputs) {
