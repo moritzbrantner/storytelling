@@ -585,10 +585,11 @@ cadence.
 This repository ships `@moritzbrantner/storytelling` as a standalone package
 while keeping `./remotion` and `./three` as subpath exports. It is not published
 to npm; consumers install a commit-pinned git dependency, which builds itself via
-the `prepare` script:
+the `prepare` script. `--trust` adds the package to `trustedDependencies`, which
+Bun requires before it runs that script:
 
 ```sh
-bun add "@moritzbrantner/storytelling@git+https://github.com/moritzbrantner/storytelling.git#<commit-sha>"
+bun add --trust "@moritzbrantner/storytelling@git+https://github.com/moritzbrantner/storytelling.git#<commit-sha>"
 ```
 
 ```sh
