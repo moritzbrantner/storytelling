@@ -583,8 +583,9 @@ cadence.
 ## Standalone verification
 
 This repository ships `@moritzbrantner/storytelling` as a standalone package
-while keeping `./remotion` and `./three` as subpath exports. It is not published
-to npm; consumers install a commit-pinned git dependency, which builds itself via
+while keeping `./remotion` and `./three` as subpath exports. npm publishing is
+discontinued: versions already on npm stay installable but receive no further
+updates. Install a commit-pinned git dependency instead, which builds itself via
 the `prepare` script. `--trust` adds the package to `trustedDependencies`, which
 Bun requires before it runs that script:
 
