@@ -582,8 +582,14 @@ cadence.
 
 ## Standalone verification
 
-This repository publishes `@moritzbrantner/storytelling` as a standalone package
-while keeping `./remotion` and `./three` as subpath exports.
+This repository ships `@moritzbrantner/storytelling` as a standalone package
+while keeping `./remotion` and `./three` as subpath exports. It is not published
+to npm; consumers install a commit-pinned git dependency, which builds itself via
+the `prepare` script:
+
+```sh
+bun add "@moritzbrantner/storytelling@git+https://github.com/moritzbrantner/storytelling.git#<commit-sha>"
+```
 
 ```sh
 bun run verify
@@ -591,9 +597,8 @@ bun run verify
 
 The release gate covers formatting, Oxlint diagnostics, forbidden import checks,
 type checking, unit tests, build output, package export smoke tests, temporary
-consumer install smoke coverage, and package dry-run contents. After publishing,
-run `bun run test:published` to verify npm metadata, the `latest` dist-tag, and
-clean-project installability from the public registry.
+consumer install smoke coverage, and package dry-run contents. Run
+`bun run verify:git-install` to check that a clean git install builds and imports.
 
 The repository also includes focused quality gates for library correctness and
 performance:
