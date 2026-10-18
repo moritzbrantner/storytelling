@@ -87,7 +87,14 @@ jobs:
   merge-ready:
     name: merge-ready
     if: ${{ always() }}
-    needs: ["fast-validation", "integration-validation", "e2e-validation", "dependency-resolution", "performance-smoke"]
+    needs:
+      [
+        "fast-validation",
+        "integration-validation",
+        "e2e-validation",
+        "dependency-resolution",
+        "performance-smoke",
+      ]
     runs-on: ubuntu-latest
     steps:
       - uses: moritzbrantner/reusable-workflows/.github/actions/merge-ready@b0f25f241d76af2584dfc9e375084ff5c5cb97da
