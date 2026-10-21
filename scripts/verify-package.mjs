@@ -13,9 +13,10 @@ assert.equal(
   undefined,
   "timeline editor must not be a published runtime dependency",
 );
-assert.equal(
-  packageJson.devDependencies?.["@moritzbrantner/timeline-editor"],
-  "^1.0.0",
+// A 1.x range or an exact 1.x pin (Renovate pins dependencies).
+assert.match(
+  packageJson.devDependencies?.["@moritzbrantner/timeline-editor"] ?? "",
+  /^\^?1\.\d+\.\d+$/,
   "timeline editor should remain available to the example app as a development dependency",
 );
 
