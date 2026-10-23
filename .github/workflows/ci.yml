@@ -43,6 +43,7 @@ jobs:
 
   e2e-validation:
     permissions:
+      actions: read
       contents: read
       packages: read
     uses: moritzbrantner/reusable-workflows/.github/workflows/e2e-validation.yml@a30c972a594d044c23951b1b6fb6e88e14b914e5 # main (install-system-packages)
