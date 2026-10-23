@@ -273,14 +273,12 @@ export function workflowDocumentToStory<TData extends StoryNodeData = StoryNodeD
       sourceEdges.length === 1 && sourceEdges[0]?.data.kind === "next" ? sourceEdges[0] : null;
     const choices = nextEdge
       ? undefined
-      : sourceEdges.map(
-          (edge): StoryChoice => ({
-            id: edge.data.choiceId || edge.sourcePortId,
-            label: edge.data.choiceLabel || edge.sourcePortId,
-            target: edge.targetNodeId,
-            disabled: edge.data.disabled,
-          }),
-        );
+      : sourceEdges.map((edge): StoryChoice => ({
+          id: edge.data.choiceId || edge.sourcePortId,
+          label: edge.data.choiceLabel || edge.sourcePortId,
+          target: edge.targetNodeId,
+          disabled: edge.data.disabled,
+        }));
 
     return {
       ...storyNode,

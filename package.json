@@ -4,7 +4,7 @@
   "description": "Serializable story documents, branching React playback, and Remotion or Three adapters.",
   "private": false,
   "type": "module",
-  "packageManager": "bun@1.3.14",
+  "packageManager": "bun@1.4.3",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/moritzbrantner/storytelling.git"
@@ -64,10 +64,10 @@
   },
   "peerDependencies": {
     "@react-three/fiber": "^9.4.0",
-    "react": ">=19.0.0 <19.3.0",
-    "react-dom": ">=19.0.0 <19.3.0",
+    "react": ">=19.0.0 <19.4.0",
+    "react-dom": ">=19.0.0 <19.4.0",
     "remotion": "^4.0.379",
-    "three": "^0.180.0"
+    "three": ">=0.180.0 <0.187.0"
   },
   "peerDependenciesMeta": {
     "@react-three/fiber": {
@@ -94,21 +94,21 @@
     "@types/node": "25.9.9",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "@types/three": "0.180.0",
+    "@types/three": "0.186.0",
     "@vitejs/plugin-react": "6.1.2",
     "@vitest/coverage-istanbul": "4.1.12",
     "@vitest/coverage-v8": "4.1.12",
     "fast-check": "4.10.2",
     "jsdom": "29.1.1",
-    "oxfmt": "0.46.0",
+    "oxfmt": "0.74.0",
     "oxlint": "1.89.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "remotion": "4.0.537",
-    "three": "0.180.0",
+    "three": "0.186.1",
     "tinybench": "6.2.2",
     "tsup": "8.5.1",
-    "typescript": "6.0.2",
+    "typescript": "6.0.3",
     "vite": "8.3.5",
     "vitest": "4.1.12"
   },
