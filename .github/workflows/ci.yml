@@ -43,9 +43,10 @@ jobs:
 
   e2e-validation:
     permissions:
+      actions: read
       contents: read
       packages: read
-    uses: moritzbrantner/reusable-workflows/.github/workflows/e2e-validation.yml@458c85c1a58cac26a5ab978e12ab8e9a27d4e0ee # workflow-standard-v1.2
+    uses: moritzbrantner/reusable-workflows/.github/workflows/e2e-validation.yml@a30c972a594d044c23951b1b6fb6e88e14b914e5 # main (install-system-packages)
     with:
       bun_version: latest
       install_command: bun install --frozen-lockfile
