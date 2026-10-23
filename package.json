@@ -67,7 +67,7 @@
     "react": ">=19.0.0 <19.4.0",
     "react-dom": ">=19.0.0 <19.4.0",
     "remotion": "^4.0.379",
-    "three": "^0.180.0 || ^0.186.0"
+    "three": ">=0.180.0 <0.187.0"
   },
   "peerDependenciesMeta": {
     "@react-three/fiber": {
