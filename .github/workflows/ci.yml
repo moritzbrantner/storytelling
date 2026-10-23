@@ -21,7 +21,7 @@ jobs:
       packages: read
     uses: moritzbrantner/reusable-workflows/.github/workflows/fast-validation.yml@458c85c1a58cac26a5ab978e12ab8e9a27d4e0ee # workflow-standard-v1.2
     with:
-      bun_version: 1.3.14
+      bun_version: latest
       install_command: bun install --frozen-lockfile
       lint_command: bun run lint
       typecheck_command: bun run check-types
@@ -35,7 +35,7 @@ jobs:
       packages: read
     uses: moritzbrantner/reusable-workflows/.github/workflows/integration-validation.yml@458c85c1a58cac26a5ab978e12ab8e9a27d4e0ee # workflow-standard-v1.2
     with:
-      bun_version: 1.3.14
+      bun_version: latest
       install_command: bun install --frozen-lockfile
       pre_command: bun run build
       package_check_command: bun run size && bun run test:package && bun run test:consumer && bun run verify:git-install && bun run pack:dry
@@ -47,7 +47,7 @@ jobs:
       packages: read
     uses: moritzbrantner/reusable-workflows/.github/workflows/e2e-validation.yml@458c85c1a58cac26a5ab978e12ab8e9a27d4e0ee # workflow-standard-v1.2
     with:
-      bun_version: 1.3.14
+      bun_version: latest
       install_command: bun install --frozen-lockfile
       build_command: bun run build:example
       install_playwright: true
@@ -68,7 +68,7 @@ jobs:
         uses: moritzbrantner/coding-tooling@8ed470bd2afe903d10850706ab5abcd2ae0def9b
         with:
           operation: dependency-resolution
-          bun-version: 1.3.14
+          bun-version: latest
           strict: true
           report-path: .artifacts/coding-tooling/dependency-resolution.json
 
@@ -78,7 +78,7 @@ jobs:
       packages: read
     uses: moritzbrantner/reusable-workflows/.github/workflows/performance-validation.yml@458c85c1a58cac26a5ab978e12ab8e9a27d4e0ee # workflow-standard-v1.2
     with:
-      bun_version: 1.3.14
+      bun_version: latest
       install_command: bun install --frozen-lockfile
       benchmark_command: bun run perf:smoke
       artifact_paths: bench/results/smoke.json
