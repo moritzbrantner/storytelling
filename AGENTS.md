@@ -12,7 +12,7 @@
 
 ## Deterministic work
 
-- Use Bun `1.3.14`, as pinned by `package.json`, and keep dependency installation frozen with `bun install --frozen-lockfile` in validation paths.
+- Use the latest stable Bun (`package.json` `packageManager` is a minimum), and keep dependency installation frozen with `bun install --frozen-lockfile` in validation paths.
 - Prefer repository-declared scripts and the `.coding-tooling.json` capabilities over invented validation commands.
 - Keep package-consumer verification deterministic. Tests of peer compatibility must not depend on whichever newest package version happens to satisfy a floating range on the day CI runs.
 - Keep performance budgets as evidence. Repair regressions or unstable measurements rather than loosening a budget simply to make CI green.
