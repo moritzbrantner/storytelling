@@ -67,7 +67,7 @@
     "react": ">=19.0.0 <19.4.0",
     "react-dom": ">=19.0.0 <19.4.0",
     "remotion": "^4.0.379",
-    "three": ">=0.180.0 <0.187.0"
+    "three": ">=0.180.0 <0.188.0"
   },
   "peerDependenciesMeta": {
     "@react-three/fiber": {
@@ -94,7 +94,7 @@
     "@types/node": "25.9.9",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "@types/three": "0.186.0",
+    "@types/three": "0.187.0",
     "@vitejs/plugin-react": "6.1.2",
     "@vitest/coverage-istanbul": "4.1.12",
     "@vitest/coverage-v8": "4.1.12",
@@ -105,7 +105,7 @@
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "remotion": "4.0.539",
-    "three": "0.186.1",
+    "three": "0.187.0",
     "tinybench": "6.2.2",
     "tsup": "8.5.1",
     "typescript": "6.0.3",
