@@ -86,7 +86,7 @@
   },
   "devDependencies": {
     "@moritzbrantner/timeline-editor": "1.0.1",
-    "@playwright/test": "1.65.0",
+    "@playwright/test": "1.65.1",
     "@react-three/fiber": "9.8.2",
     "@tailwindcss/vite": "4.3.5",
     "@tanstack/react-query": "5.107.1",
