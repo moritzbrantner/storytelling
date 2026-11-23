@@ -4,7 +4,7 @@
   "description": "Serializable story documents, branching React playback, and Remotion or Three adapters.",
   "private": false,
   "type": "module",
-  "packageManager": "bun@1.4.4",
+  "packageManager": "bun@1.4.5",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/moritzbrantner/storytelling.git"
@@ -89,7 +89,7 @@
     "@playwright/test": "1.65.1",
     "@react-three/fiber": "9.8.2",
     "@tailwindcss/vite": "4.3.5",
-    "@tanstack/react-query": "5.108.0",
+    "@tanstack/react-query": "5.108.1",
     "@testing-library/react": "16.3.3",
     "@types/node": "25.9.9",
     "@types/react": "19.3.0",
