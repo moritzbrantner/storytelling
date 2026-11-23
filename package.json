@@ -4,7 +4,6 @@
   "description": "Serializable story documents, branching React playback, and Remotion or Three adapters.",
   "private": false,
   "type": "module",
-  "packageManager": "bun@1.4.5",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/moritzbrantner/storytelling.git"
